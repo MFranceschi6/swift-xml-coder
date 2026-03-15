@@ -4,7 +4,7 @@ All notable changes to SwiftXMLCoder will be documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [Unreleased]
+## [1.0.0] — 2026-03-16
 
 ### Added (Epic H — Pre-Release API Completeness)
 
