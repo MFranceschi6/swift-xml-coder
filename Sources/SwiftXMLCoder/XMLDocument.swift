@@ -68,6 +68,33 @@ public struct XMLDocument: Sendable {
             self.entityDecodingPolicy = entityDecodingPolicy
         }
 
+        /// A conservative preset for parsing XML from untrusted sources.
+        ///
+        /// Explicitly enforces all hardening options:
+        /// - Network external resource loading is forbidden.
+        /// - DTD loading is forbidden (prevents XXE and related attacks).
+        /// - Entity references are preserved without substitution (prevents entity expansion).
+        /// - Whitespace-only text nodes are trimmed.
+        ///
+        /// Use this factory when parsing XML received from external, user-supplied, or
+        /// otherwise untrusted sources. Combine with ``XMLTreeParser/Limits/untrustedInputDefault()``
+        /// for full defence-in-depth.
+        ///
+        /// ```swift
+        /// let parser = XMLTreeParser(configuration: .init(
+        ///     parsingConfiguration: .untrusted(),
+        ///     limits: .untrustedInputDefault()
+        /// ))
+        /// ```
+        public static func untrusted() -> ParsingConfiguration {
+            ParsingConfiguration(
+                trimBlankTextNodes: true,
+                externalResourceLoadingPolicy: .forbidNetwork,
+                dtdLoadingPolicy: .forbid,
+                entityDecodingPolicy: .preserveReferences
+            )
+        }
+
         fileprivate var libxmlOptions: Int32 {
             var options: Int32 = 0
 

@@ -184,21 +184,27 @@ Tasks:
 
 All XSD temporal shapes must be covered before 1.0.
 
-Types to add (as `Codable`-compatible value types with `XMLDateCodingContext` strategy support):
-- `xs:date` (`xsd:date`) — date without time
-- `xs:time` (`xsd:time`) — time without date
-- `xs:gYear` — year only (e.g. `2024`)
-- `xs:gYearMonth` — year + month (e.g. `2024-03`)
-- `xs:gMonth` — month only (e.g. `--03`)
-- `xs:gDay` — day only (e.g. `---15`)
-- `xs:gMonthDay` — month + day (e.g. `--03-15`)
-- `xs:duration` — ISO 8601 duration (e.g. `P1Y2M3DT4H5M6S`)
+**Architectural decisions (locked):**
+- `xs:date` maps directly to `Foundation.Date` via `DateEncodingStrategy.xsdDate` / `DateDecodingStrategy.xsdDate` — no wrapper type needed.
+- All other partial shapes (`xs:time`, `xs:gYear`, `xs:gYearMonth`, `xs:gMonth`, `xs:gDay`, `xs:gMonthDay`, `xs:duration`) get dedicated Swift value types living in `SwiftXMLCoder` (no separate module).
+- Bridge to `Foundation.Date` is explicit and opt-in: each type exposes `toDate(timeZone:)` and `init?(date:timeZone:)` where the conversion is meaningful. `XMLDuration` exposes `toTimeInterval(referenceDate:)`.
+- All types live in `SwiftXMLCoder` — no new SPM products.
+
+Types to add:
+- `xs:date` — use `Foundation.Date` directly via new `DateEncodingStrategy.xsdDate` / `DateDecodingStrategy.xsdDate` cases
+- `XMLTime` — `xs:time` — time without date, struct with hour/minute/second/fractionalSeconds/timezone
+- `XMLGYear` — year only (e.g. `2024`)
+- `XMLGYearMonth` — year + month (e.g. `2024-03`)
+- `XMLGMonth` — month only (e.g. `--03`)
+- `XMLGDay` — day only (e.g. `---15`)
+- `XMLGMonthDay` — month + day (e.g. `--03-15`)
+- `XMLDuration` — ISO 8601 duration (e.g. `P1Y2M3DT4H5M6S`)
 
 Each type must:
-- have a dedicated Swift value type (struct, `Sendable`, `Equatable`, `Hashable`, `Codable`)
-- have a corresponding `XMLDecoder.DateDecodingStrategy` case and `XMLEncoder.DateEncodingStrategy` case
+- have a dedicated Swift value type (struct, `Sendable`, `Equatable`, `Hashable`, `Codable`) — Codable encodes/decodes as XSD lexical string
 - round-trip losslessly (no precision loss on re-encode)
 - have dedicated parse/encode tests covering valid values, edge cases, and invalid input rejection
+- expose explicit `Foundation.Date` bridge where semantically meaningful
 
 ### D.4 — Security hardening documentation
 - Document the parser security profile: what each limit does, recommended values for trusted vs untrusted input
@@ -236,17 +242,29 @@ Implement property-level name override and date format macros. Currently name ov
 
 **Done when:** all three macros are implemented with parity tests; `@XMLDateFormat` covers all types introduced in D.3.
 
-### E.2 — Logging integration
-**Background:** swift-soap needed request/response debug logging and this was cut short (see insights). swift-xml-coder already depends on `swift-log`.
+### E.2 — Logging integration **[DECISION: full levels + structured metadata, pre-1.0]**
+**Background:** swift-xml-coder depends on `swift-log`. Logging must use all appropriate levels and structured `Logger.MetadataValue` fields — not just `.debug` flat strings.
 
-Tasks:
-- Add structured logging to `XMLTreeParser` and `XMLTreeWriter` at `.debug` level:
-  - Parser: element open/close events, attribute counts, namespace declarations
-  - Writer: element flush events, output byte count
-- Add logging to `XMLEncoder`/`XMLDecoder` at `.trace` level for key encode/decode steps
-- Logger is injected via `XMLDocument.Configuration` and `XMLEncoder`/`XMLDecoder` configuration (not global)
-- Default logger is `SwiftLog.Logger(label: "SwiftXMLCoder")` with `.critical` threshold (silent by default)
-- Tests: inject a capturing `LogHandler`, assert messages appear at correct levels
+**Level mapping:**
+- `.trace` — per-node traversal (decoder visiting each node, encoder emitting each element, each canonicalization step)
+- `.debug` — decisions: nil strategy applied, XML name sanitized, field mapping override applied, namespace lookup result
+- `.info` — parse completion (document size, node count), encode completion
+- `.warning` — recoverable anomalies: XML name contained invalid chars and was sanitized, security limit >80% approached
+- `.error` — hard failures: security limit exceeded (depth/node count/text size), parse failed, XPath invalid, namespace conflict
+
+**Structured metadata (examples):**
+```swift
+logger.debug("XML name sanitized", metadata: ["original": .string(orig), "sanitized": .string(safe)])
+logger.warning("Security limit approaching", metadata: ["limit": "depth", "current": .stringConvertible(cur), "max": .stringConvertible(max)])
+logger.error("Parse failed", metadata: ["error": .string(err.localizedDescription), "byteOffset": .stringConvertible(offset)])
+```
+
+**Injection:**
+- Logger injected via `XMLEncoder.Configuration`, `XMLDecoder.Configuration`, `XMLDocument` init, `XMLTreeParser.Configuration`
+- Property: `var logger: Logger = Logger(label: "SwiftXMLCoder")` — default bootstrap is silent (`.critical` threshold) until the app configures `LoggingSystem.bootstrap`
+- No global logger — always injected per-instance
+
+**Tests:** inject a capturing `LogHandler`, assert each call site emits at the correct level with the expected metadata keys present.
 
 ### E.3 — SPM plugin: DocC hosting (optional)
 - Evaluate adding a `swift package` command plugin to generate and serve docs locally
@@ -411,10 +429,10 @@ Examples:
 
 | Epic | Title | Status | Notes |
 |------|-------|--------|-------|
-| A | CI/CD Infrastructure | ✅ Done | commit 06f6909 — CI matrix, SwiftLint, DocC stub, coverage |
-| B | Documentation | ⏳ Pending | No DocC catalog, no README |
-| C | API Review & Breaking Changes | ⏳ Pending | Must complete before D, E, G, F |
-| D | Quality & Hardening | ⏳ Pending | Depends on C |
-| E | Ergonomics | ⏳ Pending | Depends on C |
-| G | iOS Support | ⏳ Pending | Independent of C/D/E; Track 1 (module map) first, Track 2 (Foundation backend) only if Track 1 fails |
+| A | CI/CD Infrastructure | ✅ Done | commit `06f6909` — CI matrix, SwiftLint, DocC stub, coverage |
+| B | Documentation | ✅ Done | commit `aede033` — DocC catalog + README + inline doc comments |
+| C | API Review & Breaking Changes | ✅ Done | commit `b53bb95` — XMLChild rename, Equatable, typed code, preserveWhitespace removal, makeXMLSafeName fix |
+| D | Quality & Hardening | 🔄 In Progress | D.3 XSD temporal (all 8 types), D.4 security factory, D.1 name validation, D.2 macro diagnostics |
+| E | Ergonomics | ⏳ Pending | E.1 @XMLDateFormat macro, E.2 structured logging (all levels + metadata) |
+| G | iOS Support | ⏳ Pending | Independent of C/D/E; Track 1 (module map) first |
 | F | Release 1.0 | ⏳ Pending | Last; depends on all epics |

@@ -15,6 +15,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - `DateDecodingStrategy` new cases: `.xsdDate`, `.xsdTime`, `.xsdGYear`, `.xsdGYearMonth`, `.xsdGMonth`, `.xsdGDay`, `.xsdGMonthDay` — decode XSD partial-date lexical strings into `Foundation.Date`.
 - `_XMLTemporalFoundationSupport.formatXSDDate(_:timeZone:)` and `parseXSDDate(_:)` helpers for `xs:date` ↔ `Foundation.Date` conversion.
 - 61 new tests in `XMLTemporalTypesTests` covering parsing, roundtrip, invalid input, `Foundation.Date` bridges, and `XMLValidationPolicy` build-time/runtime behavior.
+- `XMLDocument.ParsingConfiguration.untrusted()`: static factory that explicitly enforces all libxml2 hardening flags (`.forbidNetwork`, DTD forbidden, entity references preserved, blank text nodes trimmed). Intended for use with `XMLTreeParser.Limits.untrustedInputDefault()` for full defence-in-depth against malicious XML input.
+- 3 new tests in `XMLTreeHardeningTests` covering `untrusted()` policy assertions, rejection of a deeply-nested XML bomb, and rejection of an oversized text node.
 
 ### Changed
 - XML field-name validation (error code `XML6_6_FIELD_NAME_INVALID`) is now gated by `XMLValidationPolicy.validateElementNames`. Existing tests updated to use `validationPolicy: .strict` to preserve their intent. In lenient mode (default) invalid field names are silently passed through to libxml2.

@@ -192,6 +192,49 @@ final class XMLTreeHardeningTests: XCTestCase {
         }
     }
 
+    // MARK: - D.4: XMLDocument.ParsingConfiguration.untrusted()
+
+    func test_untrustedParsingConfiguration_rejectsDeeplyNestedBomb() throws {
+        // Build an XML bomb: 20 levels of nesting, configured with a tight limit of 10.
+        // libxml2's native limit is ~256; our check fires first at depth=10.
+        let open = String(repeating: "<x>", count: 20)
+        let close = String(repeating: "</x>", count: 20)
+        let bomb = Data((open + close).utf8)
+
+        let parser = XMLTreeParser(configuration: .init(
+            parsingConfiguration: .untrusted(),
+            limits: .init(maxDepth: 10)
+        ))
+
+        XCTAssertThrowsError(try parser.parse(data: bomb)) { error in
+            self.assertParseFailedCode(error, code: "XML6_2H_MAX_DEPTH")
+        }
+    }
+
+    func test_untrustedParsingConfiguration_rejectsLargeTextNode() throws {
+        // Build a text node larger than untrustedInputDefault maxTextNodeBytes=1 MiB
+        let largeText = String(repeating: "A", count: 2 * 1024 * 1024)
+        let xml = Data(("<root>" + largeText + "</root>").utf8)
+
+        let parser = XMLTreeParser(configuration: .init(
+            parsingConfiguration: .untrusted(),
+            limits: .untrustedInputDefault()
+        ))
+
+        XCTAssertThrowsError(try parser.parse(data: xml)) { error in
+            self.assertParseFailedCode(error, code: "XML6_2H_MAX_TEXT_NODE_BYTES")
+        }
+    }
+
+    func test_untrustedParsingConfiguration_hasExpectedPolicies() {
+        let config = XMLDocument.ParsingConfiguration.untrusted()
+
+        XCTAssertEqual(config.externalResourceLoadingPolicy, .forbidNetwork)
+        XCTAssertEqual(config.dtdLoadingPolicy, .forbid)
+        XCTAssertEqual(config.entityDecodingPolicy, .preserveReferences)
+        XCTAssertTrue(config.trimBlankTextNodes)
+    }
+
     private func assertParseFailedCode(
         _ error: Error,
         code: String,
