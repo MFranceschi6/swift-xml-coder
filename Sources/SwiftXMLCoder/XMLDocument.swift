@@ -6,28 +6,56 @@ import SwiftXMLCoderOwnership6
 #endif
 
 // swiftlint:disable type_body_length
+/// A mutable XML document backed by a libxml2 `xmlDocPtr`.
+///
+/// `XMLDocument` owns a libxml2 document pointer and exposes high-level Swift APIs for
+/// construction, XPath evaluation, DOM manipulation, and serialization. It is the bridge
+/// between raw XML bytes and the typed ``XMLTreeDocument`` value tree.
+///
+/// Use ``XMLTreeParser`` to parse bytes into an ``XMLTreeDocument``, or use `XMLDocument`
+/// directly when you need mutable DOM access or XPath queries.
 public struct XMLDocument: Sendable {
+    /// Low-level libxml2 parsing options.
     public struct ParsingConfiguration: Sendable, Hashable {
+        /// Controls whether external resources are fetched over the network.
         public enum ExternalResourceLoadingPolicy: Sendable, Hashable {
+            /// Forbid loading any external resource via network (default, recommended).
             case forbidNetwork
+            /// Allow loading external resources from network URLs.
             case allowNetwork
         }
 
+        /// Controls DTD loading during parsing.
         public enum DTDLoadingPolicy: Sendable, Hashable {
+            /// Disallow DTD loading (default, recommended).
             case forbid
+            /// Allow loading external DTD declarations.
             case allow
         }
 
+        /// Controls handling of entity references during parsing.
         public enum EntityDecodingPolicy: Sendable, Hashable {
+            /// Preserve entity references without substitution (default).
             case preserveReferences
+            /// Substitute entity references with their defined values.
             case substituteEntities
         }
 
+        /// When `true`, whitespace-only text nodes are trimmed from the parsed tree.
         public let trimBlankTextNodes: Bool
+        /// Policy for loading external resources.
         public let externalResourceLoadingPolicy: ExternalResourceLoadingPolicy
+        /// Policy for loading DTD declarations.
         public let dtdLoadingPolicy: DTDLoadingPolicy
+        /// Policy for entity reference handling.
         public let entityDecodingPolicy: EntityDecodingPolicy
 
+        /// Creates a parsing configuration.
+        /// - Parameters:
+        ///   - trimBlankTextNodes: Whether to discard whitespace-only text nodes. Defaults to `true`.
+        ///   - externalResourceLoadingPolicy: Network access policy. Defaults to `.forbidNetwork`.
+        ///   - dtdLoadingPolicy: DTD loading policy. Defaults to `.forbid`.
+        ///   - entityDecodingPolicy: Entity substitution policy. Defaults to `.preserveReferences`.
         public init(
             trimBlankTextNodes: Bool = true,
             externalResourceLoadingPolicy: ExternalResourceLoadingPolicy = .forbidNetwork,
@@ -311,6 +339,7 @@ public struct XMLDocument: Sendable {
         self.storage = Storage(documentPointer: documentPointer)
     }
 
+    /// Returns the document's root element node, or `nil` if the document is empty.
     public func rootElement() -> XMLNode? {
         guard let nodePointer = xmlDocGetRootElement(storage.documentPointer) else {
             return nil
@@ -319,6 +348,12 @@ public struct XMLDocument: Sendable {
     }
 
     #if swift(>=6.0)
+    /// Evaluates an XPath expression and returns the first matching node, or `nil` if none match.
+    ///
+    /// - Parameters:
+    ///   - expression: The XPath 1.0 expression to evaluate.
+    ///   - namespaces: A prefix-to-URI mapping for namespace-aware expressions.
+    /// - Throws: ``XMLParsingError/xpathFailed(expression:message:)`` if the expression is invalid.
     public func xpathFirstNode(
         _ expression: String,
         namespaces: [String: String] = [:]
@@ -332,6 +367,12 @@ public struct XMLDocument: Sendable {
         }
     }
     #else
+    /// Evaluates an XPath expression and returns the first matching node, or `nil` if none match.
+    ///
+    /// - Parameters:
+    ///   - expression: The XPath 1.0 expression to evaluate.
+    ///   - namespaces: A prefix-to-URI mapping for namespace-aware expressions.
+    /// - Throws: ``XMLParsingError/xpathFailed(expression:message:)`` if the expression is invalid.
     public func xpathFirstNode(
         _ expression: String,
         namespaces: [String: String] = [:]
@@ -438,6 +479,13 @@ public struct XMLDocument: Sendable {
     }
 
     #if swift(>=6.0)
+    /// Evaluates an XPath expression and returns all matching nodes.
+    ///
+    /// - Parameters:
+    ///   - expression: The XPath 1.0 expression to evaluate.
+    ///   - namespaces: A prefix-to-URI mapping for namespace-aware expressions.
+    /// - Returns: An array of matching nodes. Empty if the expression matches nothing.
+    /// - Throws: ``XMLParsingError/xpathFailed(expression:message:)`` if the expression is invalid.
     public func xpathNodes(
         _ expression: String,
         namespaces: [String: String] = [:]
@@ -451,6 +499,13 @@ public struct XMLDocument: Sendable {
         }
     }
     #else
+    /// Evaluates an XPath expression and returns all matching nodes.
+    ///
+    /// - Parameters:
+    ///   - expression: The XPath 1.0 expression to evaluate.
+    ///   - namespaces: A prefix-to-URI mapping for namespace-aware expressions.
+    /// - Returns: An array of matching nodes. Empty if the expression matches nothing.
+    /// - Throws: ``XMLParsingError/xpathFailed(expression:message:)`` if the expression is invalid.
     public func xpathNodes(
         _ expression: String,
         namespaces: [String: String] = [:]
@@ -559,6 +614,12 @@ public struct XMLDocument: Sendable {
     }
 
     #if swift(>=6.0)
+    /// Serializes the document to UTF-8 XML bytes.
+    ///
+    /// - Parameters:
+    ///   - encoding: The XML encoding declaration. Defaults to `"UTF-8"`.
+    ///   - prettyPrinted: When `true`, emits human-readable indented output.
+    /// - Throws: ``XMLParsingError`` if serialization fails.
     public func serializedData(encoding: String = "UTF-8", prettyPrinted: Bool = false) throws(XMLParsingError) -> Data {
         do {
             return try serializedDataImpl(encoding: encoding, prettyPrinted: prettyPrinted)
@@ -569,6 +630,12 @@ public struct XMLDocument: Sendable {
         }
     }
     #else
+    /// Serializes the document to UTF-8 XML bytes.
+    ///
+    /// - Parameters:
+    ///   - encoding: The XML encoding declaration. Defaults to `"UTF-8"`.
+    ///   - prettyPrinted: When `true`, emits human-readable indented output.
+    /// - Throws: ``XMLParsingError`` if serialization fails.
     public func serializedData(encoding: String = "UTF-8", prettyPrinted: Bool = false) throws -> Data {
         try serializedDataImpl(encoding: encoding, prettyPrinted: prettyPrinted)
     }
@@ -603,6 +670,15 @@ public struct XMLDocument: Sendable {
         return serializedData
     }
 
+    /// Creates a new XML element node with the given name and optional namespace.
+    ///
+    /// The created node is not attached to the document tree; use ``appendChild(_:to:)`` to insert it.
+    ///
+    /// - Parameters:
+    ///   - name: The local name of the element.
+    ///   - namespace: An optional namespace to associate with the element.
+    /// - Returns: A new ``XMLNode`` representing the element.
+    /// - Throws: ``XMLParsingError`` if the node cannot be created.
     #if swift(>=6.0)
     public func createElement(named name: String, namespace: XMLNamespace? = nil) throws(XMLParsingError) -> XMLNode {
         do {
@@ -626,6 +702,12 @@ public struct XMLDocument: Sendable {
         return XMLNode(nodePointer: nodePointer)
     }
 
+    /// Appends a child node to a parent node within this document.
+    ///
+    /// - Parameters:
+    ///   - child: The node to append.
+    ///   - parent: The node that will become the parent.
+    /// - Throws: ``XMLParsingError`` if the append operation fails.
     #if swift(>=6.0)
     public func appendChild(_ child: XMLNode, to parent: XMLNode) throws(XMLParsingError) {
         do {

@@ -1,10 +1,23 @@
 import Foundation
 
+/// A value-type descriptor for a `DateFormatter` configuration.
+///
+/// Use this type with ``XMLEncoder/DateEncodingStrategy/formatted(_:)`` and
+/// ``XMLDecoder/DateDecodingStrategy/formatted(_:)`` to specify a custom date format string.
 public struct XMLDateFormatterDescriptor: Sendable, Hashable, Codable {
+    /// The `DateFormatter`-compatible format string (e.g. `"yyyy-MM-dd"`).
     public let format: String
+    /// The locale identifier used when parsing/formatting. Defaults to `"en_US_POSIX"`.
     public let localeIdentifier: String
+    /// The time-zone identifier used when parsing/formatting. Defaults to `"UTC"`.
     public let timeZoneIdentifier: String
 
+    /// Creates a date formatter descriptor.
+    ///
+    /// - Parameters:
+    ///   - format: A `DateFormatter`-compatible format string.
+    ///   - localeIdentifier: A locale identifier. Defaults to `"en_US_POSIX"`.
+    ///   - timeZoneIdentifier: A time-zone identifier. Defaults to `"UTC"`.
     public init(
         format: String,
         localeIdentifier: String = "en_US_POSIX",
@@ -16,12 +29,21 @@ public struct XMLDateFormatterDescriptor: Sendable, Hashable, Codable {
     }
 }
 
+/// Contextual information provided to custom date encoding/decoding closures.
+///
+/// Passed to ``XMLDateEncodingClosure`` and ``XMLDateDecodingClosure`` so that
+/// closures can apply field-specific formatting rules based on the coding path or element name.
 public struct XMLDateCodingContext: Sendable, Equatable {
+    /// The coding path components leading to this date value.
     public let codingPath: [String]
+    /// The local XML element or attribute name, if available.
     public let localName: String?
+    /// The namespace URI of the element or attribute, if any.
     public let namespaceURI: String?
+    /// `true` when the date value is encoded as an XML attribute; `false` for element content.
     public let isAttribute: Bool
 
+    /// Creates a date coding context.
     public init(
         codingPath: [String],
         localName: String?,
@@ -35,9 +57,17 @@ public struct XMLDateCodingContext: Sendable, Equatable {
     }
 }
 
+/// A closure that converts a `Date` to its XML lexical string representation.
+///
+/// Receives the date and an ``XMLDateCodingContext`` describing where in the document
+/// the date will be written.
 public typealias XMLDateEncodingClosure =
     @Sendable (_ date: Date, _ context: XMLDateCodingContext) throws -> String
 
+/// A closure that parses an XML lexical string into a `Date`.
+///
+/// Receives the raw string value and an ``XMLDateCodingContext`` describing where in
+/// the document the date was read from.
 public typealias XMLDateDecodingClosure =
     @Sendable (_ lexicalValue: String, _ context: XMLDateCodingContext) throws -> Date
 

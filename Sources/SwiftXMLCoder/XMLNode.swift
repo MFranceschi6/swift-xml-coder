@@ -2,6 +2,13 @@ import Foundation
 import XMLCoderCompatibility
 import SwiftXMLCoderCShim
 
+/// A view over a single libxml2 element node within an ``XMLDocument``.
+///
+/// `XMLNode` is a lightweight, copyable view. It does **not** own the underlying C pointer —
+/// the owning ``XMLDocument`` must remain alive for any `XMLNode` derived from it.
+///
+/// Use ``XMLDocument`` methods to obtain nodes, and methods on `XMLNode` to navigate, read,
+/// and mutate the document tree.
 public struct XMLNode {
     let nodePointer: xmlNodePtr
 
@@ -9,6 +16,7 @@ public struct XMLNode {
         self.nodePointer = nodePointer
     }
 
+    /// The local name of the element, or `nil` if the node has no name.
     public var name: String? {
         guard let namePointer = nodePointer.pointee.name else {
             return nil
@@ -16,6 +24,7 @@ public struct XMLNode {
         return String(cString: UnsafePointer<CChar>(OpaquePointer(namePointer)))
     }
 
+    /// The namespace prefix bound to this element's namespace, or `nil` if unprefixed.
     public var namespacePrefix: String? {
         guard let namespacePointer = nodePointer.pointee.ns else {
             return nil
@@ -26,6 +35,7 @@ public struct XMLNode {
         return String(cString: UnsafePointer<CChar>(OpaquePointer(prefixPointer)))
     }
 
+    /// The namespace URI of this element, or `nil` if the element has no associated namespace.
     public var namespaceURI: String? {
         guard let namespacePointer = nodePointer.pointee.ns else {
             return nil
@@ -36,6 +46,7 @@ public struct XMLNode {
         return String(cString: UnsafePointer<CChar>(OpaquePointer(hrefPointer)))
     }
 
+    /// Returns the parent element node, or `nil` if this node is the root or has no element parent.
     public func parent() -> XMLNode? {
         guard let parentPointer = nodePointer.pointee.parent else {
             return nil
@@ -46,6 +57,9 @@ public struct XMLNode {
         return XMLNode(nodePointer: parentPointer)
     }
 
+    /// Returns the namespace declarations defined directly on this node, keyed by prefix.
+    ///
+    /// The empty string key (`""`) represents the default namespace.
     public func namespaceDeclarations() -> [String: String] {
         var declarations: [String: String] = [:]
         var namespacePointer = nodePointer.pointee.nsDef
@@ -68,6 +82,10 @@ public struct XMLNode {
         return declarations
     }
 
+    /// Returns all namespace declarations in scope for this node, walking up to ancestor elements.
+    ///
+    /// Inner declarations shadow outer ones with the same prefix.
+    /// The empty string key (`""`) represents the default namespace.
     public func namespaceDeclarationsInScope() -> [String: String] {
         var scopeDeclarations: [String: String] = [:]
         var currentNode: XMLNode? = self
@@ -82,12 +100,16 @@ public struct XMLNode {
         return scopeDeclarations
     }
 
+    /// Returns the concatenated text content of this node and all its descendants, or `nil` if empty.
     public func text() -> String? {
         return LibXML2.withOwnedXMLCharPointer(xmlNodeGetContent(nodePointer)) { contentPointer in
             String(cString: UnsafePointer<CChar>(OpaquePointer(contentPointer)))
         }
     }
 
+    /// Returns the value of an attribute on this node, or `nil` if the attribute is absent.
+    ///
+    /// - Parameter attributeName: The unqualified attribute name.
     public func attribute(named attributeName: String) -> String? {
         LibXML2.ensureInitialized()
 
@@ -98,6 +120,7 @@ public struct XMLNode {
         }
     }
 
+    /// Returns all direct element children of this node.
     public func children() -> [XMLNode] {
         var nodes: [XMLNode] = []
         var childPointer = nodePointer.pointee.children
@@ -110,16 +133,28 @@ public struct XMLNode {
         return nodes
     }
 
+    /// Returns the first direct element child with the given local name, or `nil` if none is found.
+    ///
+    /// - Parameter childName: The local name to match.
     public func firstChild(named childName: String) -> XMLNode? {
         children().first(where: { $0.name == childName })
     }
 
+    /// Sets the text content of this node, replacing any existing content.
+    ///
+    /// - Parameter value: The new text content.
     public func setText(_ value: String) {
         LibXML2.withXMLCharPointer(value) { valuePointer in
             xmlNodeSetContent(nodePointer, valuePointer)
         }
     }
 
+    /// Sets an attribute on this node.
+    ///
+    /// - Parameters:
+    ///   - attributeName: The unqualified attribute name.
+    ///   - value: The attribute value.
+    /// - Throws: ``XMLParsingError`` if the attribute cannot be set.
     #if swift(>=6.0)
     public func setAttribute(named attributeName: String, value: String) throws(XMLParsingError) {
         let result = LibXML2.withXMLCharPointer(attributeName) { attributeNamePointer in
@@ -150,6 +185,11 @@ public struct XMLNode {
     }
     #endif
 
+    /// Adds a namespace declaration to this node and sets it as the node's active namespace.
+    ///
+    /// - Parameter namespace: The ``XMLNamespace`` to declare and activate.
+    /// - Throws: ``XMLParsingError`` if the namespace URI is empty (for a prefixed declaration)
+    ///   or if the libxml2 call fails.
     #if swift(>=6.0)
     public func addNamespace(_ namespace: XMLNamespace) throws(XMLParsingError) {
         if namespace.prefix != nil && namespace.uri.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -200,6 +240,11 @@ public struct XMLNode {
     }
     #endif
 
+    /// Appends `child` as the last child of this node.
+    ///
+    /// - Parameter child: The node to append. Must belong to the same document.
+    /// - Throws: ``XMLParsingError`` if appending would create a cycle, the node is appended
+    ///   to itself, the node belongs to a different document, or the libxml2 call fails.
     #if swift(>=6.0)
     public func addChild(_ child: XMLNode) throws(XMLParsingError) {
         if child.nodePointer == nodePointer {

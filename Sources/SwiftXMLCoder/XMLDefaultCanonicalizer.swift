@@ -1,6 +1,18 @@
 import Foundation
 
+/// The default ``XMLCanonicalizer`` implementation.
+///
+/// Produces deterministic canonical XML by sorting attributes alphabetically,
+/// normalising namespace declarations, applying any ``XMLTransform`` pipeline steps,
+/// and serialising with configurable whitespace and encoding policies.
+///
+/// ```swift
+/// let canonicalizer = XMLDefaultCanonicalizer()
+/// let view = try canonicalizer.canonicalView(for: tree)
+/// let deterministicBytes = view.canonicalXMLData
+/// ```
 public struct XMLDefaultCanonicalizer: XMLCanonicalizer {
+    /// Creates a default canonicalizer.
     public init() {}
 
     #if swift(>=6.0)
