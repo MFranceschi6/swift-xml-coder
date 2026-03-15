@@ -27,7 +27,7 @@ enum XMLCanonicalizerContractHarness {
 
     static func assertTransformFailureEnvelope(
         canonicalizer: XMLTestCanonicalizer = XMLDefaultCanonicalizer(),
-        expectedCode: String = XMLCanonicalizationErrorCode.transformFailed.rawValue,
+        expectedCode: XMLCanonicalizationErrorCode = .transformFailed,
         file: StaticString = #filePath,
         line: UInt = #line
     ) throws {

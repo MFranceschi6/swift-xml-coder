@@ -4,7 +4,7 @@ import Foundation
 ///
 /// A `nil` prefix represents the default namespace (`xmlns="..."`).
 /// A non-`nil` prefix represents a prefixed namespace (`xmlns:prefix="..."`).
-public struct XMLNamespace: Sendable {
+public struct XMLNamespace: Sendable, Equatable, Hashable {
     /// The namespace prefix, or `nil` for the default namespace.
     public let prefix: String?
     /// The namespace URI (e.g. `"http://www.w3.org/2001/XMLSchema"`).

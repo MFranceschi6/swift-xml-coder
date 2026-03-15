@@ -8,7 +8,7 @@ SwiftXMLCoder supports five Swift compatibility lanes with a single source tree.
 |---------------|----------|--------------------|
 | 5.4 | `Package.swift` | Stub only — tooling discovery |
 | 5.6+ | `Package@swift-5.6.swift` | Core encoder/decoder, XPath, namespaces, canonicalization |
-| 5.9+ | `Package@swift-5.9.swift` | Adds `@XMLCodable`, `@XMLAttribute`, `@XMLElement` macros |
+| 5.9+ | `Package@swift-5.9.swift` | Adds `@XMLCodable`, `@XMLAttribute`, `@XMLChild` macros |
 | 5.10 | (uses 5.9 manifest) | Same as 5.9 |
 | 6.0+ | `Package@swift-6.0.swift` | Adds `~Copyable` ownership wrappers for libxml2 pointers; Swift 6 language mode |
 | 6.1 | `Package@swift-6.1.swift` | Latest — same as 6.0 |
@@ -27,7 +27,7 @@ SwiftXMLCoder supports five Swift compatibility lanes with a single source tree.
 - `XMLTreeParser` / `XMLTreeWriter`
 - `XMLNamespaceResolver`, `XMLNamespaceValidator`
 - `XMLCanonicalizer`, `XMLDefaultCanonicalizer`, `XMLTransform`
-- `XMLAttribute<Value>` / `XMLElement<Value>` property wrappers
+- `XMLAttribute<Value>` / `XMLChild<Value>` property wrappers
 - `XMLFieldCodingOverrides`, `XMLFieldCodingOverrideProvider`
 - `SwiftXMLCoderTestSupport`
 
@@ -35,7 +35,7 @@ SwiftXMLCoder supports five Swift compatibility lanes with a single source tree.
 
 - `@XMLCodable` extension macro
 - `@XMLAttribute` peer macro
-- `@XMLElement` peer macro
+- `@XMLChild` peer macro
 
 Available via the `SwiftXMLCoderMacros` product:
 

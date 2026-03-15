@@ -6,13 +6,13 @@ Control whether each field is encoded as an XML element or an XML attribute.
 
 By default every field in a `Codable` type is encoded as a child element. SwiftXMLCoder provides three complementary mechanisms to change this, evaluated in priority order:
 
-1. **Property wrappers** — `@XMLAttribute` / `@XMLElement` (all Swift versions)
-2. **Macros** — `@XMLCodable` + `@XMLAttribute` / `@XMLElement` (Swift 5.9+, no boxing)
+1. **Property wrappers** — `@XMLAttribute` / `@XMLChild` (all Swift versions)
+2. **Macros** — `@XMLCodable` + `@XMLAttribute` / `@XMLChild` (Swift 5.9+, no boxing)
 3. **Runtime overrides** — `XMLFieldCodingOverrides` passed via encoder/decoder configuration
 
 ## Property Wrappers
 
-Wrap a field with ``XMLAttribute`` to encode it as an XML attribute, or ``XMLElement`` to keep the default element behaviour explicitly:
+Wrap a field with ``XMLAttribute`` to encode it as an XML attribute, or ``XMLChild`` to keep the default element behaviour explicitly:
 
 ```swift
 import SwiftXMLCoder
@@ -29,11 +29,11 @@ let data = try encoder.encode(product)
 // <Product id="SKU-1"><name>Widget</name><price>9.99</price></Product>
 ```
 
-> Note: `@XMLAttribute` and `@XMLElement` box the value — the Swift property type becomes `XMLAttribute<String>`, not `String`. This is transparent at the `Codable` level, but affects pattern matching and direct property access.
+> Note: `@XMLAttribute` and `@XMLChild` box the value — the Swift property type becomes `XMLAttribute<String>`, not `String`. This is transparent at the `Codable` level, but affects pattern matching and direct property access.
 
 ## Macros (Swift 5.9+)
 
-Import `SwiftXMLCoderMacros` and annotate the type with `@XMLCodable`. Then annotate individual properties with `@XMLAttribute` or `@XMLElement`. The macro keeps the field's Swift type unboxed:
+Import `SwiftXMLCoderMacros` and annotate the type with `@XMLCodable`. Then annotate individual properties with `@XMLAttribute` or `@XMLChild`. The macro keeps the field's Swift type unboxed:
 
 ```swift
 import SwiftXMLCoder
@@ -67,7 +67,7 @@ The `path` parameter is the dotted coding-key path leading to the field. For top
 
 When encoding or decoding a field, the encoder/decoder evaluates:
 
-1. Property wrapper (`XMLAttribute<Value>` or `XMLElement<Value>` Swift type)
+1. Property wrapper (`XMLAttribute<Value>` or `XMLChild<Value>` Swift type)
 2. `XMLFieldCodingOverrideProvider.xmlFieldNodeKinds` (synthesised by `@XMLCodable`)
 3. `XMLFieldCodingOverrides` in configuration
 4. Default: `.element`

@@ -7,7 +7,7 @@ import Foundation
 //
 // ## Mechanism A — Property wrappers (all Swift versions, pre-macro path)
 //
-//   `XMLAttribute<Value>` and `XMLElement<Value>` are `@propertyWrapper` types.
+//   `XMLAttribute<Value>` and `XMLChild<Value>` are `@propertyWrapper` types.
 //   They conform to `_XMLFieldKindOverrideType`, checked at priority-chain step 1.
 //   The wrapper is transparent at the Codable level (delegates to the wrapped value),
 //   so the field's type in generated models stays concrete (e.g. `XMLAttribute<Int>`
@@ -32,6 +32,8 @@ import Foundation
 //   2. `XMLFieldCodingOverrideProvider.xmlFieldNodeKinds`            (macro dict)
 //   3. `XMLFieldCodingOverrides` in encoder/decoder options           (runtime)
 //   4. Default: `.element`
+//
+// `XMLElement` is a deprecated alias for `XMLChild` (renamed to avoid Foundation.XMLElement collision).
 
 /// Whether a Codable field maps to an XML element or an XML attribute.
 ///
@@ -52,7 +54,7 @@ public enum XMLFieldNodeKind: String, Sendable, Hashable, Codable {
 /// are mapped without modifying the model type.
 ///
 /// This is mechanism C in the priority chain (lowest precedence); prefer
-/// ``XMLAttribute`` / ``XMLElement`` wrappers or the `@XMLCodable` macro for
+/// ``XMLAttribute`` / ``XMLChild`` wrappers or the `@XMLCodable` macro for
 /// compile-time clarity.
 public struct XMLFieldCodingOverrides: Sendable, Hashable, Codable {
     /// The raw mapping of coding-path keys to node kinds.
@@ -106,7 +108,7 @@ public struct XMLFieldCodingOverrides: Sendable, Hashable, Codable {
 ///
 /// The `@XMLCodable` macro generates an extension of your type conforming to this protocol,
 /// providing a static dictionary that maps field names to node kinds based on the
-/// `@XMLAttribute` and `@XMLElement` macro arguments you declared.
+/// `@XMLAttribute` and `@XMLChild` macro arguments you declared.
 ///
 /// You typically do not implement this protocol manually — use the `@XMLCodable` macro instead.
 /// Direct implementation is supported for advanced use cases.
@@ -156,9 +158,6 @@ protocol _XMLAttributeDecodableValue {
 /// - Note: When the wrapped `Value` is optional and `nil`, the attribute is always
 ///   omitted from the output regardless of ``XMLEncoder/NilEncodingStrategy``.
 ///
-/// - Note: If both `Foundation.XMLElement` and `SwiftXMLCoder.XMLElement` are in scope
-///   (e.g. when importing `Foundation` and `SwiftXMLCoder`), qualify the wrapper
-///   as `@SwiftXMLCoder.XMLElement` to avoid ambiguity.
 ///
 /// ## Example
 /// ```swift
@@ -242,22 +241,18 @@ extension XMLAttribute: _XMLAttributeDecodableValue {
 
 /// A property wrapper that explicitly marks a `Codable` field as an XML child element.
 ///
-/// Use `@XMLElement` when you want to be explicit about element mapping, or to override
+/// Use `@XMLChild` when you want to be explicit about element mapping, or to override
 /// an inherited ``XMLFieldCodingOverrideProvider`` or ``XMLFieldCodingOverrides`` setting.
 /// Because `.element` is the default mapping, you rarely need this wrapper unless
 /// clarifying intent or overriding a lower-priority setting.
 ///
-/// - Note: If both `Foundation.XMLElement` and `SwiftXMLCoder.XMLElement` are in scope,
-///   qualify the wrapper as `@SwiftXMLCoder.XMLElement` to avoid ambiguity. This is a
-///   known symbol collision — see `POST-XML-10` in the project documentation.
-///
 /// This is mechanism A (highest precedence) in the field-node-kind priority chain.
 @propertyWrapper
-public struct XMLElement<Value: Codable>: Codable {
+public struct XMLChild<Value: Codable>: Codable {
     /// The wrapped `Codable` value.
     public var wrappedValue: Value
 
-    /// Creates an `XMLElement` wrapper around the given value.
+    /// Creates an `XMLChild` wrapper around the given value.
     public init(wrappedValue: Value) {
         self.wrappedValue = wrappedValue
     }
@@ -273,9 +268,16 @@ public struct XMLElement<Value: Codable>: Codable {
     }
 }
 
-extension XMLElement: Equatable where Value: Equatable {}
-extension XMLElement: Hashable where Value: Hashable {}
+extension XMLChild: Equatable where Value: Equatable {}
+extension XMLChild: Hashable where Value: Hashable {}
 
-extension XMLElement: _XMLFieldKindOverrideType {
+extension XMLChild: _XMLFieldKindOverrideType {
     static var _xmlFieldNodeKindOverride: XMLFieldNodeKind { .element }
 }
+
+/// Deprecated alias for ``XMLChild``. Use `@XMLChild` instead.
+///
+/// - Note: `XMLElement` was renamed to `XMLChild` to avoid collision with
+///   `Foundation.XMLElement`. The old name is preserved for source compatibility.
+@available(*, deprecated, renamed: "XMLChild")
+public typealias XMLElement<Value: Codable> = XMLChild<Value>

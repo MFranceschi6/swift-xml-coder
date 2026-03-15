@@ -9,7 +9,7 @@ import SwiftXMLCoderCShim
 ///
 /// ## Security limits
 /// All limits default to unlimited. For untrusted inputs, use
-/// ``XMLTreeParser/Configuration/untrustedInputProfile(preserveWhitespaceTextNodes:whitespaceTextNodePolicy:)``
+/// ``XMLTreeParser/Configuration/untrustedInputProfile(whitespaceTextNodePolicy:)``
 /// which enforces conservative caps on input size, depth, node count, and text sizes.
 ///
 /// - SeeAlso: ``XMLTreeDocument``, ``XMLTreeWriter``, ``XMLDecoder``
@@ -86,28 +86,18 @@ public struct XMLTreeParser: Sendable {
         /// Input size limits. Defaults to unlimited.
         public let limits: Limits
 
-        /// `true` when `whitespaceTextNodePolicy == .preserve`.
-        public var preserveWhitespaceTextNodes: Bool {
-            whitespaceTextNodePolicy == .preserve
-        }
-
         /// Creates a parser configuration.
         ///
         /// - Parameters:
-        ///   - preserveWhitespaceTextNodes: Legacy flag. When `whitespaceTextNodePolicy` is `nil`,
-        ///     `true` resolves to `.preserve` and `false` to `.dropWhitespaceOnly`.
-        ///   - whitespaceTextNodePolicy: Explicit whitespace policy. Overrides the legacy flag.
+        ///   - whitespaceTextNodePolicy: Whitespace handling policy. Defaults to `.dropWhitespaceOnly`.
         ///   - parsingConfiguration: Low-level libxml2 parsing options.
         ///   - limits: Input size limits. Defaults to unlimited.
         public init(
-            preserveWhitespaceTextNodes: Bool = false,
-            whitespaceTextNodePolicy: WhitespaceTextNodePolicy? = nil,
+            whitespaceTextNodePolicy: WhitespaceTextNodePolicy = .dropWhitespaceOnly,
             parsingConfiguration: XMLDocument.ParsingConfiguration = XMLDocument.ParsingConfiguration(),
             limits: Limits = Limits()
         ) {
-            self.whitespaceTextNodePolicy = whitespaceTextNodePolicy ?? (
-                preserveWhitespaceTextNodes ? .preserve : .dropWhitespaceOnly
-            )
+            self.whitespaceTextNodePolicy = whitespaceTextNodePolicy
             self.parsingConfiguration = parsingConfiguration
             self.limits = limits
         }
@@ -116,18 +106,15 @@ public struct XMLTreeParser: Sendable {
         ///
         /// Applies ``Limits/untrustedInputDefault()``, forbids network external resources,
         /// forbids DTD loading, and preserves entity references.
+        ///
+        /// - Parameter whitespaceTextNodePolicy: Whitespace handling policy. Defaults to `.dropWhitespaceOnly`.
         public static func untrustedInputProfile(
-            preserveWhitespaceTextNodes: Bool = false,
-            whitespaceTextNodePolicy: WhitespaceTextNodePolicy? = nil
+            whitespaceTextNodePolicy: WhitespaceTextNodePolicy = .dropWhitespaceOnly
         ) -> Configuration {
-            let resolvedWhitespacePolicy = whitespaceTextNodePolicy ?? (
-                preserveWhitespaceTextNodes ? .preserve : .dropWhitespaceOnly
-            )
-            return Configuration(
-                preserveWhitespaceTextNodes: preserveWhitespaceTextNodes,
-                whitespaceTextNodePolicy: resolvedWhitespacePolicy,
+            Configuration(
+                whitespaceTextNodePolicy: whitespaceTextNodePolicy,
                 parsingConfiguration: XMLDocument.ParsingConfiguration(
-                    trimBlankTextNodes: resolvedWhitespacePolicy != .preserve,
+                    trimBlankTextNodes: whitespaceTextNodePolicy != .preserve,
                     externalResourceLoadingPolicy: .forbidNetwork,
                     dtdLoadingPolicy: .forbid,
                     entityDecodingPolicy: .preserveReferences

@@ -298,6 +298,18 @@ final class XMLEncoderTests: XCTestCase {
         XCTAssertEqual(children(named: "entry", in: tree.root).count, 1)
     }
 
+    func test_encodeTree_itemElementName_namespacePrefixed_stripsPrefix() throws {
+        // "soap:item" must strip the namespace prefix → "item", not "soap_item".
+        let encoder = XMLEncoder(
+            configuration: .init(
+                rootElementName: "Root",
+                itemElementName: "soap:item"
+            )
+        )
+        let tree = try encoder.encodeTree([1, 2])
+        XCTAssertEqual(children(named: "item", in: tree.root).count, 2)
+    }
+
     // MARK: - POST-XML-6: CodingKey element name early validation
 
     func test_encodeTree_codingKeyWithWhitespace_throwsEarlyDiagnostic() throws {

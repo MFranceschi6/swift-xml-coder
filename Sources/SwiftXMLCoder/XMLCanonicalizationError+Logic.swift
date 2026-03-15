@@ -12,14 +12,15 @@ extension XMLCanonicalizationError {
         }
     }
 
-    public var code: String {
+    /// The stable error code identifying the failure category.
+    public var code: XMLCanonicalizationErrorCode {
         switch self {
         case .transformFailed(let code, _, _, _, _):
-            return code.rawValue
+            return code
         case .serializationFailed(let code, _, _):
-            return code.rawValue
+            return code
         case .other(let code, _, _):
-            return code.rawValue
+            return code
         }
     }
 }

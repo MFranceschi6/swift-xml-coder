@@ -15,7 +15,7 @@ Encode and decode any `Codable` type to XML with control over element vs. attrib
 ## Features
 
 - **`XMLEncoder` / `XMLDecoder`** — Codable-compatible, zero-reflection encoding and decoding
-- **Three-tier field mapping** — `@XMLAttribute` / `@XMLElement` property wrappers, `@XMLCodable` macros (Swift 5.9+), or runtime `XMLFieldCodingOverrides`
+- **Three-tier field mapping** — `@XMLAttribute` / `@XMLChild` property wrappers, `@XMLCodable` macros (Swift 5.9+), or runtime `XMLFieldCodingOverrides`
 - **XPath 1.0** — query parsed documents with namespace-aware expressions
 - **Namespace support** — declare, resolve, and validate XML namespace prefixes
 - **Canonicalization** — deterministic XML output via `XMLCanonicalizer` (XML-DSig ready)
