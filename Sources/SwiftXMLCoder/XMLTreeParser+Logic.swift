@@ -1,4 +1,5 @@
 import Foundation
+import Logging
 import XMLCoderCompatibility
 import SwiftXMLCoderCShim
 
@@ -32,6 +33,10 @@ extension XMLTreeParser {
             throw XMLParsingError.parseFailed(message: "XML document does not contain a root element.")
         }
 
+        var logger = configuration.logger
+        logger[metadataKey: "component"] = "XMLTreeParser"
+        logger.debug("XML parse started")
+
         var parseState = ParseState()
         let rootElement = try parseElement(
             nodePointer: rootNode.nodePointer,
@@ -40,6 +45,7 @@ extension XMLTreeParser {
             parseState: &parseState
         )
         let metadata = parseDocumentMetadata(from: rootNode.nodePointer.pointee.doc)
+        logger.debug("XML parse completed", metadata: ["nodeCount": "\(parseState.nodeCount)"])
         return XMLTreeDocument(root: rootElement, metadata: metadata)
     }
 
@@ -69,6 +75,10 @@ extension XMLTreeParser {
         }
 
         guard actual <= limit else {
+            configuration.logger.warning(
+                "XML parse limit exceeded",
+                metadata: ["code": "\(code)", "context": "\(context)", "actual": "\(actual)", "limit": "\(limit)"]
+            )
             throw XMLParsingError.parseFailed(
                 message: "[\(code)] \(context) exceeded max (\(limit)): \(actual)."
             )
@@ -81,7 +91,7 @@ extension XMLTreeParser {
         depth: Int,
         parseState: inout ParseState
     ) throws -> XMLTreeElement {
-        try ensureDepth(depth)
+        try ensureDepth(depth, parseState: &parseState)
         try incrementNodeCount(parseState: &parseState, context: "element")
 
         let nodeName = string(fromXMLCharPointer: nodePointer.pointee.name)
@@ -271,23 +281,65 @@ extension XMLTreeParser {
         return String(cString: UnsafePointer<CChar>(OpaquePointer(pointer)))
     }
 
-    private func ensureDepth(_ depth: Int) throws {
-        guard depth <= configuration.limits.maxDepth else {
+    private func ensureDepth(_ depth: Int, parseState: inout ParseState) throws {
+        let maxDepth = configuration.limits.maxDepth
+        guard depth <= maxDepth else {
+            configuration.logger.warning(
+                "XML parse depth limit exceeded",
+                metadata: ["code": "XML6_2H_MAX_DEPTH", "depth": "\(depth)", "limit": "\(maxDepth)"]
+            )
             throw XMLParsingError.parseFailed(
                 message:
-                    "[XML6_2H_MAX_DEPTH] XML depth exceeded max depth (\(configuration.limits.maxDepth)): \(depth)."
+                    "[XML6_2H_MAX_DEPTH] XML depth exceeded max depth (\(maxDepth)): \(depth)."
             )
+        }
+
+        // Warn once when depth first reaches 80% of the limit.
+        if !parseState.warnedDepthApproaching {
+            let threshold = (maxDepth * 4) / 5
+            if depth >= threshold {
+                parseState.warnedDepthApproaching = true
+                configuration.logger.warning(
+                    "XML parse depth approaching limit",
+                    metadata: ["code": "XML6_2H_MAX_DEPTH", "depth": "\(depth)", "limit": "\(maxDepth)"]
+                )
+            }
         }
     }
 
     private func incrementNodeCount(parseState: inout ParseState, context: String) throws {
         parseState.nodeCount += 1
-        try ensureLimit(
-            actual: parseState.nodeCount,
-            limit: configuration.limits.maxNodeCount,
-            code: "XML6_2H_MAX_NODE_COUNT",
-            context: "total parsed nodes after \(context)"
-        )
+        if let maxNodeCount = configuration.limits.maxNodeCount {
+            guard parseState.nodeCount <= maxNodeCount else {
+                configuration.logger.warning(
+                    "XML parse limit exceeded",
+                    metadata: [
+                        "code": "XML6_2H_MAX_NODE_COUNT",
+                        "context": "total parsed nodes after \(context)",
+                        "actual": "\(parseState.nodeCount)",
+                        "limit": "\(maxNodeCount)"
+                    ]
+                )
+                throw XMLParsingError.parseFailed(
+                    message: "[XML6_2H_MAX_NODE_COUNT] total parsed nodes after \(context) exceeded max (\(maxNodeCount)): \(parseState.nodeCount)."
+                )
+            }
+            // Warn once when node count first reaches 80% of the limit.
+            if !parseState.warnedNodeCountApproaching {
+                let threshold = (maxNodeCount * 4) / 5
+                if parseState.nodeCount >= threshold {
+                    parseState.warnedNodeCountApproaching = true
+                    configuration.logger.warning(
+                        "XML parse node count approaching limit",
+                        metadata: [
+                            "code": "XML6_2H_MAX_NODE_COUNT",
+                            "nodeCount": "\(parseState.nodeCount)",
+                            "limit": "\(maxNodeCount)"
+                        ]
+                    )
+                }
+            }
+        }
     }
 
     private func ensureUTF8Length(

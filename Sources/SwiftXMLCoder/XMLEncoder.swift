@@ -1,4 +1,5 @@
 import Foundation
+import Logging
 
 /// Encodes `Encodable` values into XML trees or raw XML data.
 ///
@@ -142,6 +143,11 @@ public struct XMLEncoder: Sendable {
         /// Defaults to ``XMLValidationPolicy/default``, which respects the
         /// `SWIFT_XML_CODER_STRICT_VALIDATION` compile-time flag.
         public let validationPolicy: XMLValidationPolicy
+        /// Logger used for encode-time diagnostics.
+        ///
+        /// Defaults to `Logger(label: "SwiftXMLCoder")` with a `.critical` effective threshold
+        /// until `LoggingSystem.bootstrap` is called by the application.
+        public let logger: Logger
 
         /// Creates an encoder configuration.
         ///
@@ -154,6 +160,7 @@ public struct XMLEncoder: Sendable {
         ///   - dataEncodingStrategy: How `Data` values are serialised. Defaults to `.base64`.
         ///   - writerConfiguration: Writer options forwarded to `XMLTreeWriter`.
         ///   - validationPolicy: Structural validation policy. Defaults to ``XMLValidationPolicy/default``.
+        ///   - logger: Logger for encode-time diagnostics. Defaults to `Logger(label: "SwiftXMLCoder")`.
         public init(
             rootElementName: String? = nil,
             itemElementName: String = "item",
@@ -162,7 +169,8 @@ public struct XMLEncoder: Sendable {
             dateEncodingStrategy: DateEncodingStrategy = .xsdDateTimeISO8601,
             dataEncodingStrategy: DataEncodingStrategy = .base64,
             writerConfiguration: XMLTreeWriter.Configuration = XMLTreeWriter.Configuration(),
-            validationPolicy: XMLValidationPolicy = .default
+            validationPolicy: XMLValidationPolicy = .default,
+            logger: Logger = Logger(label: "SwiftXMLCoder")
         ) {
             self.rootElementName = rootElementName
             self.itemElementName = itemElementName
@@ -172,6 +180,7 @@ public struct XMLEncoder: Sendable {
             self.dataEncodingStrategy = dataEncodingStrategy
             self.writerConfiguration = writerConfiguration
             self.validationPolicy = validationPolicy
+            self.logger = logger
         }
     }
 
@@ -242,7 +251,10 @@ public struct XMLEncoder: Sendable {
     #endif
 
     private func encodeTreeImpl<T: Encodable>(_ value: T) throws -> XMLTreeDocument {
-        let rootElementName = try resolveRootElementName(for: T.self)
+        var logger = configuration.logger
+        logger[metadataKey: "component"] = "XMLEncoder"
+        let rootElementName = try resolveRootElementName(for: T.self, logger: logger)
+        logger.debug("XML encode started", metadata: ["type": "\(T.self)", "rootElement": "\(rootElementName)"])
         let rootNamespaceURI = XMLRootNameResolver.implicitRootElementNamespaceURI(for: T.self)
         let rootNamespaceDeclarations: [XMLNamespaceDeclaration] = rootNamespaceURI.map {
             [XMLNamespaceDeclaration(prefix: nil, uri: $0)]
@@ -267,22 +279,46 @@ public struct XMLEncoder: Sendable {
         } else {
             try value.encode(to: encoder)
         }
-        return XMLTreeDocument(root: rootNode.makeElement())
+        let root = rootNode.makeElement()
+        logger.debug(
+            "XML encode completed",
+            metadata: ["rootElement": "\(rootElementName)", "childCount": "\(root.children.count)"]
+        )
+        return XMLTreeDocument(root: root)
     }
 
-    private func resolveRootElementName<T>(for type: T.Type) throws -> String {
+    private func resolveRootElementName<T>(for type: T.Type, logger: Logger) throws -> String {
         let policy = configuration.validationPolicy
+
         if let explicitName = try XMLRootNameResolver.explicitRootElementName(
             from: configuration.rootElementName,
             validationPolicy: policy
         ) {
+            let raw = configuration.rootElementName ?? ""
+            if explicitName != raw {
+                logger.warning(
+                    "rootElementName sanitized",
+                    metadata: ["original": "\(raw)", "sanitized": "\(explicitName)"]
+                )
+            }
             return explicitName
         }
 
         if let implicitName = try XMLRootNameResolver.implicitRootElementName(for: type, validationPolicy: policy) {
+            if let rawName = (type as? XMLRootNode.Type)?.xmlRootElementName, rawName != implicitName {
+                logger.warning(
+                    "XMLRootNode.xmlRootElementName sanitized",
+                    metadata: ["type": "\(T.self)", "original": "\(rawName)", "sanitized": "\(implicitName)"]
+                )
+            }
             return implicitName
         }
 
-        return XMLRootNameResolver.fallbackRootElementName(for: type)
+        let fallback = XMLRootNameResolver.fallbackRootElementName(for: type)
+        logger.debug(
+            "Root element name derived from type name",
+            metadata: ["type": "\(T.self)", "rootElement": "\(fallback)"]
+        )
+        return fallback
     }
 }

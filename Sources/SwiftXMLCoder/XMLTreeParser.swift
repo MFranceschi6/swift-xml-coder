@@ -1,4 +1,5 @@
 import Foundation
+import Logging
 import XMLCoderCompatibility
 import SwiftXMLCoderCShim
 
@@ -78,13 +79,18 @@ public struct XMLTreeParser: Sendable {
     }
 
     /// Full configuration for the XML tree parser.
-    public struct Configuration: Sendable, Hashable {
+    public struct Configuration: Sendable {
         /// How whitespace-only text nodes are handled. Defaults to `.dropWhitespaceOnly`.
         public let whitespaceTextNodePolicy: WhitespaceTextNodePolicy
         /// Low-level libxml2 parsing configuration (DTD, entity, external resource policies).
         public let parsingConfiguration: XMLDocument.ParsingConfiguration
         /// Input size limits. Defaults to unlimited.
         public let limits: Limits
+        /// Logger used for parse-time diagnostics.
+        ///
+        /// Defaults to `Logger(label: "SwiftXMLCoder")` with a `.critical` effective threshold
+        /// until `LoggingSystem.bootstrap` is called by the application.
+        public let logger: Logger
 
         /// Creates a parser configuration.
         ///
@@ -92,14 +98,17 @@ public struct XMLTreeParser: Sendable {
         ///   - whitespaceTextNodePolicy: Whitespace handling policy. Defaults to `.dropWhitespaceOnly`.
         ///   - parsingConfiguration: Low-level libxml2 parsing options.
         ///   - limits: Input size limits. Defaults to unlimited.
+        ///   - logger: Logger for parse-time diagnostics. Defaults to `Logger(label: "SwiftXMLCoder")`.
         public init(
             whitespaceTextNodePolicy: WhitespaceTextNodePolicy = .dropWhitespaceOnly,
             parsingConfiguration: XMLDocument.ParsingConfiguration = XMLDocument.ParsingConfiguration(),
-            limits: Limits = Limits()
+            limits: Limits = Limits(),
+            logger: Logger = Logger(label: "SwiftXMLCoder")
         ) {
             self.whitespaceTextNodePolicy = whitespaceTextNodePolicy
             self.parsingConfiguration = parsingConfiguration
             self.limits = limits
+            self.logger = logger
         }
 
         /// A configuration profile for parsing input from untrusted sources.
@@ -107,9 +116,12 @@ public struct XMLTreeParser: Sendable {
         /// Applies ``Limits/untrustedInputDefault()``, forbids network external resources,
         /// forbids DTD loading, and preserves entity references.
         ///
-        /// - Parameter whitespaceTextNodePolicy: Whitespace handling policy. Defaults to `.dropWhitespaceOnly`.
+        /// - Parameters:
+        ///   - whitespaceTextNodePolicy: Whitespace handling policy. Defaults to `.dropWhitespaceOnly`.
+        ///   - logger: Logger for parse-time diagnostics. Defaults to `Logger(label: "SwiftXMLCoder")`.
         public static func untrustedInputProfile(
-            whitespaceTextNodePolicy: WhitespaceTextNodePolicy = .dropWhitespaceOnly
+            whitespaceTextNodePolicy: WhitespaceTextNodePolicy = .dropWhitespaceOnly,
+            logger: Logger = Logger(label: "SwiftXMLCoder")
         ) -> Configuration {
             Configuration(
                 whitespaceTextNodePolicy: whitespaceTextNodePolicy,
@@ -119,13 +131,17 @@ public struct XMLTreeParser: Sendable {
                     dtdLoadingPolicy: .forbid,
                     entityDecodingPolicy: .preserveReferences
                 ),
-                limits: .untrustedInputDefault()
+                limits: .untrustedInputDefault(),
+                logger: logger
             )
         }
     }
 
     struct ParseState {
         var nodeCount: Int = 0
+        /// Prevents repeated "approaching limit" warnings for node count and depth.
+        var warnedNodeCountApproaching: Bool = false
+        var warnedDepthApproaching: Bool = false
     }
 
     /// The active configuration for this parser.
@@ -155,7 +171,8 @@ public struct XMLTreeParser: Sendable {
 
             let document = try XMLDocument(
                 data: data,
-                parsingConfiguration: effectiveParsingConfiguration()
+                parsingConfiguration: effectiveParsingConfiguration(),
+                logger: configuration.logger
             )
             return try parse(document: document)
         } catch let error as XMLParsingError {
@@ -197,7 +214,8 @@ public struct XMLTreeParser: Sendable {
 
         let document = try XMLDocument(
             data: data,
-            parsingConfiguration: effectiveParsingConfiguration()
+            parsingConfiguration: effectiveParsingConfiguration(),
+            logger: configuration.logger
         )
         return try parse(document: document)
     }

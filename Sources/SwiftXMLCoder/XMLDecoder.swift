@@ -1,4 +1,5 @@
 import Foundation
+import Logging
 
 /// Decodes XML trees or raw XML data into `Decodable` Swift types.
 ///
@@ -94,6 +95,11 @@ public struct XMLDecoder: Sendable {
         /// validated strictly. Defaults to ``XMLValidationPolicy/default``, which
         /// respects the `SWIFT_XML_CODER_STRICT_VALIDATION` compile-time flag.
         public let validationPolicy: XMLValidationPolicy
+        /// Logger used for decode-time diagnostics.
+        ///
+        /// Defaults to `Logger(label: "SwiftXMLCoder")` with a `.critical` effective threshold
+        /// until `LoggingSystem.bootstrap` is called by the application.
+        public let logger: Logger
 
         /// Creates a decoder configuration.
         ///
@@ -105,6 +111,7 @@ public struct XMLDecoder: Sendable {
         ///   - dataDecodingStrategy: How text content is decoded into `Data`. Defaults to `.base64`.
         ///   - parserConfiguration: Parser options forwarded to `XMLTreeParser`.
         ///   - validationPolicy: Structural validation policy. Defaults to ``XMLValidationPolicy/default``.
+        ///   - logger: Logger for decode-time diagnostics. Defaults to `Logger(label: "SwiftXMLCoder")`.
         public init(
             rootElementName: String? = nil,
             itemElementName: String = "item",
@@ -114,7 +121,8 @@ public struct XMLDecoder: Sendable {
             ),
             dataDecodingStrategy: DataDecodingStrategy = .base64,
             parserConfiguration: XMLTreeParser.Configuration = XMLTreeParser.Configuration(),
-            validationPolicy: XMLValidationPolicy = .default
+            validationPolicy: XMLValidationPolicy = .default,
+            logger: Logger = Logger(label: "SwiftXMLCoder")
         ) {
             self.rootElementName = rootElementName
             self.itemElementName = itemElementName
@@ -123,6 +131,7 @@ public struct XMLDecoder: Sendable {
             self.dataDecodingStrategy = dataDecodingStrategy
             self.parserConfiguration = parserConfiguration
             self.validationPolicy = validationPolicy
+            self.logger = logger
         }
     }
 
@@ -200,8 +209,16 @@ public struct XMLDecoder: Sendable {
     #endif
 
     private func decodeTreeImpl<T: Decodable>(_ type: T.Type, from tree: XMLTreeDocument) throws -> T {
+        var logger = configuration.logger
+        logger[metadataKey: "component"] = "XMLDecoder"
+        logger.debug("XML decode started", metadata: ["type": "\(T.self)", "rootElement": "\(tree.root.name.localName)"])
+
         if let expectedRootName = try resolveExpectedRootElementName(for: type),
            tree.root.name.localName != expectedRootName {
+            logger.error(
+                "XML root element mismatch",
+                metadata: ["expected": "\(expectedRootName)", "found": "\(tree.root.name.localName)", "type": "\(T.self)"]
+            )
             throw XMLParsingError.parseFailed(
                 message: "[XML6_5_ROOT_MISMATCH] Expected root '\(expectedRootName)' but found '\(tree.root.name.localName)'."
             )
@@ -220,6 +237,7 @@ public struct XMLDecoder: Sendable {
         // bypassing our scalar path. This mirrors the JSONDecoder approach of special-casing
         // Foundation types via a direct unbox call instead of relying on T.init(from:).
         if let scalar: T = try decoder.decodeScalar(type, from: tree.root, codingPath: []) {
+            logger.debug("XML decode completed", metadata: ["mode": "scalar"])
             return scalar
         }
         if decoder.isKnownScalarType(type) {
@@ -227,7 +245,12 @@ public struct XMLDecoder: Sendable {
                 message: "[XML6_5_SCALAR_PARSE_FAILED] Unable to decode scalar at root element '\(tree.root.name.localName)'."
             )
         }
-        return try T(from: decoder)
+        let result = try T(from: decoder)
+        logger.debug(
+            "XML decode completed",
+            metadata: ["rootElement": "\(tree.root.name.localName)", "childCount": "\(tree.root.children.count)"]
+        )
+        return result
     }
 
     private func resolveExpectedRootElementName<T>(for type: T.Type) throws -> String? {
