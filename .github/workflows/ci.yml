@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [ "main" ]
   pull_request:
-    branches: [main]
+    branches: [ "main" ]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -12,69 +12,264 @@ concurrency:
 
 jobs:
   # ──────────────────────────────────────────────────────────────────────────
-  # Linux × all Swift versions
+  # runtime-5.4 — manifest smoke (Package.swift, swift-tools-version: 5.4)
+  # Uses Docker: setup-swift cannot install 5.4 on modern runners.
   # ──────────────────────────────────────────────────────────────────────────
-  linux:
-    name: Linux / Swift ${{ matrix.swift }}
-    runs-on: ${{ matrix.swift == '5.6' && 'ubuntu-22.04' || matrix.swift == '5.9' && 'ubuntu-22.04' || 'ubuntu-latest' }}
+  runtime-5_4:
+    name: runtime-5.4 (linux)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: List versioned manifests
+        run: ls -1 Package*.swift
+
+      - name: Validate runtime lane with Swift 5.4
+        run: |
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE:/workspace" \
+            -w /workspace \
+            swift:5.4 \
+            bash -lc '
+              set -euo pipefail
+              apt-get update >/dev/null
+              apt-get install -y libxml2-dev >/dev/null
+              rm -rf /tmp/swift-lane-workspace
+              mkdir -p /tmp/swift-lane-workspace
+              cp -a /workspace/Package*.swift /tmp/swift-lane-workspace/
+              cp -a /workspace/Sources /tmp/swift-lane-workspace/
+              cp -a /workspace/Tests /tmp/swift-lane-workspace/
+              cd /tmp/swift-lane-workspace
+              swift --version
+              swift package describe > /tmp/runtime-5.4-package-describe.txt
+            '
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # tooling-5.6 — build + test (Package@swift-5.6.swift)
+  # Uses Docker: setup-swift cannot install 5.6 on ubuntu-24.04.
+  # ──────────────────────────────────────────────────────────────────────────
+  tooling-5_6:
+    name: tooling-5.6 (linux)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: List versioned manifests
+        run: ls -1 Package*.swift
+
+      - name: Build and test with Swift 5.6
+        run: |
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE:/workspace" \
+            -w /workspace \
+            swift:5.6 \
+            bash -lc '
+              set -euo pipefail
+              apt-get update >/dev/null
+              apt-get install -y libxml2-dev >/dev/null
+              rm -rf /tmp/swift-lane-workspace
+              mkdir -p /tmp/swift-lane-workspace
+              cp -a /workspace/Package*.swift /tmp/swift-lane-workspace/
+              cp -a /workspace/Sources /tmp/swift-lane-workspace/
+              cp -a /workspace/Tests /tmp/swift-lane-workspace/
+              cd /tmp/swift-lane-workspace
+              swift --version
+              swift build -c debug
+              swift test --jobs 1 --parallel --num-workers 1
+            '
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # macro-5.9 — build + test + SwiftLint (Package@swift-5.9.swift)
+  # ──────────────────────────────────────────────────────────────────────────
+  macro-5_9:
+    name: macro-5.9 (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        swift: ["5.6", "5.9", "5.10", "6.0", "6.1"]
+        os: [ubuntu-22.04, macos-15]
     steps:
       - uses: actions/checkout@v4
 
-      - uses: swift-actions/setup-swift@v2
+      - name: Setup Swift
+        uses: swift-actions/setup-swift@v2
         with:
-          swift-version: ${{ matrix.swift }}
+          swift-version: "5.9"
 
-      - name: Build
-        run: swift build -c debug
+      - name: Smoke check
+        run: swift --version
 
-      - name: Test
-        run: swift test --enable-code-coverage
+      - name: List versioned manifests
+        run: ls -1 Package*.swift
 
-      # Coverage report — only on Swift 6.1, only on pushes to main
-      - name: Generate coverage report
-        if: matrix.swift == '6.1' && github.event_name == 'push' && github.ref == 'refs/heads/main'
+      - name: Install System Dependencies (Linux)
+        if: runner.os == 'Linux'
         run: |
-          BINARY=$(swift build --show-bin-path -c debug)/SwiftXMLCoderPackageTests
-          PROFDATA=$(find .build -name "*.profdata" | head -1)
-          xcrun llvm-profdata merge -sparse "$PROFDATA" -o .build/merged.profdata
-          xcrun llvm-cov export \
-            "$BINARY" \
-            -instr-profile=.build/merged.profdata \
-            -format=lcov \
-            -ignore-filename-regex="\.build|Tests" \
-            > .build/coverage.lcov
-          xcrun llvm-cov report \
-            "$BINARY" \
-            -instr-profile=.build/merged.profdata \
-            -ignore-filename-regex="\.build|Tests" \
-            --use-color
+          sudo apt-get update
+          sudo apt-get install -y libxml2-dev
 
-      - name: Upload coverage artifact
-        if: matrix.swift == '6.1' && github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-linux-swift-6_1
-          path: .build/coverage.lcov
-          retention-days: 30
+      - name: Run SwiftLint (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install swiftlint
+          swiftlint lint --reporter github-actions-logging
 
-  # ──────────────────────────────────────────────────────────────────────────
-  # macOS / Swift 6.1 (Xcode 16 on macos-15)
-  # ──────────────────────────────────────────────────────────────────────────
-  macos:
-    name: macOS / Swift 6.1
-    runs-on: macos-15
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Select Xcode
-        run: sudo xcode-select -switch /Applications/Xcode_16.2.app
+      - name: Run SwiftLint (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE:/workdir" \
+            -w /workdir \
+            ghcr.io/realm/swiftlint:latest \
+            swiftlint lint --reporter github-actions-logging
 
       - name: Build
         run: swift build -c debug
 
       - name: Test
-        run: swift test --enable-code-coverage
+        run: swift test --jobs 1 --parallel --num-workers 1
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # quality-5.10 — build + test + SwiftLint + coverage ≥ 90%
+  # ──────────────────────────────────────────────────────────────────────────
+  quality-5_10:
+    name: quality-5.10 (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, macos-15]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Swift
+        uses: swift-actions/setup-swift@v2
+        with:
+          swift-version: "5.10"
+
+      - name: Smoke check
+        run: swift --version
+
+      - name: List versioned manifests
+        run: ls -1 Package*.swift
+
+      - name: Install System Dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxml2-dev
+
+      - name: Run SwiftLint (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install swiftlint
+          swiftlint lint --reporter github-actions-logging
+
+      - name: Run SwiftLint (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE:/workdir" \
+            -w /workdir \
+            ghcr.io/realm/swiftlint:latest \
+            swiftlint lint --reporter github-actions-logging
+
+      - name: Build
+        run: swift build -c debug
+
+      - name: Test (with Code Coverage)
+        run: swift test --enable-code-coverage --jobs 1 --parallel --num-workers 1
+
+      - name: Enforce Code Coverage (>= 90%)
+        run: |
+          BIN_PATH=$(swift build --show-bin-path)
+          PROFDATA=$(find "$BIN_PATH/codecov" -name "default.profdata" -type f | head -n 1)
+          TEST_BUNDLE=$(find "$BIN_PATH" -name "*.xctest" | head -n 1)
+
+          if [ -z "$TEST_BUNDLE" ]; then
+            echo "::error::Could not find test bundle in $BIN_PATH."
+            exit 1
+          fi
+
+          if [ -d "$TEST_BUNDLE" ]; then
+            TEST_BIN="$TEST_BUNDLE/Contents/MacOS/$(basename "$TEST_BUNDLE" .xctest)"
+          else
+            TEST_BIN="$TEST_BUNDLE"
+          fi
+
+          LLVM_COV="$(dirname "$(which swift)")/llvm-cov"
+          if [ ! -x "$LLVM_COV" ]; then
+            LLVM_COV="llvm-cov"
+          fi
+
+          if [ ! -f "$TEST_BIN" ] || [ -z "$PROFDATA" ] || [ ! -f "$PROFDATA" ]; then
+            echo "::error::Could not find test binary ($TEST_BIN) or profdata ($PROFDATA)."
+            exit 1
+          fi
+
+          COVERAGE_REPORT=$($LLVM_COV report -instr-profile="$PROFDATA" "$TEST_BIN" --ignore-filename-regex=".build|Tests|Package.swift")
+          TOTAL_LINE_COV=$(printf '%s\n' "$COVERAGE_REPORT" | awk '/^TOTAL/ {print $10}')
+          TOTAL_LINE_COV="${TOTAL_LINE_COV%\%}"
+          echo "Total line coverage: $TOTAL_LINE_COV%"
+
+          if [[ -z "$TOTAL_LINE_COV" ]]; then
+            echo "::error::Unable to extract total line coverage."
+            printf '%s\n' "$COVERAGE_REPORT"
+            exit 1
+          fi
+
+          awk "BEGIN { exit !($TOTAL_LINE_COV >= 90.0) }" || {
+            echo "::error::Code coverage $TOTAL_LINE_COV% is below the 90% threshold."
+            exit 1
+          }
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # latest — Swift 6.1 (linux + macOS)
+  # ──────────────────────────────────────────────────────────────────────────
+  latest:
+    name: latest-6.1 (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, macos-15]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Swift
+        uses: swift-actions/setup-swift@v2
+        with:
+          swift-version: "6.1"
+
+      - name: Smoke check
+        run: swift --version
+
+      - name: List versioned manifests
+        run: ls -1 Package*.swift
+
+      - name: Install System Dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxml2-dev
+
+      - name: Run SwiftLint (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install swiftlint
+          swiftlint lint --reporter github-actions-logging
+
+      - name: Run SwiftLint (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE:/workdir" \
+            -w /workdir \
+            ghcr.io/realm/swiftlint:latest \
+            swiftlint lint --reporter github-actions-logging
+
+      - name: Build
+        run: swift build -c debug
+
+      - name: Test
+        run: swift test --jobs 1 --parallel --num-workers 1
