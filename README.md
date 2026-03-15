@@ -3,7 +3,7 @@
 [![CI](https://github.com/MFranceschi6/swift-xml-coder/actions/workflows/ci.yml/badge.svg)](https://github.com/MFranceschi6/swift-xml-coder/actions/workflows/ci.yml)
 [![Lint](https://github.com/MFranceschi6/swift-xml-coder/actions/workflows/lint.yml/badge.svg)](https://github.com/MFranceschi6/swift-xml-coder/actions/workflows/lint.yml)
 [![Swift 5.6+](https://img.shields.io/badge/Swift-5.6%2B-orange)](https://swift.org)
-[![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Linux-lightgrey)](https://swift.org)
+[![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20iOS%20%7C%20tvOS%20%7C%20watchOS%20%7C%20Linux-lightgrey)](https://swift.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue)](LICENSE)
 
 A Codable-compatible XML encoder and decoder for Swift, backed by libxml2.
@@ -22,7 +22,7 @@ Encode and decode any `Codable` type to XML with control over element vs. attrib
 - **Parser security** — configurable depth, node-count, and text-size limits; network and DTD access disabled by default
 - **Immutable tree model** — value-semantic `XMLTreeDocument` for transform pipelines
 - **Swift 5.6 – 6.1** — multi-manifest compatibility; macros on 5.9+; `~Copyable` ownership on 6.0+
-- **Linux + macOS** — SPM-only, no Objective-C, no Foundation XML APIs
+- **macOS, iOS, tvOS, watchOS, Linux** — SPM-only, no Objective-C, no Foundation XML APIs
 
 ---
 
@@ -126,6 +126,9 @@ Full API documentation and guides:
 |-----------|-------------|
 | Swift | 5.6+ (macros require 5.9+) |
 | macOS | 10.15+ |
+| iOS | 15.0+ |
+| tvOS | 15.0+ |
+| watchOS | 8.0+ |
 | Linux | Ubuntu 20.04+ with `libxml2-dev` |
 | Package manager | Swift Package Manager only |
 

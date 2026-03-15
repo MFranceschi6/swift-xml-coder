@@ -38,6 +38,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Encoder and decoder emit `.trace` (not `.debug`) when a per-property date hint from `XMLDateCodingOverrideProvider` overrides the global strategy (with `field` and `hint` metadata).
 - 20 new integration tests in `XMLStructuredLoggingTests` covering encoder/decoder/parser debug lifecycle entries with metadata assertions, root name sanitization warnings, root mismatch error log, per-property hint trace entries, limit exceeded/approaching warnings (including once-only guarantee), and `XMLCapturingLogHandler` helpers.
 
+- iOS 15+, tvOS 15+, watchOS 8+ platform support (Epic G.1 — Track 1): libxml2 resolves via Xcode SDK sysroot; `pkgConfig` silently no-ops on device/simulator SDKs. No source changes required. CI adds `ios-simulator` build-only job (`arm64-apple-ios15.0-simulator`).
+- `Platforms` badge and Requirements table in `README.md` updated to include iOS, tvOS, watchOS.
+- DocC `Articles/Compatibility.md` documents new Apple platform targets and CI gate policy.
+
 ### Changed
 - XML field-name validation (error code `XML6_6_FIELD_NAME_INVALID`) is now gated by `XMLValidationPolicy.validateElementNames`. Existing tests updated to use `validationPolicy: .strict` to preserve their intent. In lenient mode (default) invalid field names are silently passed through to libxml2.
 

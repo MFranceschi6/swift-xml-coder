@@ -5,7 +5,10 @@ import PackageDescription
 let package = Package(
     name: "SwiftXMLCoder",
     platforms: [
-        .macOS(.v10_15)
+        .macOS(.v10_15),
+        .iOS(.v15),
+        .tvOS(.v15),
+        .watchOS(.v8)
     ],
     products: [
         .library(name: "SwiftXMLCoder", targets: ["SwiftXMLCoder"]),
