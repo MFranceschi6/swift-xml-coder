@@ -227,4 +227,61 @@ final class XMLDocumentCoverageTests: XCTestCase {
         XCTAssertNil(root.namespacePrefix)
         XCTAssertEqual(root.namespaceURI, "urn:default")
     }
+
+    // MARK: - XMLParsingError Equatable
+
+    func test_xmlParsingError_equatable_sameCase_equal() {
+        XCTAssertEqual(XMLParsingError.invalidUTF8, .invalidUTF8)
+        XCTAssertEqual(XMLParsingError.parseFailed(message: "msg"), .parseFailed(message: "msg"))
+        XCTAssertEqual(XMLParsingError.parseFailed(message: nil), .parseFailed(message: nil))
+        XCTAssertEqual(
+            XMLParsingError.xpathFailed(expression: "//x", message: "oops"),
+            .xpathFailed(expression: "//x", message: "oops")
+        )
+        XCTAssertEqual(XMLParsingError.documentCreationFailed(message: "d"), .documentCreationFailed(message: "d"))
+        XCTAssertEqual(
+            XMLParsingError.nodeCreationFailed(name: "el", message: "n"),
+            .nodeCreationFailed(name: "el", message: "n")
+        )
+        XCTAssertEqual(
+            XMLParsingError.invalidNamespaceConfiguration(prefix: "ns", uri: "urn:x"),
+            .invalidNamespaceConfiguration(prefix: "ns", uri: "urn:x")
+        )
+        XCTAssertEqual(XMLParsingError.nodeOperationFailed(message: "op"), .nodeOperationFailed(message: "op"))
+    }
+
+    func test_xmlParsingError_equatable_differentCases_notEqual() {
+        XCTAssertNotEqual(XMLParsingError.invalidUTF8, .parseFailed(message: nil))
+        XCTAssertNotEqual(XMLParsingError.parseFailed(message: "a"), .parseFailed(message: "b"))
+    }
+
+    func test_xmlParsingError_other_neverEqual() {
+        let lhs = XMLParsingError.other(underlyingError: nil, message: "x")
+        let rhs = XMLParsingError.other(underlyingError: nil, message: "x")
+        XCTAssertNotEqual(lhs, rhs)
+    }
+
+    // MARK: - XMLDateFormatHint encodingStrategy / decodingStrategy
+
+    func test_xmlDateFormatHint_encodingStrategy_allCases() {
+        let hints: [XMLDateFormatHint] = [
+            .xsdDateTime, .xsdDate, .xsdDateWithTimezone(identifier: "Europe/Rome"),
+            .xsdTime, .xsdTimeWithTimezone(identifier: "America/New_York"),
+            .xsdGYear, .xsdGYearMonth, .xsdGMonth, .xsdGDay, .xsdGMonthDay,
+            .secondsSince1970, .millisecondsSince1970
+        ]
+        for hint in hints {
+            _ = hint.encodingStrategy
+            _ = hint.decodingStrategy
+        }
+    }
+
+    func test_xmlDateFormatHint_equatable_hashable() {
+        XCTAssertEqual(XMLDateFormatHint.xsdDate, .xsdDate)
+        XCTAssertNotEqual(XMLDateFormatHint.xsdDate, .xsdTime)
+        var seen = Set<XMLDateFormatHint>()
+        seen.insert(.xsdDate)
+        seen.insert(.xsdDate)
+        XCTAssertEqual(seen.count, 1)
+    }
 }

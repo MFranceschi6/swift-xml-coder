@@ -87,7 +87,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-22.04, macos-15]
+        # macOS excluded: setup-swift standalone toolchain (5.9.x) is incompatible
+        # with the macOS 15.x SDK shipped on macos-15 runners (c_standard_library mismatch).
+        os: [ubuntu-22.04]
     steps:
       - uses: actions/checkout@v4
 
@@ -138,7 +140,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-22.04, macos-15]
+        # macOS excluded: setup-swift standalone toolchain (5.10.x) is incompatible
+        # with the macOS 15.x SDK shipped on macos-15 runners (c_standard_library mismatch).
+        os: [ubuntu-22.04]
     steps:
       - uses: actions/checkout@v4
 
