@@ -429,10 +429,10 @@ Examples:
 
 | Epic | Title | Status | Notes |
 |------|-------|--------|-------|
-| A | CI/CD Infrastructure | ✅ Done | commit `06f6909` — CI matrix, SwiftLint, DocC stub, coverage |
+| A | CI/CD Infrastructure | ✅ Done | commit `06f6909` — CI matrix, SwiftLint, DocC stub, coverage. **CI infra notes:** Swift 5.6/5.9 Linux jobs must use `ubuntu-22.04` (toolchains not available on ubuntu-24.04); SwiftLint action pinned to `realm/SwiftLint@v0.63.2` (v0.57.1 tag does not exist). Fixed in `0dc1620`. |
 | B | Documentation | ✅ Done | commit `aede033` — DocC catalog + README + inline doc comments |
 | C | API Review & Breaking Changes | ✅ Done | commit `b53bb95` — XMLChild rename, Equatable, typed code, preserveWhitespace removal, makeXMLSafeName fix |
-| D | Quality & Hardening | 🔄 In Progress | D.3 XSD temporal (all 8 types), D.4 security factory, D.1 name validation, D.2 macro diagnostics |
-| E | Ergonomics | ⏳ Pending | E.1 @XMLDateFormat macro, E.2 structured logging (all levels + metadata) |
+| D | Quality & Hardening | ✅ Done | commit `89d68d2`–`00b13c9` — D.1 name validation, D.2 macro diagnostics, D.3 XSD temporal (all 8 types), D.4 security factory |
+| E | Ergonomics | ✅ Done | commit `fcad15f` (E.1 @XMLDateFormat) + `88ef636` (E.2 structured logging, all levels + metadata) |
 | G | iOS Support | ⏳ Pending | Independent of C/D/E; Track 1 (module map) first |
 | F | Release 1.0 | ⏳ Pending | Last; depends on all epics |

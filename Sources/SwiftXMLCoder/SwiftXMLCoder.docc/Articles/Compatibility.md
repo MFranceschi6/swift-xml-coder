@@ -16,7 +16,14 @@ SwiftXMLCoder supports five Swift compatibility lanes with a single source tree.
 ## Minimum Deployment Targets
 
 - **macOS**: 10.15 (Catalina)
+- **iOS**: 15.0
+- **tvOS**: 15.0
+- **watchOS**: 8.0
 - **Linux**: Ubuntu 20.04+ (libxml2-dev required)
+
+iOS, tvOS, and watchOS are supported via Track 1: libxml2 is a system library embedded in every Xcode SDK sysroot. No additional configuration is needed — `pkgConfig` resolution silently no-ops on Apple device/simulator SDKs, and the `link "xml2"` directive in the module map handles linking. All existing API is available on all Apple platforms.
+
+> **Note:** CI runs a build-only gate for iOS Simulator (`arm64-apple-ios15.0-simulator`). Test execution on Simulator is not run in CI due to runner boot time constraints; the macOS test suite provides full coverage of the shared code path.
 
 ## Feature Availability by Lane
 

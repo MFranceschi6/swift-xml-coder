@@ -277,3 +277,34 @@ jobs:
 
       - name: Test
         run: swift test --jobs 1 --parallel --num-workers 1
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # ios-simulator — iOS Simulator build (build only, no test run)
+  # Verifies Track 1 (libxml2 via sysroot) compiles for iOS without pkgConfig.
+  # ──────────────────────────────────────────────────────────────────────────
+  ios-simulator:
+    name: ios-simulator (macos-15)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Swift
+        uses: swift-actions/setup-swift@v2
+        with:
+          swift-version: "6.1"
+
+      - name: Smoke check
+        run: swift --version
+
+      - name: List versioned manifests
+        run: ls -1 Package*.swift
+
+      - name: Resolve iOS Simulator SDK path
+        id: sdk
+        run: echo "path=$(xcrun --sdk iphonesimulator --show-sdk-path)" >> "$GITHUB_OUTPUT"
+
+      - name: Build (iOS Simulator)
+        run: |
+          swift build \
+            --triple arm64-apple-ios15.0-simulator \
+            --sdk "${{ steps.sdk.outputs.path }}"
