@@ -251,7 +251,7 @@ public struct XMLEncoder: Sendable {
             name: XMLQualifiedName(localName: rootElementName, namespaceURI: rootNamespaceURI),
             namespaceDeclarations: rootNamespaceDeclarations
         )
-        let options = _XMLEncoderOptions(configuration: configuration)
+        let options = try _XMLEncoderOptions(configuration: configuration)
         let encoder = _XMLTreeEncoder(
             options: options,
             codingPath: [],
@@ -270,11 +270,15 @@ public struct XMLEncoder: Sendable {
     }
 
     private func resolveRootElementName<T>(for type: T.Type) throws -> String {
-        if let explicitName = XMLRootNameResolver.explicitRootElementName(from: configuration.rootElementName) {
+        let policy = configuration.validationPolicy
+        if let explicitName = try XMLRootNameResolver.explicitRootElementName(
+            from: configuration.rootElementName,
+            validationPolicy: policy
+        ) {
             return explicitName
         }
 
-        if let implicitName = try XMLRootNameResolver.implicitRootElementName(for: type) {
+        if let implicitName = try XMLRootNameResolver.implicitRootElementName(for: type, validationPolicy: policy) {
             return implicitName
         }
 

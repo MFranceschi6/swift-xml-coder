@@ -310,6 +310,98 @@ final class XMLEncoderTests: XCTestCase {
         XCTAssertEqual(children(named: "item", in: tree.root).count, 2)
     }
 
+    // MARK: - D.1: rootElementName strict validation
+
+    func test_encodeTree_rootElementName_withSpace_strictPolicy_throwsEarlyDiagnostic() throws {
+        let encoder = XMLEncoder(configuration: .init(
+            rootElementName: "bad root",
+            validationPolicy: .strict
+        ))
+        XCTAssertThrowsError(try encoder.encodeTree(["x"])) { error in
+            guard case let XMLParsingError.parseFailed(message) = error else {
+                return XCTFail("Expected XMLParsingError.parseFailed, got \(error).")
+            }
+            XCTAssertTrue((message ?? "").contains("XML6_6_ROOT_NAME_INVALID"), "got: \(message ?? "")")
+        }
+    }
+
+    func test_encodeTree_rootElementName_withDigitPrefix_strictPolicy_throwsEarlyDiagnostic() throws {
+        let encoder = XMLEncoder(configuration: .init(
+            rootElementName: "9Root",
+            validationPolicy: .strict
+        ))
+        XCTAssertThrowsError(try encoder.encodeTree(["x"])) { error in
+            guard case let XMLParsingError.parseFailed(message) = error else {
+                return XCTFail("Expected XMLParsingError.parseFailed, got \(error).")
+            }
+            XCTAssertTrue((message ?? "").contains("XML6_6_ROOT_NAME_INVALID"), "got: \(message ?? "")")
+        }
+    }
+
+    func test_encodeTree_rootElementName_validName_strictPolicy_succeeds() throws {
+        struct S: Encodable { let v: Int }
+        let encoder = XMLEncoder(configuration: .init(rootElementName: "Root_1", validationPolicy: .strict))
+        XCTAssertNoThrow(try encoder.encodeTree(S(v: 1)))
+    }
+
+    func test_encodeTree_xmlRootNode_invalidName_strictPolicy_throwsEarlyDiagnostic() throws {
+        struct Bad: Encodable, XMLRootNode {
+            static let xmlRootElementName = "bad name"
+            let v: Int
+        }
+        let encoder = XMLEncoder(configuration: .init(validationPolicy: .strict))
+        XCTAssertThrowsError(try encoder.encodeTree(Bad(v: 1))) { error in
+            guard case let XMLParsingError.parseFailed(message) = error else {
+                return XCTFail("Expected XMLParsingError.parseFailed, got \(error).")
+            }
+            XCTAssertTrue((message ?? "").contains("XML6_6_ROOT_NAME_INVALID"), "got: \(message ?? "")")
+        }
+    }
+
+    // MARK: - D.1: itemElementName strict validation
+
+    func test_encodeTree_itemElementName_withSpace_strictPolicy_throwsEarlyDiagnostic() throws {
+        let encoder = XMLEncoder(configuration: .init(
+            rootElementName: "Root",
+            itemElementName: "bad item",
+            validationPolicy: .strict
+        ))
+        XCTAssertThrowsError(try encoder.encodeTree([1, 2])) { error in
+            guard case let XMLParsingError.parseFailed(message) = error else {
+                return XCTFail("Expected XMLParsingError.parseFailed, got \(error).")
+            }
+            XCTAssertTrue((message ?? "").contains("XML6_6_ITEM_NAME_INVALID"), "got: \(message ?? "")")
+        }
+    }
+
+    func test_encodeTree_itemElementName_validName_strictPolicy_succeeds() throws {
+        let encoder = XMLEncoder(configuration: .init(
+            rootElementName: "Root",
+            itemElementName: "entry",
+            validationPolicy: .strict
+        ))
+        XCTAssertNoThrow(try encoder.encodeTree([1, 2]))
+    }
+
+    // MARK: - D.1: lenient mode — invalid names are sanitized, not rejected
+
+    func test_encodeTree_rootElementName_withSpace_lenientPolicy_sanitizesAndSucceeds() throws {
+        struct S: Encodable { let v: Int }
+        let encoder = XMLEncoder(configuration: .init(rootElementName: "bad root", validationPolicy: .lenient))
+        let tree = try encoder.encodeTree(S(v: 1))
+        XCTAssertEqual(tree.root.name.localName, "bad_root")
+    }
+
+    func test_encodeTree_itemElementName_withSpace_lenientPolicy_sanitizesAndSucceeds() throws {
+        let encoder = XMLEncoder(configuration: .init(
+            rootElementName: "Root",
+            itemElementName: "bad item",
+            validationPolicy: .lenient
+        ))
+        let tree = try encoder.encodeTree([1, 2])
+        XCTAssertEqual(children(named: "bad_item", in: tree.root).count, 2)
+    }
+
     // MARK: - POST-XML-6: CodingKey element name early validation
 
     func test_encodeTree_codingKeyWithWhitespace_throwsEarlyDiagnostic() throws {

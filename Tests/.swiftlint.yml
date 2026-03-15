@@ -15,3 +15,7 @@ type_name:
 
 force_unwrapping:
   severity: warning
+
+type_body_length:
+  warning: 600
+  error: 800
