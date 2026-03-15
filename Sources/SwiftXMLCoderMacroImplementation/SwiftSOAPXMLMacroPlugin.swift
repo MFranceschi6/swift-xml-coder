@@ -7,5 +7,6 @@ struct SwiftXMLCoderMacroPlugin: CompilerPlugin {
         XMLAttributeMacro.self,
         XMLChildMacro.self,
         XMLCodableMacro.self,
+        XMLDateFormatMacro.self,
     ]
 }

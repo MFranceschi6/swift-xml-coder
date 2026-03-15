@@ -49,6 +49,13 @@ func _xmlFieldNodeKinds<T>(for type: T.Type) -> [String: XMLFieldNodeKind] {
     return provider.xmlFieldNodeKinds
 }
 
+func _xmlPropertyDateHints<T>(for type: T.Type) -> [String: XMLDateFormatHint] {
+    guard let provider = type as? XMLDateCodingOverrideProvider.Type else {
+        return [:]
+    }
+    return provider.xmlPropertyDateHints
+}
+
 struct _XMLEncoderOptions {
     let itemElementName: String
     let fieldCodingOverrides: XMLFieldCodingOverrides
@@ -56,6 +63,8 @@ struct _XMLEncoderOptions {
     let dateEncodingStrategy: XMLEncoder.DateEncodingStrategy
     let dataEncodingStrategy: XMLEncoder.DataEncodingStrategy
     let validationPolicy: XMLValidationPolicy
+    /// Per-property date format hints populated from `XMLDateCodingOverrideProvider`.
+    var perPropertyDateHints: [String: XMLDateFormatHint] = [:]
 
     init(configuration: XMLEncoder.Configuration) throws {
         let policy = configuration.validationPolicy
@@ -266,7 +275,15 @@ final class _XMLTreeEncoder: Encoder {
             isAttribute: isAttribute
         )
 
-        switch options.dateEncodingStrategy {
+        // Per-property hint overrides the global strategy when present.
+        let effectiveStrategy: XMLEncoder.DateEncodingStrategy
+        if let name = localName, let hint = options.perPropertyDateHints[name] {
+            effectiveStrategy = hint.encodingStrategy
+        } else {
+            effectiveStrategy = options.dateEncodingStrategy
+        }
+
+        switch effectiveStrategy {
         case .deferredToDate:
             return nil
         case .secondsSince1970:
@@ -390,8 +407,10 @@ struct _XMLKeyedEncodingContainer<Key: CodingKey>: KeyedEncodingContainerProtoco
         }
 
         let child = encoder.node.makeChild(localName: key.stringValue)
+        var nestedOptions = encoder.options
+        nestedOptions.perPropertyDateHints = _xmlPropertyDateHints(for: T.self)
         let nestedEncoder = _XMLTreeEncoder(
-            options: encoder.options,
+            options: nestedOptions,
             codingPath: codingPath + [key],
             node: child,
             fieldNodeKinds: _xmlFieldNodeKinds(for: T.self)
