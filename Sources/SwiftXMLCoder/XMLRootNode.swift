@@ -1,6 +1,21 @@
 import Foundation
 
+/// A type that declares a fixed XML root element name and optional namespace URI.
+///
+/// Conform your `Codable` type to `XMLRootNode` to override the default root element
+/// name (which falls back to the type name) and to attach a namespace URI to the root:
+///
+/// ```swift
+/// struct Envelope: Codable, XMLRootNode {
+///     static let xmlRootElementName = "Envelope"
+///     static let xmlRootElementNamespaceURI: String? = "http://schemas.xmlsoap.org/soap/envelope/"
+/// }
+/// ```
+///
+/// Both ``XMLEncoder`` and ``XMLDecoder`` check for this conformance before falling
+/// back to the configuration-level `rootElementName`.
 public protocol XMLRootNode {
+    /// The XML element name to use as the document root when encoding this type.
     static var xmlRootElementName: String { get }
     /// The XML namespace URI for the root element, or `nil` for no namespace.
     static var xmlRootElementNamespaceURI: String? { get }

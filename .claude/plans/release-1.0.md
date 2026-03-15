@@ -411,7 +411,7 @@ Examples:
 
 | Epic | Title | Status | Notes |
 |------|-------|--------|-------|
-| A | CI/CD Infrastructure | ⏳ Pending | No workflows exist yet |
+| A | CI/CD Infrastructure | ✅ Done | commit 06f6909 — CI matrix, SwiftLint, DocC stub, coverage |
 | B | Documentation | ⏳ Pending | No DocC catalog, no README |
 | C | API Review & Breaking Changes | ⏳ Pending | Must complete before D, E, G, F |
 | D | Quality & Hardening | ⏳ Pending | Depends on C |
