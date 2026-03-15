@@ -1,0 +1,17 @@
+# Normalize line endings on checkout
+* text=auto
+
+# Swift source — always LF
+*.swift       text eol=lf
+
+# Config / markup
+*.yml         text eol=lf
+*.yaml        text eol=lf
+*.json        text eol=lf
+*.md          text eol=lf
+*.h           text eol=lf
+*.modulemap   text eol=lf
+*.sh          text eol=lf
+
+# Linguist: AI workflow files are docs, not project source
+.claude/**    linguist-documentation=true
