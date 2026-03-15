@@ -457,7 +457,7 @@ struct _XMLKeyedEncodingContainer<Key: CodingKey>: KeyedEncodingContainerProtoco
     mutating func encodeIfPresent<T: Encodable>(_ value: T?, forKey key: Key) throws { try _encodeIfPresent(value, forKey: key) }
 
     private mutating func _encodeIfPresent<T: Encodable>(_ value: T?, forKey key: Key) throws {
-        if let value {
+        if let value = value {
             try encodeEncodable(value, forKey: key)
         } else {
             try encodeNil(forKey: key)
