@@ -134,6 +134,12 @@ public struct XMLDocument: Sendable {
     private let logger: Logger
 
     #if swift(>=6.0)
+    /// Creates a new XML document with a named root element.
+    ///
+    /// - Parameters:
+    ///   - rootElementName: The local name for the root element.
+    ///   - logger: A structured logger for this document. Defaults to a `"com.swift-xml-coder.SwiftXMLCoder"` logger.
+    /// - Throws: ``XMLParsingError`` if the document or root node cannot be created.
     public init(rootElementName: String, logger: Logger? = nil) throws(XMLParsingError) {
         do {
             try self.init(createDocument: rootElementName, rootNamespace: nil, logger: logger ?? Self.defaultLogger())
@@ -144,6 +150,13 @@ public struct XMLDocument: Sendable {
         }
     }
 
+    /// Creates a new XML document with a namespace-qualified root element.
+    ///
+    /// - Parameters:
+    ///   - rootElementName: The local name for the root element.
+    ///   - rootNamespace: The namespace to associate with the root element.
+    ///   - logger: A structured logger for this document. Defaults to a `"com.swift-xml-coder.SwiftXMLCoder"` logger.
+    /// - Throws: ``XMLParsingError`` if the document or root node cannot be created.
     public init(rootElementName: String, rootNamespace: XMLNamespace, logger: Logger? = nil) throws(XMLParsingError) {
         do {
             try self.init(
@@ -158,6 +171,13 @@ public struct XMLDocument: Sendable {
         }
     }
 
+    /// Parses an XML document from raw bytes.
+    ///
+    /// - Parameters:
+    ///   - data: The raw XML bytes to parse.
+    ///   - parsingConfiguration: Low-level libxml2 parsing options. Defaults to a secure configuration.
+    ///   - logger: A structured logger for this document. Defaults to a `"com.swift-xml-coder.SwiftXMLCoder"` logger.
+    /// - Throws: ``XMLParsingError/parseFailed(message:)`` if the data cannot be parsed as valid XML.
     public init(
         data: Data,
         parsingConfiguration: ParsingConfiguration = ParsingConfiguration(),
@@ -177,6 +197,14 @@ public struct XMLDocument: Sendable {
         }
     }
 
+    /// Parses an XML document from raw bytes, with a base URL for relative reference resolution.
+    ///
+    /// - Parameters:
+    ///   - data: The raw XML bytes to parse.
+    ///   - sourceURL: The URL from which the data was obtained; used to resolve relative references.
+    ///   - parsingConfiguration: Low-level libxml2 parsing options. Defaults to a secure configuration.
+    ///   - logger: A structured logger for this document. Defaults to a `"com.swift-xml-coder.SwiftXMLCoder"` logger.
+    /// - Throws: ``XMLParsingError/parseFailed(message:)`` if the data cannot be parsed as valid XML.
     public init(
         data: Data,
         sourceURL: URL,
@@ -197,6 +225,13 @@ public struct XMLDocument: Sendable {
         }
     }
 
+    /// Loads and parses an XML document from a file URL.
+    ///
+    /// - Parameters:
+    ///   - url: The file URL to read from.
+    ///   - parsingConfiguration: Low-level libxml2 parsing options. Defaults to a secure configuration.
+    ///   - logger: A structured logger for this document. Defaults to a `"com.swift-xml-coder.SwiftXMLCoder"` logger.
+    /// - Throws: ``XMLParsingError`` if the file cannot be read or the data cannot be parsed as valid XML.
     public init(
         url: URL,
         parsingConfiguration: ParsingConfiguration = ParsingConfiguration(),
@@ -228,10 +263,23 @@ public struct XMLDocument: Sendable {
         }
     }
     #else
+    /// Creates a new XML document with a named root element.
+    ///
+    /// - Parameters:
+    ///   - rootElementName: The local name for the root element.
+    ///   - logger: A structured logger for this document. Defaults to a `"com.swift-xml-coder.SwiftXMLCoder"` logger.
+    /// - Throws: ``XMLParsingError`` if the document or root node cannot be created.
     public init(rootElementName: String, logger: Logger? = nil) throws {
         try self.init(createDocument: rootElementName, rootNamespace: nil, logger: logger ?? Self.defaultLogger())
     }
 
+    /// Creates a new XML document with a namespace-qualified root element.
+    ///
+    /// - Parameters:
+    ///   - rootElementName: The local name for the root element.
+    ///   - rootNamespace: The namespace to associate with the root element.
+    ///   - logger: A structured logger for this document. Defaults to a `"com.swift-xml-coder.SwiftXMLCoder"` logger.
+    /// - Throws: ``XMLParsingError`` if the document or root node cannot be created.
     public init(rootElementName: String, rootNamespace: XMLNamespace, logger: Logger? = nil) throws {
         try self.init(
             createDocument: rootElementName,
@@ -240,6 +288,13 @@ public struct XMLDocument: Sendable {
         )
     }
 
+    /// Parses an XML document from raw bytes.
+    ///
+    /// - Parameters:
+    ///   - data: The raw XML bytes to parse.
+    ///   - parsingConfiguration: Low-level libxml2 parsing options. Defaults to a secure configuration.
+    ///   - logger: A structured logger for this document. Defaults to a `"com.swift-xml-coder.SwiftXMLCoder"` logger.
+    /// - Throws: ``XMLParsingError/parseFailed(message:)`` if the data cannot be parsed as valid XML.
     public init(
         data: Data,
         parsingConfiguration: ParsingConfiguration = ParsingConfiguration(),
@@ -253,6 +308,14 @@ public struct XMLDocument: Sendable {
         )
     }
 
+    /// Parses an XML document from raw bytes, with a base URL for relative reference resolution.
+    ///
+    /// - Parameters:
+    ///   - data: The raw XML bytes to parse.
+    ///   - sourceURL: The URL from which the data was obtained; used to resolve relative references.
+    ///   - parsingConfiguration: Low-level libxml2 parsing options. Defaults to a secure configuration.
+    ///   - logger: A structured logger for this document. Defaults to a `"com.swift-xml-coder.SwiftXMLCoder"` logger.
+    /// - Throws: ``XMLParsingError/parseFailed(message:)`` if the data cannot be parsed as valid XML.
     public init(
         data: Data,
         sourceURL: URL,
@@ -267,6 +330,13 @@ public struct XMLDocument: Sendable {
         )
     }
 
+    /// Loads and parses an XML document from a file URL.
+    ///
+    /// - Parameters:
+    ///   - url: The file URL to read from.
+    ///   - parsingConfiguration: Low-level libxml2 parsing options. Defaults to a secure configuration.
+    ///   - logger: A structured logger for this document. Defaults to a `"com.swift-xml-coder.SwiftXMLCoder"` logger.
+    /// - Throws: ``XMLParsingError`` if the file cannot be read or the data cannot be parsed as valid XML.
     public init(
         url: URL,
         parsingConfiguration: ParsingConfiguration = ParsingConfiguration(),
