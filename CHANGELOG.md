@@ -21,6 +21,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - `_XMLEncoderOptions.init` now throws `[XML6_6_ITEM_NAME_INVALID]` in `.strict` mode when `itemElementName` requires sanitization. In `.lenient` mode (default) the name is still sanitized silently.
 - 8 new tests in `XMLEncoderTests` (D.1 matrix): strict rejection of `rootElementName` with space, digit-prefix, invalid `XMLRootNode` name, and `itemElementName` with space; lenient sanitization pass for root and item names; valid-name no-throw assertions.
 - `Tests/.swiftlint.yml`: raised `type_body_length` warning threshold to 600 lines for test files (test classes grow with coverage matrix).
+- New test target `SwiftXMLCoderMacroTests` (Swift 5.9+ manifests): uses `SwiftSyntaxMacrosTestSupport.assertMacroExpansion` to verify macro diagnostic IDs and expansion output. Covers: `@XMLCodable` on `enum` → `XML8A_INVALID_DECL` error; `@XMLCodable` on `actor` → same error; `@XMLCodable` on struct/class → correct `xmlFieldNodeKinds` expansion; `@XMLAttribute`/`@XMLChild` as pure peer markers (no generated peers).
 
 ### Changed
 - XML field-name validation (error code `XML6_6_FIELD_NAME_INVALID`) is now gated by `XMLValidationPolicy.validateElementNames`. Existing tests updated to use `validationPolicy: .strict` to preserve their intent. In lenient mode (default) invalid field names are silently passed through to libxml2.

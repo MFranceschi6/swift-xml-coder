@@ -70,6 +70,13 @@ let package = Package(
                 "SwiftXMLCoderTestSupport",
                 "SwiftXMLCoderMacros"
             ]
+        ),
+        .testTarget(
+            name: "SwiftXMLCoderMacroTests",
+            dependencies: [
+                "SwiftXMLCoderMacroImplementation",
+                .product(name: "SwiftSyntaxMacrosTestSupport", package: "swift-syntax")
+            ]
         )
     ]
 )
