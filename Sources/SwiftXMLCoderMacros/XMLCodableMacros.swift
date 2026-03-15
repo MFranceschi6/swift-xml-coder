@@ -27,6 +27,33 @@ public macro XMLDateFormat(_ hint: XMLDateFormatHint) = #externalMacro(
     type: "XMLDateFormatMacro"
 )
 
+/// Marks a stored `String` property to be encoded as a CDATA section when processed by `@XMLCodable`.
+///
+/// Apply this macro to stored properties of type `String` or `String?` inside a type
+/// also annotated with `@XMLCodable`. The owning type's `xmlPropertyStringHints` dictionary
+/// (synthesised by `@XMLCodable`) will map the field's name to `.cdata`,
+/// causing the XML encoder to wrap that property's content in `<![CDATA[...]]>`.
+///
+/// ```swift
+/// @XMLCodable
+/// struct Article: Codable {
+///     var title: String           // uses encoder-level stringEncodingStrategy
+///     @XMLCDATA var body: String  // always emitted as <body><![CDATA[...]]></body>
+/// }
+/// ```
+///
+/// - Note: CDATA is not valid in XML attributes. Applying `@XMLCDATA` to a property
+///   also annotated with `@XMLAttribute` compiles successfully but the CDATA hint is
+///   silently ignored — attributes are always emitted as plain text.
+///
+/// - Note: Without `@XMLCodable` on the enclosing type this annotation compiles
+///   successfully but has no runtime effect — it is a pure syntax marker.
+@attached(peer)
+public macro XMLCDATA() = #externalMacro(
+    module: "SwiftXMLCoderMacroImplementation",
+    type: "XMLCDATAMacro"
+)
+
 /// Marks a stored property as an XML **attribute** when encoded or decoded by `@XMLCodable`.
 ///
 /// Apply this macro to individual properties inside a type annotated with `@XMLCodable`.
@@ -75,6 +102,33 @@ public macro XMLElement() = #externalMacro(
     type: "XMLChildMacro"
 )
 
+/// Forces a stored property's XML element to always be serialised in expanded form
+/// (`<field></field>` instead of `<field/>`), even when the element has no content.
+///
+/// Apply this macro to stored properties inside a type annotated with `@XMLCodable`.
+/// The owning type's `xmlPropertyExpandEmptyKeys` set (synthesised by `@XMLCodable`) will
+/// include this field's name, causing the XML encoder to inject an empty text node into
+/// child-less elements so that the writer emits the explicit open/close form.
+///
+/// ```swift
+/// @XMLCodable
+/// struct Envelope: Codable {
+///     @XMLExpandEmpty var header: String?  // → <header></header>
+///     var body: String                     // → <body/> if empty (global policy)
+/// }
+/// ```
+///
+/// - Note: The decoded value is identical whether the element is `<field/>` or
+///   `<field></field>` — only the serialised form differs.
+///
+/// - Note: Without `@XMLCodable` on the enclosing type this annotation compiles
+///   successfully but has no runtime effect — it is a pure syntax marker.
+@attached(peer)
+public macro XMLExpandEmpty() = #externalMacro(
+    module: "SwiftXMLCoderMacroImplementation",
+    type: "XMLExpandEmptyMacro"
+)
+
 /// Synthesises `XMLFieldCodingOverrideProvider` conformance for a struct or class by
 /// scanning its stored-property annotations.
 ///
@@ -103,7 +157,13 @@ public macro XMLElement() = #externalMacro(
 ///
 /// - Important: Only `struct` and `class` declarations are supported. Applying
 ///   `@XMLCodable` to an `enum` or `actor` emits a compile-time error.
-@attached(extension, conformances: XMLFieldCodingOverrideProvider, names: named(xmlFieldNodeKinds))
+@attached(
+    extension,
+    conformances: XMLFieldCodingOverrideProvider, XMLDateCodingOverrideProvider,
+        XMLStringCodingOverrideProvider, XMLExpandEmptyProvider,
+    names: named(xmlFieldNodeKinds), named(xmlPropertyDateHints),
+        named(xmlPropertyStringHints), named(xmlPropertyExpandEmptyKeys)
+)
 public macro XMLCodable() = #externalMacro(
     module: "SwiftXMLCoderMacroImplementation",
     type: "XMLCodableMacro"

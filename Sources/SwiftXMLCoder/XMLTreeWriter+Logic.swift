@@ -59,6 +59,12 @@ extension XMLTreeWriter {
             to: node
         )
 
+        // When expandEmptyElements is enabled, inject an empty text node into child-less elements
+        // so that libxml2 emits <tag></tag> instead of <tag/>.
+        if configuration.expandEmptyElements && element.children.isEmpty {
+            try appendTextNode("", to: node)
+        }
+
         for child in element.children {
             switch child {
             case .element(let childElement):

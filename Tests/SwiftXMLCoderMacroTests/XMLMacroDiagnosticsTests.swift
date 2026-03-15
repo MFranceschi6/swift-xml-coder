@@ -8,6 +8,7 @@ import XCTest
 private let testMacros: [String: any Macro.Type] = [
     "XMLCodable": XMLCodableMacro.self,
     "XMLAttribute": XMLAttributeMacro.self,
+    "XMLCDATA": XMLCDATAMacro.self,
     "XMLChild": XMLChildMacro.self,
     "XMLDateFormat": XMLDateFormatMacro.self,
 ]

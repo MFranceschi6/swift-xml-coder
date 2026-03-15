@@ -5,8 +5,10 @@ import SwiftSyntaxMacros
 struct SwiftXMLCoderMacroPlugin: CompilerPlugin {
     let providingMacros: [Macro.Type] = [
         XMLAttributeMacro.self,
+        XMLCDATAMacro.self,
         XMLChildMacro.self,
         XMLCodableMacro.self,
         XMLDateFormatMacro.self,
+        XMLExpandEmptyMacro.self,
     ]
 }

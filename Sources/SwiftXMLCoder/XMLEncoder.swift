@@ -17,40 +17,18 @@ import Logging
 public struct XMLEncoder: Sendable {
     /// Controls how optional (`nil`) values are represented in the XML output.
     ///
-    /// ## Synthesised `Codable` conformances
-    ///
-    /// Swift's compiler-synthesised `encode(to:)` calls `encodeIfPresent(_:forKey:)` for
-    /// optional properties. The default protocol implementation of `encodeIfPresent` skips
-    /// encoding entirely when the value is `nil`, without ever invoking `encodeNil(forKey:)`.
-    /// As a result, `NilEncodingStrategy` has **no effect** on optional properties whose
-    /// `Encodable` conformance is synthesised by the compiler:
+    /// Applies to all optional properties, including those with compiler-synthesised
+    /// `Encodable` conformances. Both `encodeIfPresent` and explicit `encodeNil` calls
+    /// respect this strategy.
     ///
     /// ```swift
     /// struct Example: Encodable { var name: String? }
-    /// // name == nil → no <name> element regardless of NilEncodingStrategy
+    /// // name == nil with .omitElement → no <name> element in the output
+    /// // name == nil with .emptyElement → <name/> in the output (default)
     /// ```
     ///
-    /// ## Explicit `encodeNil` calls
-    ///
-    /// `NilEncodingStrategy` applies when your custom `encode(to:)` explicitly calls
-    /// `try container.encodeNil(forKey:)`:
-    ///
-    /// ```swift
-    /// func encode(to encoder: Encoder) throws {
-    ///     var c = encoder.container(keyedBy: CodingKeys.self)
-    ///     try c.encodeNil(forKey: .field)   // NilEncodingStrategy applies here
-    /// }
-    /// ```
-    ///
-    /// - With `.emptyElement` (default): an empty `<field/>` element is emitted.
-    /// - With `.omitElement`: the element is omitted entirely.
-    ///
-    /// ## `@XMLAttribute` optional properties
-    ///
-    /// A `nil` value in an `@XMLAttribute`-wrapped property always results in the
-    /// attribute being **omitted**, regardless of `NilEncodingStrategy`. This follows
-    /// the XML convention that absent attributes and attributes with no value are
-    /// semantically equivalent for most use cases.
+    /// `nil` values in `@XMLAttribute`-wrapped properties are always **omitted**
+    /// regardless of this strategy (XML convention: absent attribute ≡ not set).
     public enum NilEncodingStrategy: Sendable, Hashable {
         /// Emit an empty element (`<field/>`). This is the default.
         case emptyElement
@@ -110,6 +88,22 @@ public struct XMLEncoder: Sendable {
         case custom(XMLDateEncodingClosure)
     }
 
+    /// Controls how `String` values are serialised as XML text content.
+    ///
+    /// Applies to all `String` properties when no per-field `@XMLCDATA` override is present.
+    ///
+    /// - Note: `@XMLAttribute`-wrapped `String` properties are always emitted as plain text —
+    ///   CDATA is not valid in XML attributes. The strategy is silently ignored for attributes.
+    public enum StringEncodingStrategy: Sendable, Hashable {
+        /// Emit strings as plain XML text (special characters are escaped). This is the default.
+        case text
+        /// Wrap string values in a CDATA section (`<![CDATA[...]]>`).
+        ///
+        /// Use this when the content contains characters that are frequently escaped (e.g. HTML
+        /// fragments, embedded XML, or SQL) and you prefer human-readable output.
+        case cdata
+    }
+
     /// Controls how `Data` values are serialised to XML text content.
     public enum DataEncodingStrategy: Sendable, Hashable {
         /// Delegate to `Data`'s default `Encodable` behaviour.
@@ -121,7 +115,7 @@ public struct XMLEncoder: Sendable {
     }
 
     /// Encoding configuration applied to every encode call on this instance.
-    public struct Configuration: Sendable {
+    public struct Configuration: @unchecked Sendable {
         /// Override the root element name.
         /// When `nil`, the encoder derives the name from `@XMLRootNode` or the type name.
         public let rootElementName: String?
@@ -135,6 +129,16 @@ public struct XMLEncoder: Sendable {
         public let dateEncodingStrategy: DateEncodingStrategy
         /// Strategy for encoding `Data` values.  Defaults to `.base64`.
         public let dataEncodingStrategy: DataEncodingStrategy
+        /// Strategy for encoding `String` values.  Defaults to `.text`.
+        ///
+        /// Set to `.cdata` to wrap all string content in CDATA sections. Use the `@XMLCDATA`
+        /// macro to override this on a per-field basis.
+        public let stringEncodingStrategy: StringEncodingStrategy
+        /// Strategy for transforming Swift coding keys into XML element and attribute names.
+        ///
+        /// Defaults to `.useDefaultKeys` (identity — no transformation).
+        /// Set to `.capitalized` for SOAP/PascalCase XML, `.convertToSnakeCase` for snake_case XML, etc.
+        public let keyTransformStrategy: XMLKeyTransformStrategy
         /// Configuration forwarded to the underlying `XMLTreeWriter`.
         public let writerConfiguration: XMLTreeWriter.Configuration
         /// Validation policy applied during encoding.
@@ -148,6 +152,17 @@ public struct XMLEncoder: Sendable {
         /// Defaults to `Logger(label: "SwiftXMLCoder")` with a `.critical` effective threshold
         /// until `LoggingSystem.bootstrap` is called by the application.
         public let logger: Logger
+        /// Contextual user information forwarded to every `encode(to:)` call via `encoder.userInfo`.
+        ///
+        /// Use this to pass application-specific context (feature flags, locale, DI tokens, etc.)
+        /// into custom `Encodable` implementations without polluting the type signature.
+        ///
+        /// ```swift
+        /// let key = CodingUserInfoKey(rawValue: "locale")!
+        /// var config = XMLEncoder.Configuration()
+        /// config = XMLEncoder.Configuration(userInfo: [key: Locale.current])
+        /// ```
+        public let userInfo: [CodingUserInfoKey: Any]
 
         /// Creates an encoder configuration.
         ///
@@ -158,9 +173,12 @@ public struct XMLEncoder: Sendable {
         ///   - nilEncodingStrategy: How `nil` values are represented. Defaults to `.emptyElement`.
         ///   - dateEncodingStrategy: How `Date` values are serialised. Defaults to `.xsdDateTimeISO8601`.
         ///   - dataEncodingStrategy: How `Data` values are serialised. Defaults to `.base64`.
+        ///   - stringEncodingStrategy: How `String` values are serialised. Defaults to `.text`. Use `.cdata` to wrap all strings in CDATA sections.
+        ///   - keyTransformStrategy: Transformation applied to coding key names. Defaults to `.useDefaultKeys`.
         ///   - writerConfiguration: Writer options forwarded to `XMLTreeWriter`.
         ///   - validationPolicy: Structural validation policy. Defaults to ``XMLValidationPolicy/default``.
         ///   - logger: Logger for encode-time diagnostics. Defaults to `Logger(label: "SwiftXMLCoder")`.
+        ///   - userInfo: Context dictionary forwarded to `encoder.userInfo`. Defaults to empty.
         public init(
             rootElementName: String? = nil,
             itemElementName: String = "item",
@@ -168,9 +186,12 @@ public struct XMLEncoder: Sendable {
             nilEncodingStrategy: NilEncodingStrategy = .emptyElement,
             dateEncodingStrategy: DateEncodingStrategy = .xsdDateTimeISO8601,
             dataEncodingStrategy: DataEncodingStrategy = .base64,
+            stringEncodingStrategy: StringEncodingStrategy = .text,
+            keyTransformStrategy: XMLKeyTransformStrategy = .useDefaultKeys,
             writerConfiguration: XMLTreeWriter.Configuration = XMLTreeWriter.Configuration(),
             validationPolicy: XMLValidationPolicy = .default,
-            logger: Logger = Logger(label: "SwiftXMLCoder")
+            logger: Logger = Logger(label: "SwiftXMLCoder"),
+            userInfo: [CodingUserInfoKey: Any] = [:]
         ) {
             self.rootElementName = rootElementName
             self.itemElementName = itemElementName
@@ -178,9 +199,12 @@ public struct XMLEncoder: Sendable {
             self.nilEncodingStrategy = nilEncodingStrategy
             self.dateEncodingStrategy = dateEncodingStrategy
             self.dataEncodingStrategy = dataEncodingStrategy
+            self.stringEncodingStrategy = stringEncodingStrategy
+            self.keyTransformStrategy = keyTransformStrategy
             self.writerConfiguration = writerConfiguration
             self.validationPolicy = validationPolicy
             self.logger = logger
+            self.userInfo = userInfo
         }
     }
 
@@ -265,6 +289,8 @@ public struct XMLEncoder: Sendable {
         )
         var options = try _XMLEncoderOptions(configuration: configuration)
         options.perPropertyDateHints = _xmlPropertyDateHints(for: T.self)
+        options.perPropertyStringHints = _xmlPropertyStringHints(for: T.self)
+        options.perPropertyExpandEmptyKeys = _xmlPropertyExpandEmptyKeys(for: T.self)
         let encoder = _XMLTreeEncoder(
             options: options,
             codingPath: [],

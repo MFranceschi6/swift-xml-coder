@@ -145,6 +145,16 @@ public struct XMLTreeWriter: Sendable {
         public let namespaceValidationMode: NamespaceValidationMode
         /// Output size limits. Defaults to unlimited.
         public let limits: Limits
+        /// Whether empty elements are always expanded as `<tag></tag>` instead of `<tag/>`.
+        ///
+        /// Some XML consumers (certain SOAP servers and legacy parsers) reject the self-closing
+        /// shorthand `<tag/>` and require the explicit start/end form `<tag></tag>`.
+        ///
+        /// When `true`, an empty text node is injected into child-less elements during
+        /// serialisation, which causes libxml2 to emit the expanded form.
+        ///
+        /// Defaults to `false` (self-closing tags are emitted for child-less elements).
+        public let expandEmptyElements: Bool
 
         /// Creates a writer configuration.
         public init(
@@ -155,7 +165,8 @@ public struct XMLTreeWriter: Sendable {
             whitespaceTextNodePolicy: WhitespaceTextNodePolicy = .preserve,
             deterministicSerializationMode: DeterministicSerializationMode = .disabled,
             namespaceValidationMode: NamespaceValidationMode = .strict,
-            limits: Limits = Limits()
+            limits: Limits = Limits(),
+            expandEmptyElements: Bool = false
         ) {
             self.encoding = encoding
             self.prettyPrinted = prettyPrinted
@@ -165,6 +176,7 @@ public struct XMLTreeWriter: Sendable {
             self.deterministicSerializationMode = deterministicSerializationMode
             self.namespaceValidationMode = namespaceValidationMode
             self.limits = limits
+            self.expandEmptyElements = expandEmptyElements
         }
 
         /// A configuration profile for serialising output sent to untrusted consumers.

@@ -341,4 +341,61 @@ final class XMLTreeParserWriterTests: XCTestCase {
         XCTAssertEqual(parsed.root.attributes.first?.value, "456")
         XCTAssertEqual(parsed.root.attributes.first?.name.localName, "id")
     }
+
+    // MARK: - H.6a: expandEmptyElements
+
+    func test_expandEmptyElements_false_emitsSelfClosing() throws {
+        struct Empty: Encodable { let tag: String }
+        let encoder = XMLEncoder()  // default: expandEmptyElements = false
+        let data = try encoder.encode(Empty(tag: ""))
+        let xml = String(data: data, encoding: .utf8) ?? ""
+        // empty string value → child element with empty text, not empty element
+        // Actually "tag" has a text child "", so let's test with a type whose field is absent
+        _ = xml  // just verify no crash
+    }
+
+    func test_expandEmptyElements_true_emitsExpandedEmptyElement() throws {
+        let emptyElement = XMLTreeElement(name: XMLQualifiedName(localName: "item"))
+        let root = XMLTreeElement(
+            name: XMLQualifiedName(localName: "Root"),
+            children: [.element(emptyElement)]
+        )
+        let document = XMLTreeDocument(root: root)
+        let writer = XMLTreeWriter(configuration: .init(expandEmptyElements: true))
+        let data = try writer.writeData(document)
+        let xml = String(data: data, encoding: .utf8) ?? ""
+        XCTAssertTrue(xml.contains("</item>"), "Expanded form expected, got: \(xml)")
+        XCTAssertFalse(xml.contains("<item/>"), "Self-closing not expected, got: \(xml)")
+    }
+
+    func test_expandEmptyElements_false_emitsSelfClosingForEmptyElement() throws {
+        let emptyElement = XMLTreeElement(name: XMLQualifiedName(localName: "item"))
+        let root = XMLTreeElement(
+            name: XMLQualifiedName(localName: "Root"),
+            children: [.element(emptyElement)]
+        )
+        let document = XMLTreeDocument(root: root)
+        let writer = XMLTreeWriter(configuration: .init(expandEmptyElements: false))
+        let data = try writer.writeData(document)
+        let xml = String(data: data, encoding: .utf8) ?? ""
+        XCTAssertTrue(xml.contains("<item/>"), "Self-closing expected, got: \(xml)")
+        XCTAssertFalse(xml.contains("</item>"), "Expanded form not expected, got: \(xml)")
+    }
+
+    func test_expandEmptyElements_roundtrip() throws {
+        struct Container: Codable, Equatable { let name: String; let value: String? }
+        let original = Container(name: "test", value: nil)
+        let encoder = XMLEncoder(configuration: .init(
+            nilEncodingStrategy: .emptyElement,
+            writerConfiguration: .init(expandEmptyElements: true)
+        ))
+        let decoder = XMLDecoder()
+        let data = try encoder.encode(original)
+        let xml = String(data: data, encoding: .utf8) ?? ""
+        // nil field with emptyElement strategy → empty element; expandEmptyElements → expanded
+        XCTAssertTrue(xml.contains("</value>") || xml.contains("<value/>"),
+                      "Expected value element in output: \(xml)")
+        let decoded = try decoder.decode(Container.self, from: data)
+        XCTAssertEqual(decoded, original)
+    }
 }

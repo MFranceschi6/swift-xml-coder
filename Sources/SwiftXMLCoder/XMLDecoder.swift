@@ -75,7 +75,7 @@ public struct XMLDecoder: Sendable {
     }
 
     /// Decoding configuration applied to every decode call on this instance.
-    public struct Configuration: Sendable {
+    public struct Configuration: @unchecked Sendable {
         /// Override the expected root element name.
         /// When `nil`, the decoder derives the name from `@XMLRootNode` or skips validation.
         public let rootElementName: String?
@@ -87,6 +87,11 @@ public struct XMLDecoder: Sendable {
         public let dateDecodingStrategy: DateDecodingStrategy
         /// Strategy for decoding `Data` values.  Defaults to `.base64`.
         public let dataDecodingStrategy: DataDecodingStrategy
+        /// Strategy for matching XML element and attribute names to Swift coding keys.
+        ///
+        /// Defaults to `.useDefaultKeys` (identity — no transformation).
+        /// Must match the strategy used by the encoder that produced the XML.
+        public let keyTransformStrategy: XMLKeyTransformStrategy
         /// Configuration forwarded to the underlying `XMLTreeParser`.
         public let parserConfiguration: XMLTreeParser.Configuration
         /// Validation policy applied during decoding.
@@ -100,6 +105,16 @@ public struct XMLDecoder: Sendable {
         /// Defaults to `Logger(label: "SwiftXMLCoder")` with a `.critical` effective threshold
         /// until `LoggingSystem.bootstrap` is called by the application.
         public let logger: Logger
+        /// Contextual user information forwarded to every `init(from:)` call via `decoder.userInfo`.
+        ///
+        /// Use this to pass application-specific context (feature flags, locale, DI tokens, etc.)
+        /// into custom `Decodable` implementations without polluting the type signature.
+        ///
+        /// ```swift
+        /// let key = CodingUserInfoKey(rawValue: "locale")!
+        /// let config = XMLDecoder.Configuration(userInfo: [key: Locale.current])
+        /// ```
+        public let userInfo: [CodingUserInfoKey: Any]
 
         /// Creates a decoder configuration.
         ///
@@ -109,9 +124,11 @@ public struct XMLDecoder: Sendable {
         ///   - fieldCodingOverrides: Per-field node-kind overrides. Defaults to empty (all elements).
         ///   - dateDecodingStrategy: How text content is decoded into `Date`. Defaults to a multi-format chain.
         ///   - dataDecodingStrategy: How text content is decoded into `Data`. Defaults to `.base64`.
+        ///   - keyTransformStrategy: Transformation applied to coding key names during lookup. Defaults to `.useDefaultKeys`.
         ///   - parserConfiguration: Parser options forwarded to `XMLTreeParser`.
         ///   - validationPolicy: Structural validation policy. Defaults to ``XMLValidationPolicy/default``.
         ///   - logger: Logger for decode-time diagnostics. Defaults to `Logger(label: "SwiftXMLCoder")`.
+        ///   - userInfo: Context dictionary forwarded to `decoder.userInfo`. Defaults to empty.
         public init(
             rootElementName: String? = nil,
             itemElementName: String = "item",
@@ -120,18 +137,22 @@ public struct XMLDecoder: Sendable {
                 [.xsdDateTimeISO8601, .secondsSince1970, .millisecondsSince1970]
             ),
             dataDecodingStrategy: DataDecodingStrategy = .base64,
+            keyTransformStrategy: XMLKeyTransformStrategy = .useDefaultKeys,
             parserConfiguration: XMLTreeParser.Configuration = XMLTreeParser.Configuration(),
             validationPolicy: XMLValidationPolicy = .default,
-            logger: Logger = Logger(label: "SwiftXMLCoder")
+            logger: Logger = Logger(label: "SwiftXMLCoder"),
+            userInfo: [CodingUserInfoKey: Any] = [:]
         ) {
             self.rootElementName = rootElementName
             self.itemElementName = itemElementName
             self.fieldCodingOverrides = fieldCodingOverrides
             self.dateDecodingStrategy = dateDecodingStrategy
             self.dataDecodingStrategy = dataDecodingStrategy
+            self.keyTransformStrategy = keyTransformStrategy
             self.parserConfiguration = parserConfiguration
             self.validationPolicy = validationPolicy
             self.logger = logger
+            self.userInfo = userInfo
         }
     }
 
@@ -263,5 +284,32 @@ public struct XMLDecoder: Sendable {
         }
 
         return try XMLRootNameResolver.implicitRootElementName(for: type, validationPolicy: policy)
+    }
+}
+
+// MARK: - Convenience accessors
+
+extension XMLDecoder {
+    /// The whitespace text node policy applied by the underlying parser.
+    ///
+    /// This is a shorthand for `configuration.parserConfiguration.whitespaceTextNodePolicy`.
+    ///
+    /// Common values:
+    /// - `.dropWhitespaceOnly` (default) — whitespace-only text nodes between elements are dropped,
+    ///   which produces clean element trees from pretty-printed XML.
+    /// - `.preserve` — all whitespace text nodes are retained in the tree, suitable when
+    ///   mixed content (text and elements interleaved) must be decoded faithfully.
+    ///
+    /// To create a decoder with a different policy, supply a custom `parserConfiguration`:
+    ///
+    /// ```swift
+    /// let decoder = XMLDecoder(configuration: .init(
+    ///     parserConfiguration: XMLTreeParser.Configuration(
+    ///         whitespaceTextNodePolicy: .preserve
+    ///     )
+    /// ))
+    /// ```
+    public var whitespacePolicy: XMLTreeParser.WhitespaceTextNodePolicy {
+        configuration.parserConfiguration.whitespaceTextNodePolicy
     }
 }
