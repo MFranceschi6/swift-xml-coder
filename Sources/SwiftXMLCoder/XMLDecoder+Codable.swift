@@ -47,12 +47,14 @@ struct _XMLDecoderOptions {
     let fieldCodingOverrides: XMLFieldCodingOverrides
     let dateDecodingStrategy: XMLDecoder.DateDecodingStrategy
     let dataDecodingStrategy: XMLDecoder.DataDecodingStrategy
+    let validationPolicy: XMLValidationPolicy
 
     init(configuration: XMLDecoder.Configuration) {
         self.itemElementName = configuration.itemElementName
         self.fieldCodingOverrides = configuration.fieldCodingOverrides
         self.dateDecodingStrategy = configuration.dateDecodingStrategy
         self.dataDecodingStrategy = configuration.dataDecodingStrategy
+        self.validationPolicy = configuration.validationPolicy
     }
 }
 
@@ -376,6 +378,38 @@ final class _XMLTreeDecoder: Decoder {
             return Date(timeIntervalSince1970: millis / 1000.0)
         case .xsdDateTimeISO8601, .iso8601:
             return _XMLTemporalFoundationSupport.parseISO8601(lexicalValue)
+        case .xsdDate:
+            return _XMLTemporalFoundationSupport.parseXSDDate(lexicalValue)
+        case .xsdTime:
+            return XMLTime(lexicalValue: lexicalValue)?.toDate()
+        case .xsdGYear:
+            return XMLGYear(lexicalValue: lexicalValue)?.toDate()
+        case .xsdGYearMonth:
+            return XMLGYearMonth(lexicalValue: lexicalValue)?.toDate()
+        case .xsdGMonth:
+            guard let gMonth = XMLGMonth(lexicalValue: lexicalValue) else { return nil }
+            var cal = Calendar(identifier: .gregorian)
+            cal.timeZone = gMonth.timezoneOffset?.timeZone ?? .utc
+            var comps = DateComponents()
+            comps.year = 2000; comps.month = gMonth.month; comps.day = 1
+            comps.hour = 0; comps.minute = 0; comps.second = 0
+            return cal.date(from: comps)
+        case .xsdGDay:
+            guard let gDay = XMLGDay(lexicalValue: lexicalValue) else { return nil }
+            var cal = Calendar(identifier: .gregorian)
+            cal.timeZone = gDay.timezoneOffset?.timeZone ?? .utc
+            var comps = DateComponents()
+            comps.year = 2000; comps.month = 1; comps.day = gDay.day
+            comps.hour = 0; comps.minute = 0; comps.second = 0
+            return cal.date(from: comps)
+        case .xsdGMonthDay:
+            guard let gMonthDay = XMLGMonthDay(lexicalValue: lexicalValue) else { return nil }
+            var cal = Calendar(identifier: .gregorian)
+            cal.timeZone = gMonthDay.timezoneOffset?.timeZone ?? .utc
+            var comps = DateComponents()
+            comps.year = 2000; comps.month = gMonthDay.month; comps.day = gMonthDay.day
+            comps.hour = 0; comps.minute = 0; comps.second = 0
+            return cal.date(from: comps)
         case .formatter(let descriptor):
             return _XMLTemporalFoundationSupport.makeDateFormatter(from: descriptor).date(from: lexicalValue)
         case .multiple(let strategies):

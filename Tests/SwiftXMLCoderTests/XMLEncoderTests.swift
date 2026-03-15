@@ -324,7 +324,7 @@ final class XMLEncoderTests: XCTestCase {
             }
         }
 
-        let encoder = XMLEncoder(configuration: .init(rootElementName: "Root"))
+        let encoder = XMLEncoder(configuration: .init(rootElementName: "Root", validationPolicy: .strict))
         XCTAssertThrowsError(try encoder.encodeTree(BadKeys(field: "v"))) { error in
             guard case let XMLParsingError.parseFailed(message) = error else {
                 return XCTFail("Expected XMLParsingError.parseFailed, got \(error).")
@@ -345,7 +345,7 @@ final class XMLEncoderTests: XCTestCase {
             }
         }
 
-        let encoder = XMLEncoder(configuration: .init(rootElementName: "Root"))
+        let encoder = XMLEncoder(configuration: .init(rootElementName: "Root", validationPolicy: .strict))
         XCTAssertThrowsError(try encoder.encodeTree(BadKeys(field: 1))) { error in
             guard case let XMLParsingError.parseFailed(message) = error else {
                 return XCTFail("Expected XMLParsingError.parseFailed, got \(error).")
@@ -367,7 +367,8 @@ final class XMLEncoderTests: XCTestCase {
 
         let encoder = XMLEncoder(configuration: .init(
             rootElementName: "Root",
-            nilEncodingStrategy: .emptyElement
+            nilEncodingStrategy: .emptyElement,
+            validationPolicy: .strict
         ))
         XCTAssertThrowsError(try encoder.encodeTree(ManualNil())) { error in
             guard case let XMLParsingError.parseFailed(message) = error else {

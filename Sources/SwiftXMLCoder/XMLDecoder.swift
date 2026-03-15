@@ -26,6 +26,35 @@ public struct XMLDecoder: Sendable {
         case xsdDateTimeISO8601
         /// Decode ISO 8601 format using `ISO8601DateFormatter`.
         case iso8601
+        /// Decode an XSD `xs:date` value (`YYYY-MM-DD[Z/±HH:MM]`) into a `Foundation.Date`.
+        ///
+        /// The resulting `Date` represents midnight at the start of the day in the timezone
+        /// encoded in the lexical value, or UTC if absent.
+        case xsdDate
+        /// Decode an XSD `xs:time` value (`hh:mm:ss[.SSS][Z/±HH:MM]`) into a `Foundation.Date`.
+        ///
+        /// The date component is set to 2000-01-01 (XSD epoch reference). Only the time is meaningful.
+        case xsdTime
+        /// Decode an XSD `xs:gYear` value (`YYYY[Z/±HH:MM]`) into a `Foundation.Date`.
+        ///
+        /// Returns the first instant of the year in the encoded timezone (or UTC if absent).
+        case xsdGYear
+        /// Decode an XSD `xs:gYearMonth` value (`YYYY-MM[Z/±HH:MM]`) into a `Foundation.Date`.
+        ///
+        /// Returns the first instant of the month in the encoded timezone (or UTC if absent).
+        case xsdGYearMonth
+        /// Decode an XSD `xs:gMonth` value (`--MM[Z/±HH:MM]`).
+        ///
+        /// Returns a `Date` on year 2000 for the encoded month, day 1, time midnight UTC.
+        case xsdGMonth
+        /// Decode an XSD `xs:gDay` value (`---DD[Z/±HH:MM]`).
+        ///
+        /// Returns a `Date` on 2000-01-DD, time midnight UTC.
+        case xsdGDay
+        /// Decode an XSD `xs:gMonthDay` value (`--MM-DD[Z/±HH:MM]`).
+        ///
+        /// Returns a `Date` on 2000-MM-DD, time midnight UTC.
+        case xsdGMonthDay
         /// Decode using a custom `XMLDateFormatterDescriptor`.
         case formatter(XMLDateFormatterDescriptor)
         /// Try each strategy in turn; throw if all fail. Part of the default chain.
@@ -59,6 +88,12 @@ public struct XMLDecoder: Sendable {
         public let dataDecodingStrategy: DataDecodingStrategy
         /// Configuration forwarded to the underlying `XMLTreeParser`.
         public let parserConfiguration: XMLTreeParser.Configuration
+        /// Validation policy applied during decoding.
+        ///
+        /// Controls whether XSD temporal values and other structural values are
+        /// validated strictly. Defaults to ``XMLValidationPolicy/default``, which
+        /// respects the `SWIFT_XML_CODER_STRICT_VALIDATION` compile-time flag.
+        public let validationPolicy: XMLValidationPolicy
 
         /// Creates a decoder configuration.
         ///
@@ -69,6 +104,7 @@ public struct XMLDecoder: Sendable {
         ///   - dateDecodingStrategy: How text content is decoded into `Date`. Defaults to a multi-format chain.
         ///   - dataDecodingStrategy: How text content is decoded into `Data`. Defaults to `.base64`.
         ///   - parserConfiguration: Parser options forwarded to `XMLTreeParser`.
+        ///   - validationPolicy: Structural validation policy. Defaults to ``XMLValidationPolicy/default``.
         public init(
             rootElementName: String? = nil,
             itemElementName: String = "item",
@@ -77,7 +113,8 @@ public struct XMLDecoder: Sendable {
                 [.xsdDateTimeISO8601, .secondsSince1970, .millisecondsSince1970]
             ),
             dataDecodingStrategy: DataDecodingStrategy = .base64,
-            parserConfiguration: XMLTreeParser.Configuration = XMLTreeParser.Configuration()
+            parserConfiguration: XMLTreeParser.Configuration = XMLTreeParser.Configuration(),
+            validationPolicy: XMLValidationPolicy = .default
         ) {
             self.rootElementName = rootElementName
             self.itemElementName = itemElementName
@@ -85,6 +122,7 @@ public struct XMLDecoder: Sendable {
             self.dateDecodingStrategy = dateDecodingStrategy
             self.dataDecodingStrategy = dataDecodingStrategy
             self.parserConfiguration = parserConfiguration
+            self.validationPolicy = validationPolicy
         }
     }
 

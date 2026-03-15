@@ -97,4 +97,37 @@ enum _XMLTemporalFoundationSupport {
         plainFormatter.formatOptions = [.withInternetDateTime]
         return plainFormatter.date(from: value)
     }
+
+    /// Formats a `Date` as an XSD `xs:date` string (`YYYY-MM-DD[Z/±HH:MM]`).
+    ///
+    /// The timezone offset reflects the **DST-aware** offset at the specific `date` instant,
+    /// because `xs:date` represents a specific calendar day and the offset should match that moment.
+    static func formatXSDDate(_ date: Date, timeZone: TimeZone) -> String {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = timeZone
+        let year = cal.component(.year, from: date)
+        let month = cal.component(.month, from: date)
+        let day = cal.component(.day, from: date)
+        let tzOffset = XMLTimezoneOffset(timeZone: timeZone, at: date)
+        return String(format: "%04d-%02d-%02d", year, month, day) + tzOffset.lexicalValue
+    }
+
+    /// Parses an XSD `xs:date` string (`YYYY-MM-DD[Z/±HH:MM]`) into a `Foundation.Date`.
+    static func parseXSDDate(_ value: String) -> Date? {
+        let (base, tz) = _XMLTemporalParser.splitTimezone(value)
+        let parts = base.split(separator: "-")
+        guard parts.count == 3,
+              let year = Int(parts[0]),
+              let month = Int(parts[1]),
+              let day = Int(parts[2]),
+              month >= 1, month <= 12,
+              day >= 1, day <= 31 else { return nil }
+        let timeZone = tz?.timeZone ?? .utc
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = timeZone
+        var comps = DateComponents()
+        comps.year = year; comps.month = month; comps.day = day
+        comps.hour = 0; comps.minute = 0; comps.second = 0
+        return cal.date(from: comps)
+    }
 }
