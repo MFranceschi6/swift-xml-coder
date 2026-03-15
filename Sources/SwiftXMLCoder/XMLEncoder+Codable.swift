@@ -57,15 +57,21 @@ struct _XMLEncoderOptions {
     let dataEncodingStrategy: XMLEncoder.DataEncodingStrategy
     let validationPolicy: XMLValidationPolicy
 
-    init(configuration: XMLEncoder.Configuration) {
-        // Sanitize itemElementName using the same policy as root element names so that
-        // invalid characters never reach the libxml2 writer stage.
-        self.itemElementName = XMLRootNameResolver.makeXMLSafeName(configuration.itemElementName)
+    init(configuration: XMLEncoder.Configuration) throws {
+        let policy = configuration.validationPolicy
+        let rawItemName = configuration.itemElementName
+        let safeItemName = XMLRootNameResolver.makeXMLSafeName(rawItemName)
+        if policy.validateElementNames && safeItemName != rawItemName {
+            throw XMLParsingError.parseFailed(
+                message: "[XML6_6_ITEM_NAME_INVALID] '\(rawItemName)' is not a valid XML element name for itemElementName."
+            )
+        }
+        self.itemElementName = safeItemName
         self.fieldCodingOverrides = configuration.fieldCodingOverrides
         self.nilEncodingStrategy = configuration.nilEncodingStrategy
         self.dateEncodingStrategy = configuration.dateEncodingStrategy
         self.dataEncodingStrategy = configuration.dataEncodingStrategy
-        self.validationPolicy = configuration.validationPolicy
+        self.validationPolicy = policy
     }
 }
 

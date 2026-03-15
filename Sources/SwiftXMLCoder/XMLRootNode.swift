@@ -26,15 +26,27 @@ public extension XMLRootNode {
 }
 
 enum XMLRootNameResolver {
-    static func explicitRootElementName(from configuredName: String?) -> String? {
+    static func explicitRootElementName(
+        from configuredName: String?,
+        validationPolicy: XMLValidationPolicy = .lenient
+    ) throws -> String? {
         guard let configuredName = configuredName?.trimmingCharacters(in: .whitespacesAndNewlines),
               configuredName.isEmpty == false else {
             return nil
         }
-        return makeXMLSafeName(configuredName)
+        let safe = makeXMLSafeName(configuredName)
+        if validationPolicy.validateElementNames && safe != configuredName {
+            throw XMLParsingError.parseFailed(
+                message: "[XML6_6_ROOT_NAME_INVALID] '\(configuredName)' is not a valid XML element name for rootElementName."
+            )
+        }
+        return safe
     }
 
-    static func implicitRootElementName<T>(for type: T.Type) throws -> String? {
+    static func implicitRootElementName<T>(
+        for type: T.Type,
+        validationPolicy: XMLValidationPolicy = .lenient
+    ) throws -> String? {
         guard let rootNodeType = type as? XMLRootNode.Type else {
             return nil
         }
@@ -45,7 +57,14 @@ enum XMLRootNameResolver {
                 message: "[XML6_7_ROOT_NAME_EMPTY] Type '\(String(describing: type))' provides an empty xmlRootElementName."
             )
         }
-        return makeXMLSafeName(configuredName)
+        let safe = makeXMLSafeName(configuredName)
+        if validationPolicy.validateElementNames && safe != configuredName {
+            let typeName = String(describing: type)
+            throw XMLParsingError.parseFailed(
+                message: "[XML6_6_ROOT_NAME_INVALID] '\(configuredName)' is not a valid XML element name in XMLRootNode conformance of '\(typeName)'."
+            )
+        }
+        return safe
     }
 
     static func implicitRootElementNamespaceURI<T>(for type: T.Type) -> String? {

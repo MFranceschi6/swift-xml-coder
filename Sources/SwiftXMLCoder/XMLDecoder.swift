@@ -230,10 +230,14 @@ public struct XMLDecoder: Sendable {
     }
 
     private func resolveExpectedRootElementName<T>(for type: T.Type) throws -> String? {
-        if let explicitName = XMLRootNameResolver.explicitRootElementName(from: configuration.rootElementName) {
+        let policy = configuration.validationPolicy
+        if let explicitName = try XMLRootNameResolver.explicitRootElementName(
+            from: configuration.rootElementName,
+            validationPolicy: policy
+        ) {
             return explicitName
         }
 
-        return try XMLRootNameResolver.implicitRootElementName(for: type)
+        return try XMLRootNameResolver.implicitRootElementName(for: type, validationPolicy: policy)
     }
 }
