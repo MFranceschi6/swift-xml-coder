@@ -63,6 +63,51 @@ let product = try decoder.decode(Product.self, from: data)
 
 The `path` parameter is the dotted coding-key path leading to the field. For top-level fields, pass `[]`; for nested fields, pass the parent key path as an array of strings.
 
+## Per-Property Overrides (Swift 5.9+)
+
+When using `@XMLCodable`, additional peer macros let you set per-property encoding behaviour without touching the encoder/decoder configuration.
+
+### Date Format
+
+`@XMLDateFormat` declares the XSD date strategy for a single `Date` or `Date?` property, overriding the global `dateEncodingStrategy`/`dateDecodingStrategy`:
+
+```swift
+@XMLCodable
+struct Schedule: Codable {
+    @XMLDateFormat(.xsdDate)     var startDate: Date   // encodes as "2024-03-15"
+    @XMLDateFormat(.xsdDateTime) var createdAt: Date   // encodes as "2024-03-15T10:30:00Z"
+    var updatedAt: Date                                 // uses encoder-level strategy
+}
+```
+
+### CDATA Sections
+
+`@XMLCDATA` marks a `String` or `String?` property to always be wrapped in a `<![CDATA[...]]>` section, regardless of the encoder's global `stringEncodingStrategy`:
+
+```swift
+@XMLCodable
+struct Article: Codable {
+    var title: String            // plain text element
+    @XMLCDATA var body: String   // <body><![CDATA[...]]></body>
+}
+```
+
+> Note: `@XMLCDATA` on an `@XMLAttribute`-annotated property has no effect — attributes cannot contain CDATA sections.
+
+### Expand Empty Elements
+
+`@XMLExpandEmpty` forces an element to always serialise in expanded form (`<field></field>`) instead of self-closing (`<field/>`), even when the element has no content. Useful for interoperability with XML processors that distinguish between the two forms:
+
+```swift
+@XMLCodable
+struct Envelope: Codable {
+    @XMLExpandEmpty var header: String?  // → <header></header>
+    var body: String                      // → <body/> when empty (default)
+}
+```
+
+The decoded value is semantically identical either way.
+
 ## Priority Chain
 
 When encoding or decoding a field, the encoder/decoder evaluates:

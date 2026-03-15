@@ -30,34 +30,6 @@ let decoded = try decoder.decode(Book.self, from: data)
 
 - <doc:GettingStarted>
 
-### Field Mapping
-
-- <doc:FieldMapping>
-
-### Namespaces
-
-- <doc:Namespaces>
-
-### Canonicalization
-
-- <doc:Canonicalization>
-
-### XPath Queries
-
-- <doc:XPath>
-
-### Security
-
-- <doc:Security>
-
-### Swift Version Compatibility
-
-- <doc:Compatibility>
-
-### Test Support
-
-- <doc:TestSupport>
-
 ### Core Encoder & Decoder
 
 - ``XMLEncoder``
@@ -75,15 +47,41 @@ let decoded = try decoder.decode(Book.self, from: data)
 
 ### Field Mapping
 
+- <doc:FieldMapping>
 - ``XMLFieldCodingOverrides``
 - ``XMLFieldCodingOverrideProvider``
 - ``XMLFieldNodeKind``
 - ``XMLAttribute``
 - ``XMLChild``
 - ``XMLRootNode``
+- ``XMLStringEncodingHint``
+- ``XMLStringCodingOverrideProvider``
+- ``XMLExpandEmptyProvider``
+- ``XMLDateCodingOverrideProvider``
+
+### Key Transformation
+
+- ``XMLKeyTransformStrategy``
+
+### Date & Temporal Types
+
+- ``XMLDateFormatHint``
+- ``XMLTime``
+- ``XMLGYear``
+- ``XMLGYearMonth``
+- ``XMLGMonth``
+- ``XMLGDay``
+- ``XMLGMonthDay``
+- ``XMLDuration``
+- ``XMLTimezoneOffset``
+
+### Validation
+
+- ``XMLValidationPolicy``
 
 ### Namespaces
 
+- <doc:Namespaces>
 - ``XMLNamespace``
 - ``XMLQualifiedName``
 - ``XMLNamespaceResolver``
@@ -91,9 +89,26 @@ let decoded = try decoder.decode(Book.self, from: data)
 
 ### Canonicalization
 
+- <doc:Canonicalization>
 - ``XMLCanonicalizer``
 - ``XMLDefaultCanonicalizer``
 - ``XMLTransform``
+
+### XPath Queries
+
+- <doc:XPath>
+
+### Security
+
+- <doc:Security>
+
+### Swift Version Compatibility
+
+- <doc:Compatibility>
+
+### Test Support
+
+- <doc:TestSupport>
 
 ### Errors
 
