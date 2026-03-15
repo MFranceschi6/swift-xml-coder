@@ -6,6 +6,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+- `XMLValidationPolicy`: build-time and runtime configurable validation policy. Default is `.lenient` (no validation); `.strict` enables element-name and XSD temporal validation. Set at build time via `-DSWIFT_XML_CODER_STRICT_VALIDATION`; override per-instance via `XMLEncoder.Configuration.validationPolicy` / `XMLDecoder.Configuration.validationPolicy`.
+- XSD temporal value types: `XMLGYear`, `XMLGYearMonth`, `XMLGMonth`, `XMLGDay`, `XMLGMonthDay`, `XMLTime`, `XMLDuration` — all `Sendable`, `Equatable`, `Hashable`, `Codable` (encode/decode as XSD lexical strings). Each type with a `Foundation.Date` bridge where meaningful.
+- `XMLTimezoneOffset`: value type for XSD timezone offsets (`Z`, `±HH:MM`); `public static let utc`.
+- `TimeZone.utc`: convenience public extension.
+- `DateEncodingStrategy` new cases: `.xsdDate(timeZone:)`, `.xsdTime(timeZone:)`, `.xsdGYear(timeZone:)`, `.xsdGYearMonth(timeZone:)`, `.xsdGMonth(timeZone:)`, `.xsdGDay(timeZone:)`, `.xsdGMonthDay(timeZone:)` — encode `Foundation.Date` as each XSD partial-date form.
+- `DateDecodingStrategy` new cases: `.xsdDate`, `.xsdTime`, `.xsdGYear`, `.xsdGYearMonth`, `.xsdGMonth`, `.xsdGDay`, `.xsdGMonthDay` — decode XSD partial-date lexical strings into `Foundation.Date`.
+- `_XMLTemporalFoundationSupport.formatXSDDate(_:timeZone:)` and `parseXSDDate(_:)` helpers for `xs:date` ↔ `Foundation.Date` conversion.
+- 61 new tests in `XMLTemporalTypesTests` covering parsing, roundtrip, invalid input, `Foundation.Date` bridges, and `XMLValidationPolicy` build-time/runtime behavior.
+
+### Changed
+- XML field-name validation (error code `XML6_6_FIELD_NAME_INVALID`) is now gated by `XMLValidationPolicy.validateElementNames`. Existing tests updated to use `validationPolicy: .strict` to preserve their intent. In lenient mode (default) invalid field names are silently passed through to libxml2.
+
 ### Breaking Changes
 - Renamed `XMLElement<Value>` property wrapper to ``XMLChild<Value>``. The old name is retained as a `@available(*, deprecated, renamed: "XMLChild")` typealias for source compatibility.
 - Renamed `@XMLElement` macro to `@XMLChild`. The old macro name is kept as a deprecated alias pointing to the same implementation (`XMLChildMacro`).

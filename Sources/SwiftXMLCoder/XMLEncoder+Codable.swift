@@ -55,6 +55,7 @@ struct _XMLEncoderOptions {
     let nilEncodingStrategy: XMLEncoder.NilEncodingStrategy
     let dateEncodingStrategy: XMLEncoder.DateEncodingStrategy
     let dataEncodingStrategy: XMLEncoder.DataEncodingStrategy
+    let validationPolicy: XMLValidationPolicy
 
     init(configuration: XMLEncoder.Configuration) {
         // Sanitize itemElementName using the same policy as root element names so that
@@ -64,13 +65,16 @@ struct _XMLEncoderOptions {
         self.nilEncodingStrategy = configuration.nilEncodingStrategy
         self.dateEncodingStrategy = configuration.dateEncodingStrategy
         self.dataEncodingStrategy = configuration.dataEncodingStrategy
+        self.validationPolicy = configuration.validationPolicy
     }
 }
 
-// Validates that `name` can serve as an XML element or attribute name.
-// Rejects characters that would cause a late libxml2 writer failure with no
-// actionable diagnostic: whitespace and XML structure metacharacters.
-private func _validateXMLFieldName(_ name: String, context: String) throws {
+// Validates that `name` can serve as an XML element or attribute name when
+// `policy.validateElementNames` is `true`. Rejects characters that would cause
+// a late libxml2 writer failure with no actionable diagnostic: whitespace and
+// XML structure metacharacters.
+private func _validateXMLFieldName(_ name: String, context: String, policy: XMLValidationPolicy) throws {
+    guard policy.validateElementNames else { return }
     let invalid = name.isEmpty || name.unicodeScalars.contains { scalar in
         let codePoint = scalar.value
         return codePoint == 0x20 || codePoint == 0x09 || codePoint == 0x0A || codePoint == 0x0D  // whitespace
@@ -267,6 +271,30 @@ final class _XMLTreeEncoder: Encoder {
             return _XMLTemporalFoundationSupport.formatISO8601(date)
         case .iso8601:
             return _XMLTemporalFoundationSupport.formatISO8601(date)
+        case .xsdDate(let tz):
+            return _XMLTemporalFoundationSupport.formatXSDDate(date, timeZone: tz)
+        case .xsdTime(let tz):
+            return XMLTime(date: date, timeZone: tz).lexicalValue
+        case .xsdGYear(let tz):
+            return XMLGYear(date: date, timeZone: tz).lexicalValue
+        case .xsdGYearMonth(let tz):
+            return XMLGYearMonth(date: date, timeZone: tz).lexicalValue
+        case .xsdGMonth(let tz):
+            var gMonthCal = Calendar(identifier: .gregorian)
+            gMonthCal.timeZone = tz
+            let gMonth = gMonthCal.component(.month, from: date)
+            return XMLGMonth(month: gMonth, timezoneOffset: XMLTimezoneOffset(standardTimeOf: tz)).lexicalValue
+        case .xsdGDay(let tz):
+            var gDayCal = Calendar(identifier: .gregorian)
+            gDayCal.timeZone = tz
+            let gDay = gDayCal.component(.day, from: date)
+            return XMLGDay(day: gDay, timezoneOffset: XMLTimezoneOffset(standardTimeOf: tz)).lexicalValue
+        case .xsdGMonthDay(let tz):
+            var gMDCal = Calendar(identifier: .gregorian)
+            gMDCal.timeZone = tz
+            let gMDMonth = gMDCal.component(.month, from: date)
+            let gMDDay = gMDCal.component(.day, from: date)
+            return XMLGMonthDay(month: gMDMonth, day: gMDDay, timezoneOffset: XMLTimezoneOffset(standardTimeOf: tz)).lexicalValue
         case .formatter(let descriptor):
             return _XMLTemporalFoundationSupport.makeDateFormatter(from: descriptor).string(from: date)
         case .custom(let closure):
@@ -315,7 +343,7 @@ struct _XMLKeyedEncodingContainer<Key: CodingKey>: KeyedEncodingContainerProtoco
         if resolvedNodeKind(for: key, valueType: Never.self) == .attribute {
             return
         }
-        try _validateXMLFieldName(key.stringValue, context: "encodeNil field '\(key.stringValue)'")
+        try _validateXMLFieldName(key.stringValue, context: "encodeNil field '\(key.stringValue)'", policy: encoder.options.validationPolicy)
         encoder.addNilElementIfNeeded(localName: key.stringValue)
     }
 
@@ -339,7 +367,7 @@ struct _XMLKeyedEncodingContainer<Key: CodingKey>: KeyedEncodingContainerProtoco
     }
 
     private mutating func encodeEncodable<T: Encodable>(_ value: T, forKey key: Key) throws {
-        try _validateXMLFieldName(key.stringValue, context: "field '\(key.stringValue)'")
+        try _validateXMLFieldName(key.stringValue, context: "field '\(key.stringValue)'", policy: encoder.options.validationPolicy)
         let nodeKind = resolvedNodeKind(for: key, valueType: T.self)
         if nodeKind == .attribute {
             try encodeAttribute(value, forKey: key)

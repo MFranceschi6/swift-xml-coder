@@ -69,6 +69,40 @@ public struct XMLEncoder: Sendable {
         case xsdDateTimeISO8601
         /// Encode in ISO 8601 format as produced by `ISO8601DateFormatter`.
         case iso8601
+        /// Encode a `Date` as XSD `xs:date` (`YYYY-MM-DD`), using UTC unless a timezone is specified.
+        ///
+        /// The time-of-day and sub-second components are discarded. To use a specific timezone,
+        /// pass it via the `timeZone` parameter.
+        ///
+        /// - Parameter timeZone: The timezone used to extract year/month/day. Defaults to UTC.
+        case xsdDate(timeZone: TimeZone = .utc)
+        /// Encode a `Date` as XSD `xs:time` (`hh:mm:ss[.SSS]Z`).
+        ///
+        /// The date component is discarded. The result always carries a `Z` (UTC) or the provided
+        /// timezone suffix.
+        ///
+        /// - Parameter timeZone: The timezone used to extract the time components. Defaults to UTC.
+        case xsdTime(timeZone: TimeZone = .utc)
+        /// Encode a `Date` as XSD `xs:gYear` (`YYYY`).
+        ///
+        /// - Parameter timeZone: The timezone used to extract the year. Defaults to UTC.
+        case xsdGYear(timeZone: TimeZone = .utc)
+        /// Encode a `Date` as XSD `xs:gYearMonth` (`YYYY-MM`).
+        ///
+        /// - Parameter timeZone: The timezone used to extract year and month. Defaults to UTC.
+        case xsdGYearMonth(timeZone: TimeZone = .utc)
+        /// Encode a `Date` as XSD `xs:gMonth` (`--MM`).
+        ///
+        /// - Parameter timeZone: The timezone used to extract the month. Defaults to UTC.
+        case xsdGMonth(timeZone: TimeZone = .utc)
+        /// Encode a `Date` as XSD `xs:gDay` (`---DD`).
+        ///
+        /// - Parameter timeZone: The timezone used to extract the day. Defaults to UTC.
+        case xsdGDay(timeZone: TimeZone = .utc)
+        /// Encode a `Date` as XSD `xs:gMonthDay` (`--MM-DD`).
+        ///
+        /// - Parameter timeZone: The timezone used to extract month and day. Defaults to UTC.
+        case xsdGMonthDay(timeZone: TimeZone = .utc)
         /// Encode using a custom `XMLDateFormatterDescriptor`.
         case formatter(XMLDateFormatterDescriptor)
         /// Encode using a custom closure.
@@ -102,6 +136,12 @@ public struct XMLEncoder: Sendable {
         public let dataEncodingStrategy: DataEncodingStrategy
         /// Configuration forwarded to the underlying `XMLTreeWriter`.
         public let writerConfiguration: XMLTreeWriter.Configuration
+        /// Validation policy applied during encoding.
+        ///
+        /// Controls whether element names and other structural values are validated.
+        /// Defaults to ``XMLValidationPolicy/default``, which respects the
+        /// `SWIFT_XML_CODER_STRICT_VALIDATION` compile-time flag.
+        public let validationPolicy: XMLValidationPolicy
 
         /// Creates an encoder configuration.
         ///
@@ -113,6 +153,7 @@ public struct XMLEncoder: Sendable {
         ///   - dateEncodingStrategy: How `Date` values are serialised. Defaults to `.xsdDateTimeISO8601`.
         ///   - dataEncodingStrategy: How `Data` values are serialised. Defaults to `.base64`.
         ///   - writerConfiguration: Writer options forwarded to `XMLTreeWriter`.
+        ///   - validationPolicy: Structural validation policy. Defaults to ``XMLValidationPolicy/default``.
         public init(
             rootElementName: String? = nil,
             itemElementName: String = "item",
@@ -120,7 +161,8 @@ public struct XMLEncoder: Sendable {
             nilEncodingStrategy: NilEncodingStrategy = .emptyElement,
             dateEncodingStrategy: DateEncodingStrategy = .xsdDateTimeISO8601,
             dataEncodingStrategy: DataEncodingStrategy = .base64,
-            writerConfiguration: XMLTreeWriter.Configuration = XMLTreeWriter.Configuration()
+            writerConfiguration: XMLTreeWriter.Configuration = XMLTreeWriter.Configuration(),
+            validationPolicy: XMLValidationPolicy = .default
         ) {
             self.rootElementName = rootElementName
             self.itemElementName = itemElementName
@@ -129,6 +171,7 @@ public struct XMLEncoder: Sendable {
             self.dateEncodingStrategy = dateEncodingStrategy
             self.dataEncodingStrategy = dataEncodingStrategy
             self.writerConfiguration = writerConfiguration
+            self.validationPolicy = validationPolicy
         }
     }
 
