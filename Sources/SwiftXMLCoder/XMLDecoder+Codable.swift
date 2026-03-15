@@ -1,4 +1,5 @@
 import Foundation
+import Logging
 
 // MARK: - Architecture: XMLDecoder Codable implementation
 //
@@ -48,6 +49,7 @@ struct _XMLDecoderOptions {
     let dateDecodingStrategy: XMLDecoder.DateDecodingStrategy
     let dataDecodingStrategy: XMLDecoder.DataDecodingStrategy
     let validationPolicy: XMLValidationPolicy
+    let logger: Logger
     /// Per-property date format hints populated from `XMLDateCodingOverrideProvider`.
     var perPropertyDateHints: [String: XMLDateFormatHint] = [:]
 
@@ -57,6 +59,7 @@ struct _XMLDecoderOptions {
         self.dateDecodingStrategy = configuration.dateDecodingStrategy
         self.dataDecodingStrategy = configuration.dataDecodingStrategy
         self.validationPolicy = configuration.validationPolicy
+        self.logger = configuration.logger
     }
 }
 
@@ -359,6 +362,10 @@ final class _XMLTreeDecoder: Decoder {
         // Per-property hint overrides the global strategy when present.
         let effectiveStrategy: XMLDecoder.DateDecodingStrategy
         if let name = localName, let hint = options.perPropertyDateHints[name] {
+            options.logger.trace(
+                "Per-property date hint applied",
+                metadata: ["field": "\(name)", "hint": "\(hint)"]
+            )
             effectiveStrategy = hint.decodingStrategy
         } else {
             effectiveStrategy = options.dateDecodingStrategy
