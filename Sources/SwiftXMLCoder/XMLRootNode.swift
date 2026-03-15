@@ -58,9 +58,18 @@ enum XMLRootNameResolver {
         return makeXMLSafeName(shortName)
     }
 
+    /// Sanitises `value` into a valid XML NCName (no-colon name).
+    ///
+    /// If the value contains a `:`, the namespace prefix is stripped and only the local
+    /// part is retained (e.g. `"soap:Envelope"` → `"Envelope"`). Any remaining
+    /// non-alphanumeric characters other than `_` and `-` are replaced with `_`.
+    /// A leading digit is prefixed with `_`. An empty result falls back to `"Root"`.
     static func makeXMLSafeName(_ value: String) -> String {
+        // Strip namespace prefix — take only the local part after the last colon.
+        let localPart = value.contains(":") ? String(value.split(separator: ":", maxSplits: 1).last ?? Substring(value)) : value
+
         let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "_-"))
-        var result = value.unicodeScalars.map { scalar in
+        var result = localPart.unicodeScalars.map { scalar in
             allowed.contains(scalar) ? Character(scalar) : "_"
         }
 

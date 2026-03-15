@@ -115,7 +115,7 @@ final class XMLCanonicalizerTests: XCTestCase {
             }
 
             XCTAssertEqual(canonicalError.stage, .transform)
-            XCTAssertEqual(canonicalError.code, "XML6_9_CANONICAL_TRANSFORM_FAILED")
+            XCTAssertEqual(canonicalError.code, .transformFailed)
 
             guard case .transformFailed(
                 _,
@@ -155,7 +155,7 @@ final class XMLCanonicalizerTests: XCTestCase {
             }
 
             XCTAssertEqual(canonicalError.stage, .serialization)
-            XCTAssertEqual(canonicalError.code, "XML6_9_CANONICAL_SERIALIZATION_FAILED")
+            XCTAssertEqual(canonicalError.code, .serializationFailed)
 
             guard case .serializationFailed(_, let underlyingError, let message) = canonicalError else {
                 XCTFail("Expected serializationFailed case.")
@@ -203,7 +203,7 @@ final class XMLCanonicalizerTests: XCTestCase {
             }
 
             XCTAssertEqual(canonicalError.stage, .other)
-            XCTAssertEqual(canonicalError.code, "XML6_9_CUSTOM")
+            XCTAssertEqual(canonicalError.code, XMLCanonicalizationErrorCode(rawValue: "XML6_9_CUSTOM"))
             if case .other(_, _, let message) = canonicalError {
                 XCTAssertEqual(message, "[XML6_9_CUSTOM] custom failure")
             } else {

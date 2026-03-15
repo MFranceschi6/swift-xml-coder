@@ -9,7 +9,7 @@ import SwiftXMLCoderMacros
 @XMLCodable
 private struct MacroMappedPayload: Codable, Equatable {
     @XMLAttribute let id: Int
-    @XMLElement let name: String
+    @XMLChild let name: String
 }
 #endif
 
@@ -17,7 +17,7 @@ final class XMLFieldMappingTests: XCTestCase {
     func test_wrappers_encodeAndDecode_attributeAndElementMapping() throws {
         struct Payload: Codable, Equatable {
             @SwiftXMLCoder.XMLAttribute var id: Int
-            @SwiftXMLCoder.XMLElement var name: String
+            @SwiftXMLCoder.XMLChild var name: String
 
             init(id: Int, name: String) {
                 self.id = id

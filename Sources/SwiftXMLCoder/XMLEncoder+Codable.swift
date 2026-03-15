@@ -25,7 +25,7 @@ import Foundation
 //
 // Each field in a keyed container is resolved in order:
 //   1. Type-level: if the value's type conforms to `_XMLFieldKindOverrideType`
-//      (satisfied by the `XMLAttribute<T>` / `XMLElement<T>` property wrappers),
+//      (satisfied by the `XMLAttribute<T>` / `XMLChild<T>` property wrappers),
 //      its `_xmlFieldNodeKindOverride` is used unconditionally.
 //   2. Macro-level: if the enclosing type conforms to
 //      `XMLFieldCodingOverrideProvider` (synthesised by `@XMLCodable`), the static

@@ -79,7 +79,7 @@ let decoded = try decoder.decode(Book.self, from: data)
 - ``XMLFieldCodingOverrideProvider``
 - ``XMLFieldNodeKind``
 - ``XMLAttribute``
-- ``XMLElement``
+- ``XMLChild``
 - ``XMLRootNode``
 
 ### Namespaces

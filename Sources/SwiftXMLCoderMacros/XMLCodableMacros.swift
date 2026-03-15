@@ -11,7 +11,7 @@ import SwiftXMLCoder
 /// @XMLCodable
 /// struct Item: Codable {
 ///     @XMLAttribute var id: Int      // encoded as <Item id="42">
-///     @XMLElement  var name: String  // encoded as <name>Foo</name>
+///     @XMLChild  var name: String  // encoded as <name>Foo</name>
 /// }
 /// ```
 ///
@@ -23,7 +23,7 @@ public macro XMLAttribute() = #externalMacro(
     type: "XMLAttributeMacro"
 )
 
-/// Marks a stored property as an XML **element** when encoded or decoded by `@XMLCodable`.
+/// Marks a stored property as an XML **child element** when encoded or decoded by `@XMLCodable`.
 ///
 /// Apply this macro to individual properties inside a type annotated with `@XMLCodable`.
 /// The owning type's `xmlFieldNodeKinds` dictionary (synthesised by `@XMLCodable`) will
@@ -35,15 +35,23 @@ public macro XMLAttribute() = #externalMacro(
 /// - Note: Without `@XMLCodable` on the enclosing type this annotation compiles
 ///   successfully but has no runtime effect — it is a pure syntax marker.
 @attached(peer)
+public macro XMLChild() = #externalMacro(
+    module: "SwiftXMLCoderMacroImplementation",
+    type: "XMLChildMacro"
+)
+
+/// Deprecated alias for ``XMLChild()``. Use `@XMLChild` instead.
+@available(*, deprecated, renamed: "XMLChild")
+@attached(peer)
 public macro XMLElement() = #externalMacro(
     module: "SwiftXMLCoderMacroImplementation",
-    type: "XMLElementMacro"
+    type: "XMLChildMacro"
 )
 
 /// Synthesises `XMLFieldCodingOverrideProvider` conformance for a struct or class by
 /// scanning its stored-property annotations.
 ///
-/// `@XMLCodable` reads every `@XMLAttribute` and `@XMLElement` annotation present on the
+/// `@XMLCodable` reads every `@XMLAttribute` and `@XMLChild` annotation present on the
 /// type's stored properties at compile time and generates a static `xmlFieldNodeKinds`
 /// dictionary used by the XML encoder and decoder to decide whether each field should be
 /// serialised as an XML attribute or a child element.
@@ -52,7 +60,7 @@ public macro XMLElement() = #externalMacro(
 /// @XMLCodable
 /// struct Order: Codable {
 ///     @XMLAttribute var orderId: String   // → attribute
-///     @XMLElement   var total: Decimal    // → element
+///     @XMLChild   var total: Decimal    // → element
 ///     var currency: String                // → not in dict, encoder uses default
 /// }
 /// ```

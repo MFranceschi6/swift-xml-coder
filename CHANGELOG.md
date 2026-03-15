@@ -6,7 +6,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Breaking Changes
+- Renamed `XMLElement<Value>` property wrapper to ``XMLChild<Value>``. The old name is retained as a `@available(*, deprecated, renamed: "XMLChild")` typealias for source compatibility.
+- Renamed `@XMLElement` macro to `@XMLChild`. The old macro name is kept as a deprecated alias pointing to the same implementation (`XMLChildMacro`).
+- Removed `preserveWhitespaceTextNodes: Bool` parameter from `XMLTreeParser.Configuration.init` and `Configuration.untrustedInputProfile`. Use `whitespaceTextNodePolicy: .preserve` instead.
+- `XMLCanonicalizationError.code` now returns `XMLCanonicalizationErrorCode` instead of `String`. Update callers that compare `.code` to raw string literals to use the typed constant (e.g. `.code == .transformFailed`).
+
 ### Added
+- `XMLNamespace` conforms to `Equatable` and `Hashable`.
+- `XMLParsingError` conforms to `Equatable`. Two `.other` values are never equal (existential payload cannot be compared structurally — documented in the case's doc comment).
+- `makeXMLSafeName` now strips namespace prefixes from qualified names (e.g. `"soap:Envelope"` → `"Envelope"` instead of `"soap_Envelope"`). Regression test added.
+- Regression test `test_encodeTree_itemElementName_namespacePrefixed_stripsPrefix`.
 - DocC catalog (`Sources/SwiftXMLCoder/SwiftXMLCoder.docc/`): landing page + 8 articles (GettingStarted, FieldMapping, Namespaces, Canonicalization, XPath, Security, Compatibility, TestSupport).
 - `README.md`: installation instructions (all 3 SPM product variants), quick-start code examples, feature matrix, and links to DocC articles.
 - Inline `///` doc comments on all previously undocumented public types and members: `XMLNode`, `XMLNamespaceDeclaration`, `XMLNormalizationOptions`, `XMLTemporalCoding` types (`XMLDateFormatterDescriptor`, `XMLDateCodingContext`, `XMLDateEncodingClosure`, `XMLDateDecodingClosure`), `XMLCanonicalizationErrorCode` (all static constants), `XMLNamespace`, `XMLQualifiedName`, `XMLTreeNode` (all cases), `XMLTreeAttribute`, `XMLCanonicalizationError`, `XMLCanonicalizationStage`, `XMLCanonicalView`, `XMLIdentityTransform`, `XMLDefaultCanonicalizer`, `XMLNamespaceResolver`, `XMLNamespaceValidator`, `XMLDocument` (`createElement`, `appendChild`, `serializedData`, XPath methods).

@@ -20,7 +20,7 @@ targets: [
 ]
 ```
 
-Swift 5.9 or later is required for macro support (`@XMLCodable`, `@XMLAttribute`, `@XMLElement`). Swift 5.6+ is sufficient for the core encoder/decoder.
+Swift 5.9 or later is required for macro support (`@XMLCodable`, `@XMLAttribute`, `@XMLChild`). Swift 5.6+ is sufficient for the core encoder/decoder.
 
 ## Encoding
 

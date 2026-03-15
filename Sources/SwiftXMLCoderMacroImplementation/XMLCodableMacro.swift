@@ -30,7 +30,7 @@ private enum XMLCodableDiagnostic {
 /// Implementation of `@XMLCodable`.
 ///
 /// Scans the stored properties of the attached struct or class for `@XMLAttribute` and
-/// `@XMLElement` annotations, then synthesises an `XMLFieldCodingOverrideProvider`
+/// `@XMLChild` annotations, then synthesises an `XMLFieldCodingOverrideProvider`
 /// extension whose `xmlFieldNodeKinds` dictionary maps each annotated field name to its
 /// corresponding `XMLFieldNodeKind`.
 public struct XMLCodableMacro: ExtensionMacro {
@@ -53,7 +53,7 @@ public struct XMLCodableMacro: ExtensionMacro {
             return []
         }
 
-        // Scan member stored properties for @XMLAttribute / @XMLElement annotations.
+        // Scan member stored properties for @XMLAttribute / @XMLChild annotations.
         var entries: [(name: String, kind: String)] = []
         for member in declaration.memberBlock.members {
             guard let varDecl = member.decl.as(VariableDeclSyntax.self) else { continue }
@@ -102,7 +102,7 @@ private extension AttributeListSyntax {
             guard let attrSyntax = attr.as(AttributeSyntax.self) else { continue }
             let name = attrSyntax.attributeName.trimmedDescription
             if name == "XMLAttribute" { return ".attribute" }
-            if name == "XMLElement"   { return ".element" }
+            if name == "XMLChild"     { return ".element" }
         }
         return nil
     }

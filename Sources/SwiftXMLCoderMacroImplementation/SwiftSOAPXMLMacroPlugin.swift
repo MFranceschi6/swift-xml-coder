@@ -5,7 +5,7 @@ import SwiftSyntaxMacros
 struct SwiftXMLCoderMacroPlugin: CompilerPlugin {
     let providingMacros: [Macro.Type] = [
         XMLAttributeMacro.self,
-        XMLElementMacro.self,
+        XMLChildMacro.self,
         XMLCodableMacro.self,
     ]
 }

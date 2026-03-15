@@ -51,5 +51,33 @@ public enum XMLParsingError: Error {
     /// - Parameters:
     ///   - underlyingError: The original error in a type-erased container, if available.
     ///   - message: A human-readable description of the situation, if available.
+    ///
+    /// - Note: Two `.other` values are never considered equal regardless of their payloads,
+    ///   because `XMLAnyError` is an existential and cannot be compared structurally.
     case other(underlyingError: XMLAnyError?, message: String?)
+}
+
+extension XMLParsingError: Equatable {
+    public static func == (lhs: XMLParsingError, rhs: XMLParsingError) -> Bool {
+        switch (lhs, rhs) {
+        case (.invalidUTF8, .invalidUTF8):
+            return true
+        case (.parseFailed(let lhsMsg), .parseFailed(let rhsMsg)):
+            return lhsMsg == rhsMsg
+        case (.xpathFailed(let lhsExpr, let lhsMsg), .xpathFailed(let rhsExpr, let rhsMsg)):
+            return lhsExpr == rhsExpr && lhsMsg == rhsMsg
+        case (.documentCreationFailed(let lhsMsg), .documentCreationFailed(let rhsMsg)):
+            return lhsMsg == rhsMsg
+        case (.nodeCreationFailed(let lhsName, let lhsMsg), .nodeCreationFailed(let rhsName, let rhsMsg)):
+            return lhsName == rhsName && lhsMsg == rhsMsg
+        case (.invalidNamespaceConfiguration(let lhsPrefix, let lhsURI), .invalidNamespaceConfiguration(let rhsPrefix, let rhsURI)):
+            return lhsPrefix == rhsPrefix && lhsURI == rhsURI
+        case (.nodeOperationFailed(let lhsMsg), .nodeOperationFailed(let rhsMsg)):
+            return lhsMsg == rhsMsg
+        case (.other, .other):
+            return false
+        default:
+            return false
+        }
+    }
 }

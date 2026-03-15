@@ -902,13 +902,13 @@ final class XMLContainerCoverageTests: XCTestCase {
     }
 
     func test_parser_configuration_untrustedInputProfile_preserveWhitespace() {
-        let config = XMLTreeParser.Configuration.untrustedInputProfile(preserveWhitespaceTextNodes: true)
-        XCTAssertTrue(config.preserveWhitespaceTextNodes)
+        let config = XMLTreeParser.Configuration.untrustedInputProfile(whitespaceTextNodePolicy: .preserve)
+        XCTAssertEqual(config.whitespaceTextNodePolicy, .preserve)
     }
 
-    func test_parser_configuration_preserveWhitespaceTextNodes_false() {
-        let config = XMLTreeParser.Configuration(preserveWhitespaceTextNodes: false)
-        XCTAssertFalse(config.preserveWhitespaceTextNodes)
+    func test_parser_configuration_whitespaceTextNodePolicy_dropWhitespaceOnly() {
+        let config = XMLTreeParser.Configuration(whitespaceTextNodePolicy: .dropWhitespaceOnly)
+        XCTAssertEqual(config.whitespaceTextNodePolicy, .dropWhitespaceOnly)
     }
 
     func test_writer_limits_untrustedInputDefault() {
