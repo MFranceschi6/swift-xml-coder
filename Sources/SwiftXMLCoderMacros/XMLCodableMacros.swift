@@ -1,5 +1,32 @@
 import SwiftXMLCoder
 
+/// Declares the XSD date format for a specific stored property, overriding the global
+/// `dateEncodingStrategy` / `dateDecodingStrategy` on `XMLEncoder` / `XMLDecoder`.
+///
+/// Apply this macro to stored properties of type `Date` or `Date?` inside a type
+/// also annotated with `@XMLCodable`. The owning type's `xmlPropertyDateHints` dictionary
+/// (synthesised by `@XMLCodable`) will map the field's name to the specified hint,
+/// causing the XML encoder and decoder to use that format for this property only.
+///
+/// ```swift
+/// @XMLCodable
+/// struct Schedule: Codable {
+///     @XMLDateFormat(.xsdDate) var startDate: Date
+///     @XMLDateFormat(.xsdTime) var startTime: Date
+///     var createdAt: Date   // uses encoder-level strategy
+/// }
+/// ```
+///
+/// - Parameter hint: The ``XMLDateFormatHint`` that selects the XSD lexical format.
+///
+/// - Note: Without `@XMLCodable` on the enclosing type this annotation compiles
+///   successfully but has no runtime effect — it is a pure syntax marker.
+@attached(peer)
+public macro XMLDateFormat(_ hint: XMLDateFormatHint) = #externalMacro(
+    module: "SwiftXMLCoderMacroImplementation",
+    type: "XMLDateFormatMacro"
+)
+
 /// Marks a stored property as an XML **attribute** when encoded or decoded by `@XMLCodable`.
 ///
 /// Apply this macro to individual properties inside a type annotated with `@XMLCodable`.

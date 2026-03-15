@@ -48,6 +48,8 @@ struct _XMLDecoderOptions {
     let dateDecodingStrategy: XMLDecoder.DateDecodingStrategy
     let dataDecodingStrategy: XMLDecoder.DataDecodingStrategy
     let validationPolicy: XMLValidationPolicy
+    /// Per-property date format hints populated from `XMLDateCodingOverrideProvider`.
+    var perPropertyDateHints: [String: XMLDateFormatHint] = [:]
 
     init(configuration: XMLDecoder.Configuration) {
         self.itemElementName = configuration.itemElementName
@@ -354,7 +356,14 @@ final class _XMLTreeDecoder: Decoder {
             namespaceURI: nil,
             isAttribute: isAttribute
         )
-        if let parsed = try attemptParseDate(lexicalValue, strategy: options.dateDecodingStrategy, context: context) {
+        // Per-property hint overrides the global strategy when present.
+        let effectiveStrategy: XMLDecoder.DateDecodingStrategy
+        if let name = localName, let hint = options.perPropertyDateHints[name] {
+            effectiveStrategy = hint.decodingStrategy
+        } else {
+            effectiveStrategy = options.dateDecodingStrategy
+        }
+        if let parsed = try attemptParseDate(lexicalValue, strategy: effectiveStrategy, context: context) {
             return parsed
         }
         throw XMLParsingError.parseFailed(
@@ -552,8 +561,10 @@ struct _XMLKeyedDecodingContainer<Key: CodingKey>: KeyedDecodingContainerProtoco
             )
         }
 
+        var nestedOptions = decoder.options
+        nestedOptions.perPropertyDateHints = _xmlPropertyDateHints(for: T.self)
         let nestedDecoder = _XMLTreeDecoder(
-            options: decoder.options,
+            options: nestedOptions,
             codingPath: childPath,
             node: element,
             fieldNodeKinds: _xmlFieldNodeKinds(for: T.self)
@@ -765,8 +776,10 @@ struct _XMLUnkeyedDecodingContainer: UnkeyedDecodingContainer {
             )
         }
 
+        var nestedOptions = decoder.options
+        nestedOptions.perPropertyDateHints = _xmlPropertyDateHints(for: T.self)
         let nestedDecoder = _XMLTreeDecoder(
-            options: decoder.options,
+            options: nestedOptions,
             codingPath: itemPath,
             node: element,
             fieldNodeKinds: _xmlFieldNodeKinds(for: T.self)
@@ -865,8 +878,10 @@ struct _XMLSingleValueDecodingContainer: SingleValueDecodingContainer {
                 message: "[XML6_5_SCALAR_PARSE_FAILED] Unable to decode single-value scalar at path '\(renderPath(codingPath))'."
             )
         }
+        var nestedOptions = decoder.options
+        nestedOptions.perPropertyDateHints = _xmlPropertyDateHints(for: T.self)
         let nestedDecoder = _XMLTreeDecoder(
-            options: decoder.options,
+            options: nestedOptions,
             codingPath: codingPath,
             node: node,
             fieldNodeKinds: _xmlFieldNodeKinds(for: T.self)

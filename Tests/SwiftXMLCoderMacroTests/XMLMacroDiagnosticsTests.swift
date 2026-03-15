@@ -8,7 +8,8 @@ import XCTest
 private let testMacros: [String: any Macro.Type] = [
     "XMLCodable": XMLCodableMacro.self,
     "XMLAttribute": XMLAttributeMacro.self,
-    "XMLChild": XMLChildMacro.self
+    "XMLChild": XMLChildMacro.self,
+    "XMLDateFormat": XMLDateFormatMacro.self,
 ]
 
 final class XMLMacroDiagnosticsTests: XCTestCase {
@@ -187,6 +188,165 @@ final class XMLMacroDiagnosticsTests: XCTestCase {
             """
             struct S {
                 var name: String
+            }
+            """,
+            macros: testMacros
+        )
+    }
+
+    func test_xmlDateFormat_expandsToNoPeers() {
+        // PeerMacro that generates no peers: annotation stripped, property unchanged.
+        assertMacroExpansion(
+            """
+            struct S {
+                @XMLDateFormat(.xsdDate) var birthDate: Date
+            }
+            """,
+            expandedSource:
+            """
+            struct S {
+                var birthDate: Date
+            }
+            """,
+            macros: testMacros
+        )
+    }
+
+    // MARK: - @XMLCodable with @XMLDateFormat — synthesises xmlPropertyDateHints
+
+    func test_xmlCodable_withDateFormat_synthesisesDateHints() {
+        assertMacroExpansion(
+            """
+            @XMLCodable
+            struct Schedule: Codable {
+                @XMLDateFormat(.xsdDate) var startDate: Date
+                @XMLDateFormat(.xsdTime) var startTime: Date
+                var createdAt: Date
+            }
+            """,
+            expandedSource:
+            """
+            struct Schedule: Codable {
+                var startDate: Date
+                var startTime: Date
+                var createdAt: Date
+            }
+
+            extension Schedule: XMLFieldCodingOverrideProvider {
+                static var xmlFieldNodeKinds: [String: XMLFieldNodeKind] {
+                    [:]
+                }
+            }
+
+            extension Schedule: XMLDateCodingOverrideProvider {
+                static var xmlPropertyDateHints: [String: XMLDateFormatHint] {
+                    [
+                    "startDate": .xsdDate,
+                    "startTime": .xsdTime
+                ]
+                }
+            }
+            """,
+            macros: testMacros
+        )
+    }
+
+    func test_xmlCodable_withMixedAnnotations_synthesisesBothDictionaries() {
+        assertMacroExpansion(
+            """
+            @XMLCodable
+            struct Event: Codable {
+                @XMLAttribute var id: String
+                @XMLDateFormat(.xsdDate) var date: Date
+                var name: String
+            }
+            """,
+            expandedSource:
+            """
+            struct Event: Codable {
+                var id: String
+                var date: Date
+                var name: String
+            }
+
+            extension Event: XMLFieldCodingOverrideProvider {
+                static var xmlFieldNodeKinds: [String: XMLFieldNodeKind] {
+                    [
+                    "id": .attribute
+                ]
+                }
+            }
+
+            extension Event: XMLDateCodingOverrideProvider {
+                static var xmlPropertyDateHints: [String: XMLDateFormatHint] {
+                    [
+                    "date": .xsdDate
+                ]
+                }
+            }
+            """,
+            macros: testMacros
+        )
+    }
+
+    func test_xmlCodable_withNoDateFormat_doesNotSynthesiseDateHintsExtension() {
+        // When there are no @XMLDateFormat annotations, no XMLDateCodingOverrideProvider
+        // extension must be emitted.
+        assertMacroExpansion(
+            """
+            @XMLCodable
+            struct Plain: Codable {
+                @XMLAttribute var id: String
+                var name: String
+            }
+            """,
+            expandedSource:
+            """
+            struct Plain: Codable {
+                var id: String
+                var name: String
+            }
+
+            extension Plain: XMLFieldCodingOverrideProvider {
+                static var xmlFieldNodeKinds: [String: XMLFieldNodeKind] {
+                    [
+                    "id": .attribute
+                ]
+                }
+            }
+            """,
+            macros: testMacros
+        )
+    }
+
+    func test_xmlCodable_withComplexDateFormatArg_passesVerbatim() {
+        // @XMLDateFormat with a parameterised case: the argument is emitted verbatim
+        // into the synthesised dictionary.
+        assertMacroExpansion(
+            """
+            @XMLCodable
+            struct Tz: Codable {
+                @XMLDateFormat(.xsdDateWithTimezone(identifier: "Europe/Rome")) var date: Date
+            }
+            """,
+            expandedSource:
+            """
+            struct Tz: Codable {
+                var date: Date
+            }
+
+            extension Tz: XMLFieldCodingOverrideProvider {
+                static var xmlFieldNodeKinds: [String: XMLFieldNodeKind] {
+                    [:]
+                }
+            }
+
+            extension Tz: XMLDateCodingOverrideProvider {
+                static var xmlPropertyDateHints: [String: XMLDateFormatHint] {
+                    [
+                    "date": .xsdDateWithTimezone(identifier: "Europe/Rome")
+                ]
+                }
             }
             """,
             macros: testMacros

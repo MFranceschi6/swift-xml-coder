@@ -207,7 +207,8 @@ public struct XMLDecoder: Sendable {
             )
         }
 
-        let options = _XMLDecoderOptions(configuration: configuration)
+        var options = _XMLDecoderOptions(configuration: configuration)
+        options.perPropertyDateHints = _xmlPropertyDateHints(for: T.self)
         let decoder = _XMLTreeDecoder(
             options: options,
             codingPath: [],

@@ -251,7 +251,8 @@ public struct XMLEncoder: Sendable {
             name: XMLQualifiedName(localName: rootElementName, namespaceURI: rootNamespaceURI),
             namespaceDeclarations: rootNamespaceDeclarations
         )
-        let options = try _XMLEncoderOptions(configuration: configuration)
+        var options = try _XMLEncoderOptions(configuration: configuration)
+        options.perPropertyDateHints = _xmlPropertyDateHints(for: T.self)
         let encoder = _XMLTreeEncoder(
             options: options,
             codingPath: [],
