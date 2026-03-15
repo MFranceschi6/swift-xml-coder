@@ -1,0 +1,30 @@
+name: DocC
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  docc:
+    name: Build documentation
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -switch /Applications/Xcode_16.2.app
+
+      # NOTE: This job will be promoted to --warnings-as-errors once the
+      # DocC catalog is added in Epic B. Until then it just verifies that
+      # documentation generation does not crash.
+      - name: Build DocC
+        run: |
+          swift package generate-documentation \
+            --target SwiftXMLCoder \
+            --warnings-as-errors

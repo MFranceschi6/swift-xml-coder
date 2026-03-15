@@ -1,4 +1,27 @@
+# Swift Package Manager
 .build/
+.swiftpm/
+Package.resolved
+
+# Xcode / macOS user files
+DerivedData/
+*.xcodeproj
+*.xcworkspace
+xcuserdata/
 .DS_Store
-*.o
-*.d
+
+# Coverage artifacts
+*.profraw
+*.profdata
+codecov/
+
+# Local tooling/editor state
+.cursor/
+.claude/settings.local.json
+.vscode/
+
+# GitHub Actions local testing (act)
+.act/
+
+# Transient CI/debug logs
+*.log

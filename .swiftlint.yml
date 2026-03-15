@@ -1,0 +1,96 @@
+# .swiftlint.yml
+
+included:
+  - Sources
+  - Tests
+
+excluded:
+  - .build
+  - Packages
+  - DerivedData
+  - vendor
+
+reporter: "xcode"
+
+opt_in_rules:
+  - explicit_init
+  - empty_count
+  - empty_string
+  - first_where
+  - last_where
+  - sorted_first_last
+  - operator_usage_whitespace
+  - redundant_type_annotation
+  - redundant_void_return
+  - discouraged_optional_boolean
+  - force_try
+  - force_unwrapping
+
+disabled_rules:
+  - todo
+  - trailing_whitespace
+
+explicit_init:
+  severity: warning
+
+line_length:
+  warning: 120
+  error: 160
+  ignores_comments: true
+  ignores_urls: true
+
+function_body_length:
+  warning: 60
+  error: 120
+
+type_body_length:
+  warning: 300
+  error: 450
+
+file_length:
+  warning: 500
+  # XMLDecoder+Codable.swift hosts 4 interdependent Codable container types
+  # (_XMLTreeDecoder, _XMLKeyedDecodingContainer, _XMLUnkeyedDecodingContainer,
+  # _XMLSingleValueDecodingContainer) that cross-reference private state.
+  # Splitting them would require exposing internal state or duplicating it.
+  error: 800
+  ignore_comment_only_lines: true
+
+cyclomatic_complexity:
+  warning: 10
+  # decodeScalar dispatches over ~15 Foundation scalar types (Bool, Int, Int8…Int64,
+  # UInt…UInt64, Float, Double, Decimal, String, Date, Data, URL, UUID).
+  # This is a flat type-dispatch table, not cognitive complexity.
+  error: 30
+
+force_try:
+  severity: error
+
+force_unwrapping:
+  severity: error
+
+# Allow _ prefix for private Codable implementation types such as _XMLTreeDecoder,
+# _XMLKeyedDecodingContainer, etc. These are file-private implementation details
+# that implement public protocols and cannot use access-level modifiers.
+type_name:
+  allowed_symbols: ["_"]
+
+# Allow _ prefix for protocol requirements such as _xmlFieldNodeKindOverride
+# and internal helpers such as _xmlAttributeLexicalValue() that signal
+# non-public contracts.
+identifier_name:
+  allowed_symbols: ["_"]
+
+custom_rules:
+  no_print:
+    name: "No print in library code"
+    regex: '\bprint\('
+    message: "Avoid print() in library code: use the Logging abstraction or remove."
+    severity: warning
+    included: "Sources/.*\\.swift"
+
+# Per-file numeric overrides are not natively supported by SwiftLint.
+# Test files that genuinely exceed source thresholds use inline disable comments.
+# Agreed relaxed limits for Tests/**:
+#   function_body_length: warning 120, error 200
+#   type_body_length:     warning 450, error 600

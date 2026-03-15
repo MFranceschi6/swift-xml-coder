@@ -1,0 +1,80 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ──────────────────────────────────────────────────────────────────────────
+  # Linux × all Swift versions
+  # ──────────────────────────────────────────────────────────────────────────
+  linux:
+    name: Linux / Swift ${{ matrix.swift }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        swift: ["5.6", "5.9", "5.10", "6.0", "6.1"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: swift-actions/setup-swift@v2
+        with:
+          swift-version: ${{ matrix.swift }}
+
+      - name: Build
+        run: swift build -c debug
+
+      - name: Test
+        run: swift test --enable-code-coverage
+
+      # Coverage report — only on Swift 6.1, only on pushes to main
+      - name: Generate coverage report
+        if: matrix.swift == '6.1' && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          BINARY=$(swift build --show-bin-path -c debug)/SwiftXMLCoderPackageTests
+          PROFDATA=$(find .build -name "*.profdata" | head -1)
+          xcrun llvm-profdata merge -sparse "$PROFDATA" -o .build/merged.profdata
+          xcrun llvm-cov export \
+            "$BINARY" \
+            -instr-profile=.build/merged.profdata \
+            -format=lcov \
+            -ignore-filename-regex="\.build|Tests" \
+            > .build/coverage.lcov
+          xcrun llvm-cov report \
+            "$BINARY" \
+            -instr-profile=.build/merged.profdata \
+            -ignore-filename-regex="\.build|Tests" \
+            --use-color
+
+      - name: Upload coverage artifact
+        if: matrix.swift == '6.1' && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-linux-swift-6_1
+          path: .build/coverage.lcov
+          retention-days: 30
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # macOS / Swift 6.1 (Xcode 16 on macos-15)
+  # ──────────────────────────────────────────────────────────────────────────
+  macos:
+    name: macOS / Swift 6.1
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -switch /Applications/Xcode_16.2.app
+
+      - name: Build
+        run: swift build -c debug
+
+      - name: Test
+        run: swift test --enable-code-coverage
