@@ -30,13 +30,20 @@ private enum XMLCodableDiagnostic {
 /// Implementation of `@XMLCodable`.
 ///
 /// Scans the stored properties of the attached struct or class for `@XMLAttribute`,
-/// `@XMLChild`, and `@XMLDateFormat` annotations, then synthesises:
+/// `@XMLChild`, `@XMLDateFormat`, `@XMLCDATA`, and `@XMLExpandEmpty` annotations,
+/// then synthesises:
 ///
 /// 1. An `XMLFieldCodingOverrideProvider` extension whose `xmlFieldNodeKinds` dictionary
 ///    maps each `@XMLAttribute`/`@XMLChild`-annotated field name to its `XMLFieldNodeKind`.
 /// 2. An `XMLDateCodingOverrideProvider` extension whose `xmlPropertyDateHints` dictionary
 ///    maps each `@XMLDateFormat`-annotated field name to its `XMLDateFormatHint`.
 ///    This extension is only emitted when at least one `@XMLDateFormat` annotation is present.
+/// 3. An `XMLStringCodingOverrideProvider` extension whose `xmlPropertyStringHints` dictionary
+///    maps each `@XMLCDATA`-annotated field name to `.cdata`.
+///    This extension is only emitted when at least one `@XMLCDATA` annotation is present.
+/// 4. An `XMLExpandEmptyProvider` extension whose `xmlPropertyExpandEmptyKeys` set contains
+///    each `@XMLExpandEmpty`-annotated field name.
+///    This extension is only emitted when at least one `@XMLExpandEmpty` annotation is present.
 public struct XMLCodableMacro: ExtensionMacro {
     public static func expansion(
         of node: AttributeSyntax,
@@ -60,6 +67,8 @@ public struct XMLCodableMacro: ExtensionMacro {
         // Scan member stored properties for annotations.
         var fieldKindEntries: [(name: String, kind: String)] = []
         var dateHintEntries: [(name: String, hint: String)] = []
+        var stringHintEntries: [String] = []    // property names annotated with @XMLCDATA
+        var expandEmptyEntries: [String] = []   // property names annotated with @XMLExpandEmpty
 
         for member in declaration.memberBlock.members {
             guard let varDecl = member.decl.as(VariableDeclSyntax.self) else { continue }
@@ -68,6 +77,8 @@ public struct XMLCodableMacro: ExtensionMacro {
 
             let annotationKind = varDecl.attributes.xmlFieldAnnotationKind
             let dateHint = varDecl.attributes.xmlDateFormatHint
+            let hasCDATAAnnotation = varDecl.attributes.hasXMLCDATAAnnotation
+            let hasExpandEmptyAnnotation = varDecl.attributes.hasXMLExpandEmptyAnnotation
 
             for binding in varDecl.bindings {
                 guard let identifier = binding.pattern.as(IdentifierPatternSyntax.self) else {
@@ -79,6 +90,12 @@ public struct XMLCodableMacro: ExtensionMacro {
                 }
                 if let hint = dateHint {
                     dateHintEntries.append((name: name, hint: hint))
+                }
+                if hasCDATAAnnotation {
+                    stringHintEntries.append(name)
+                }
+                if hasExpandEmptyAnnotation {
+                    expandEmptyEntries.append(name)
                 }
             }
         }
@@ -102,25 +119,56 @@ public struct XMLCodableMacro: ExtensionMacro {
             """
         )
 
+        var extensions: [ExtensionDeclSyntax] = [fieldKindsExtension]
+
         // Only emit the date hints extension when at least one @XMLDateFormat is present.
-        guard dateHintEntries.isEmpty == false else {
-            return [fieldKindsExtension]
+        if dateHintEntries.isEmpty == false {
+            let hintLines = dateHintEntries.map { "        \"\($0.name)\": \($0.hint)" }
+            let hintDictBody = "[\n\(hintLines.joined(separator: ",\n"))\n    ]"
+            let dateHintsExtension: ExtensionDeclSyntax = try ExtensionDeclSyntax(
+                """
+                extension \(type): XMLDateCodingOverrideProvider {
+                    static var xmlPropertyDateHints: [String: XMLDateFormatHint] {
+                        \(raw: hintDictBody)
+                    }
+                }
+                """
+            )
+            extensions.append(dateHintsExtension)
         }
 
-        let hintLines = dateHintEntries.map { "        \"\($0.name)\": \($0.hint)" }
-        let hintDictBody = "[\n\(hintLines.joined(separator: ",\n"))\n    ]"
-
-        let dateHintsExtension: ExtensionDeclSyntax = try ExtensionDeclSyntax(
-            """
-            extension \(type): XMLDateCodingOverrideProvider {
-                static var xmlPropertyDateHints: [String: XMLDateFormatHint] {
-                    \(raw: hintDictBody)
+        // Only emit the string hints extension when at least one @XMLCDATA is present.
+        if stringHintEntries.isEmpty == false {
+            let stringLines = stringHintEntries.map { "        \"\($0)\": .cdata" }
+            let stringDictBody = "[\n\(stringLines.joined(separator: ",\n"))\n    ]"
+            let stringHintsExtension: ExtensionDeclSyntax = try ExtensionDeclSyntax(
+                """
+                extension \(type): XMLStringCodingOverrideProvider {
+                    static var xmlPropertyStringHints: [String: XMLStringEncodingHint] {
+                        \(raw: stringDictBody)
+                    }
                 }
-            }
-            """
-        )
+                """
+            )
+            extensions.append(stringHintsExtension)
+        }
 
-        return [fieldKindsExtension, dateHintsExtension]
+        // Only emit the expand-empty extension when at least one @XMLExpandEmpty is present.
+        if expandEmptyEntries.isEmpty == false {
+            let keySetBody = expandEmptyEntries.map { "\"\($0)\"" }.joined(separator: ", ")
+            let expandEmptyExtension: ExtensionDeclSyntax = try ExtensionDeclSyntax(
+                """
+                extension \(type): XMLExpandEmptyProvider {
+                    static var xmlPropertyExpandEmptyKeys: Set<String> {
+                        [\(raw: keySetBody)]
+                    }
+                }
+                """
+            )
+            extensions.append(expandEmptyExtension)
+        }
+
+        return extensions
     }
 }
 
@@ -136,6 +184,24 @@ private extension AttributeListSyntax {
             if name == "XMLChild"     { return ".element" }
         }
         return nil
+    }
+
+    /// Returns `true` if a `@XMLExpandEmpty` annotation is present on the property.
+    var hasXMLExpandEmptyAnnotation: Bool {
+        for attr in self {
+            guard let attrSyntax = attr.as(AttributeSyntax.self) else { continue }
+            if attrSyntax.attributeName.trimmedDescription == "XMLExpandEmpty" { return true }
+        }
+        return false
+    }
+
+    /// Returns `true` if a `@XMLCDATA` annotation is present on the property.
+    var hasXMLCDATAAnnotation: Bool {
+        for attr in self {
+            guard let attrSyntax = attr.as(AttributeSyntax.self) else { continue }
+            if attrSyntax.attributeName.trimmedDescription == "XMLCDATA" { return true }
+        }
+        return false
     }
 
     /// Returns the verbatim argument expression of `@XMLDateFormat(...)` if present, else `nil`.

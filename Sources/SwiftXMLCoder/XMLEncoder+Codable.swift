@@ -50,6 +50,20 @@ func _xmlFieldNodeKinds<T>(for type: T.Type) -> [String: XMLFieldNodeKind] {
     return provider.xmlFieldNodeKinds
 }
 
+func _xmlPropertyExpandEmptyKeys<T>(for type: T.Type) -> Set<String> {
+    guard let provider = type as? XMLExpandEmptyProvider.Type else {
+        return []
+    }
+    return provider.xmlPropertyExpandEmptyKeys
+}
+
+func _xmlPropertyStringHints<T>(for type: T.Type) -> [String: XMLStringEncodingHint] {
+    guard let provider = type as? XMLStringCodingOverrideProvider.Type else {
+        return [:]
+    }
+    return provider.xmlPropertyStringHints
+}
+
 func _xmlPropertyDateHints<T>(for type: T.Type) -> [String: XMLDateFormatHint] {
     guard let provider = type as? XMLDateCodingOverrideProvider.Type else {
         return [:]
@@ -63,10 +77,17 @@ struct _XMLEncoderOptions {
     let nilEncodingStrategy: XMLEncoder.NilEncodingStrategy
     let dateEncodingStrategy: XMLEncoder.DateEncodingStrategy
     let dataEncodingStrategy: XMLEncoder.DataEncodingStrategy
+    let stringEncodingStrategy: XMLEncoder.StringEncodingStrategy
+    let keyTransformStrategy: XMLKeyTransformStrategy
     let validationPolicy: XMLValidationPolicy
     let logger: Logger
+    let userInfo: [CodingUserInfoKey: Any]
     /// Per-property date format hints populated from `XMLDateCodingOverrideProvider`.
     var perPropertyDateHints: [String: XMLDateFormatHint] = [:]
+    /// Per-property string encoding hints populated from `XMLStringCodingOverrideProvider`.
+    var perPropertyStringHints: [String: XMLStringEncodingHint] = [:]
+    /// Per-property expand-empty keys populated from `XMLExpandEmptyProvider`.
+    var perPropertyExpandEmptyKeys: Set<String> = []
 
     init(configuration: XMLEncoder.Configuration) throws {
         let policy = configuration.validationPolicy
@@ -82,8 +103,11 @@ struct _XMLEncoderOptions {
         self.nilEncodingStrategy = configuration.nilEncodingStrategy
         self.dateEncodingStrategy = configuration.dateEncodingStrategy
         self.dataEncodingStrategy = configuration.dataEncodingStrategy
+        self.stringEncodingStrategy = configuration.stringEncodingStrategy
+        self.keyTransformStrategy = configuration.keyTransformStrategy
         self.validationPolicy = policy
         self.logger = configuration.logger
+        self.userInfo = configuration.userInfo
     }
 }
 
@@ -109,6 +133,7 @@ private func _validateXMLFieldName(_ name: String, context: String, policy: XMLV
 
 enum _XMLTreeContentBox {
     case text(String)
+    case cdata(String)
     case element(_XMLTreeElementBox)
 }
 
@@ -129,8 +154,14 @@ final class _XMLTreeElementBox {
         self.contents = []
     }
 
+    var isEmpty: Bool { contents.isEmpty }
+
     func appendText(_ value: String) {
         contents.append(.text(value))
+    }
+
+    func appendCDATA(_ value: String) {
+        contents.append(.cdata(value))
     }
 
     func appendElement(_ child: _XMLTreeElementBox) {
@@ -149,6 +180,8 @@ final class _XMLTreeElementBox {
             switch content {
             case .text(let value):
                 return XMLTreeNode.text(value)
+            case .cdata(let value):
+                return XMLTreeNode.cdata(value)
             case .element(let child):
                 return XMLTreeNode.element(child.makeElement())
             }
@@ -188,7 +221,7 @@ final class _XMLTreeEncoder: Encoder {
     let node: _XMLTreeElementBox
     let fieldNodeKinds: [String: XMLFieldNodeKind]
     var codingPath: [CodingKey]
-    var userInfo: [CodingUserInfoKey: Any] { [:] }
+    var userInfo: [CodingUserInfoKey: Any] { options.userInfo }
 
     init(
         options: _XMLEncoderOptions,
@@ -351,9 +384,12 @@ final class _XMLTreeEncoder: Encoder {
         }
     }
 
-    func addNilElementIfNeeded(localName: String) {
+    func addNilElementIfNeeded(localName: String, expandEmpty: Bool = false) {
         if options.nilEncodingStrategy == .emptyElement {
-            _ = node.makeChild(localName: localName)
+            let child = node.makeChild(localName: localName)
+            if expandEmpty {
+                child.appendText("")
+            }
         }
     }
 }
@@ -374,7 +410,8 @@ struct _XMLKeyedEncodingContainer<Key: CodingKey>: KeyedEncodingContainerProtoco
             return
         }
         try _validateXMLFieldName(key.stringValue, context: "encodeNil field '\(key.stringValue)'", policy: encoder.options.validationPolicy)
-        encoder.addNilElementIfNeeded(localName: key.stringValue)
+        let expandEmpty = encoder.options.perPropertyExpandEmptyKeys.contains(key.stringValue)
+        encoder.addNilElementIfNeeded(localName: xmlName(for: key), expandEmpty: expandEmpty)
     }
 
     mutating func encode(_ value: Bool, forKey key: Key) throws { try encodeEncodable(value, forKey: key) }
@@ -396,8 +433,44 @@ struct _XMLKeyedEncodingContainer<Key: CodingKey>: KeyedEncodingContainerProtoco
         try encodeEncodable(value, forKey: key)
     }
 
+    // MARK: encodeIfPresent — respect nilEncodingStrategy for synthesised Codable optionals
+    //
+    // Swift's compiler-synthesised encode(to:) calls the concrete encodeIfPresent overloads
+    // (Bool?, Int?, String?, etc.) rather than encodeNil(forKey:), so the default protocol
+    // implementation silently skips nil without invoking our nilEncodingStrategy.  Overriding
+    // all concrete variants routes nil through encodeNil(forKey:), which enforces the strategy.
+
+    mutating func encodeIfPresent(_ value: Bool?,   forKey key: Key) throws { try _encodeIfPresent(value, forKey: key) }
+    mutating func encodeIfPresent(_ value: String?, forKey key: Key) throws { try _encodeIfPresent(value, forKey: key) }
+    mutating func encodeIfPresent(_ value: Double?, forKey key: Key) throws { try _encodeIfPresent(value, forKey: key) }
+    mutating func encodeIfPresent(_ value: Float?,  forKey key: Key) throws { try _encodeIfPresent(value, forKey: key) }
+    mutating func encodeIfPresent(_ value: Int?,    forKey key: Key) throws { try _encodeIfPresent(value, forKey: key) }
+    mutating func encodeIfPresent(_ value: Int8?,   forKey key: Key) throws { try _encodeIfPresent(value, forKey: key) }
+    mutating func encodeIfPresent(_ value: Int16?,  forKey key: Key) throws { try _encodeIfPresent(value, forKey: key) }
+    mutating func encodeIfPresent(_ value: Int32?,  forKey key: Key) throws { try _encodeIfPresent(value, forKey: key) }
+    mutating func encodeIfPresent(_ value: Int64?,  forKey key: Key) throws { try _encodeIfPresent(value, forKey: key) }
+    mutating func encodeIfPresent(_ value: UInt?,   forKey key: Key) throws { try _encodeIfPresent(value, forKey: key) }
+    mutating func encodeIfPresent(_ value: UInt8?,  forKey key: Key) throws { try _encodeIfPresent(value, forKey: key) }
+    mutating func encodeIfPresent(_ value: UInt16?, forKey key: Key) throws { try _encodeIfPresent(value, forKey: key) }
+    mutating func encodeIfPresent(_ value: UInt32?, forKey key: Key) throws { try _encodeIfPresent(value, forKey: key) }
+    mutating func encodeIfPresent(_ value: UInt64?, forKey key: Key) throws { try _encodeIfPresent(value, forKey: key) }
+    mutating func encodeIfPresent<T: Encodable>(_ value: T?, forKey key: Key) throws { try _encodeIfPresent(value, forKey: key) }
+
+    private mutating func _encodeIfPresent<T: Encodable>(_ value: T?, forKey key: Key) throws {
+        if let value {
+            try encodeEncodable(value, forKey: key)
+        } else {
+            try encodeNil(forKey: key)
+        }
+    }
+
+    private func xmlName(for key: Key) -> String {
+        encoder.options.keyTransformStrategy.transform(key.stringValue)
+    }
+
     private mutating func encodeEncodable<T: Encodable>(_ value: T, forKey key: Key) throws {
-        try _validateXMLFieldName(key.stringValue, context: "field '\(key.stringValue)'", policy: encoder.options.validationPolicy)
+        let name = xmlName(for: key)
+        try _validateXMLFieldName(name, context: "field '\(key.stringValue)'", policy: encoder.options.validationPolicy)
         let nodeKind = resolvedNodeKind(for: key, valueType: T.self)
         if nodeKind == .attribute {
             try encodeAttribute(value, forKey: key)
@@ -407,15 +480,17 @@ struct _XMLKeyedEncodingContainer<Key: CodingKey>: KeyedEncodingContainerProtoco
         if let scalar = try encoder.boxedScalar(
             value,
             codingPath: codingPath + [key],
-            localName: key.stringValue
+            localName: name
         ) {
             try encodeScalarString(scalar, forKey: key)
             return
         }
 
-        let child = encoder.node.makeChild(localName: key.stringValue)
+        let child = encoder.node.makeChild(localName: name)
         var nestedOptions = encoder.options
         nestedOptions.perPropertyDateHints = _xmlPropertyDateHints(for: T.self)
+        nestedOptions.perPropertyStringHints = _xmlPropertyStringHints(for: T.self)
+        nestedOptions.perPropertyExpandEmptyKeys = _xmlPropertyExpandEmptyKeys(for: T.self)
         let nestedEncoder = _XMLTreeEncoder(
             options: nestedOptions,
             codingPath: codingPath + [key],
@@ -423,6 +498,11 @@ struct _XMLKeyedEncodingContainer<Key: CodingKey>: KeyedEncodingContainerProtoco
             fieldNodeKinds: _xmlFieldNodeKinds(for: T.self)
         )
         try value.encode(to: nestedEncoder)
+        // Per-field expand-empty: inject empty text into child-less elements so the writer
+        // emits <field></field> instead of <field/>.
+        if child.isEmpty && encoder.options.perPropertyExpandEmptyKeys.contains(key.stringValue) {
+            child.appendText("")
+        }
     }
 
     mutating func nestedContainer<NestedKey>(
@@ -468,8 +548,25 @@ struct _XMLKeyedEncodingContainer<Key: CodingKey>: KeyedEncodingContainerProtoco
     }
 
     private func encodeScalarString(_ value: String, forKey key: Key) throws {
-        let child = encoder.node.makeChild(localName: key.stringValue)
-        child.appendText(value)
+        let child = encoder.node.makeChild(localName: xmlName(for: key))
+        let effectiveStringStrategy = resolvedStringStrategy(for: key)
+        switch effectiveStringStrategy {
+        case .text:
+            child.appendText(value)
+        case .cdata:
+            child.appendCDATA(value)
+        }
+    }
+
+    private func resolvedStringStrategy(for key: Key) -> XMLEncoder.StringEncodingStrategy {
+        // Per-property hint (from @XMLCDATA macro) takes priority over the global strategy.
+        if let hint = encoder.options.perPropertyStringHints[key.stringValue] {
+            switch hint {
+            case .text:  return .text
+            case .cdata: return .cdata
+            }
+        }
+        return encoder.options.stringEncodingStrategy
     }
 
     private mutating func encodeAttribute<T: Encodable>(_ value: T, forKey key: Key) throws {
@@ -495,7 +592,7 @@ struct _XMLKeyedEncodingContainer<Key: CodingKey>: KeyedEncodingContainerProtoco
 
         encoder.node.attributes.append(
             XMLTreeAttribute(
-                name: XMLQualifiedName(localName: key.stringValue),
+                name: XMLQualifiedName(localName: xmlName(for: key)),
                 value: lexicalValue
             )
         )

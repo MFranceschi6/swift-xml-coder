@@ -484,22 +484,25 @@ final class XMLEncoderTests: XCTestCase {
         XCTAssertNoThrow(try encoder.encodeTree(Good(firstName: "a", lastName: "b", value123: 1)))
     }
 
-    // MARK: - POST-XML-7: NilEncodingStrategy semantics
+    // MARK: - NilEncodingStrategy semantics
 
-    func test_encodeTree_synthesizedCodable_nilOptional_alwaysAbsentRegardlessOfStrategy() throws {
+    func test_encodeTree_synthesizedCodable_nilOptional_respectsStrategy() throws {
+        // H.2a: encodeIfPresent override makes nilEncodingStrategy work for synthesised Codable.
         struct S: Encodable { var name: String? }
 
-        for strategy: XMLEncoder.NilEncodingStrategy in [.emptyElement, .omitElement] {
-            let encoder = XMLEncoder(configuration: .init(
-                rootElementName: "S",
-                nilEncodingStrategy: strategy
-            ))
-            let tree = try encoder.encodeTree(S(name: nil))
-            XCTAssertNil(
-                firstChild(named: "name", in: tree.root),
-                "Synthesised Codable nil optional must be absent with strategy .\(strategy)."
-            )
-        }
+        let emptyEncoder = XMLEncoder(configuration: .init(rootElementName: "S", nilEncodingStrategy: .emptyElement))
+        let emptyTree = try emptyEncoder.encodeTree(S(name: nil))
+        XCTAssertNotNil(
+            firstChild(named: "name", in: emptyTree.root),
+            ".emptyElement strategy should emit an empty <name/> for a nil synthesised optional"
+        )
+
+        let omitEncoder = XMLEncoder(configuration: .init(rootElementName: "S", nilEncodingStrategy: .omitElement))
+        let omitTree = try omitEncoder.encodeTree(S(name: nil))
+        XCTAssertNil(
+            firstChild(named: "name", in: omitTree.root),
+            ".omitElement strategy should omit nil synthesised optional entirely"
+        )
     }
 
     func test_encodeTree_encodeNilForAttributeKindField_alwaysOmitted() throws {
@@ -563,5 +566,129 @@ final class XMLEncoderTests: XCTestCase {
             guard case .text(let value) = node else { return nil }
             return value
         }
+    }
+
+    // MARK: - H.2a: nilEncodingStrategy on synthesised Codable optionals
+
+    func test_encodeTree_nilEncodingStrategy_omitElement_synthesisedOptional_omitsField() throws {
+        struct Address: Encodable {
+            let street: String
+            let line2: String?
+            let city: String
+        }
+
+        let encoder = XMLEncoder(configuration: .init(nilEncodingStrategy: .omitElement))
+        let tree = try encoder.encodeTree(Address(street: "Via Roma 1", line2: nil, city: "Milano"))
+
+        XCTAssertNotNil(firstChild(named: "street", in: tree.root))
+        XCTAssertNil(firstChild(named: "line2", in: tree.root), "nil field should be omitted with .omitElement")
+        XCTAssertNotNil(firstChild(named: "city", in: tree.root))
+    }
+
+    func test_encodeTree_nilEncodingStrategy_emptyElement_synthesisedOptional_emitsEmptyElement() throws {
+        struct Address: Encodable {
+            let street: String
+            let line2: String?
+            let city: String
+        }
+
+        let encoder = XMLEncoder(configuration: .init(nilEncodingStrategy: .emptyElement))
+        let tree = try encoder.encodeTree(Address(street: "Via Roma 1", line2: nil, city: "Milano"))
+
+        guard let line2 = firstChild(named: "line2", in: tree.root) else {
+            return XCTFail("Expected <line2/> element with .emptyElement strategy")
+        }
+        XCTAssertTrue(line2.children.isEmpty, "Element should be empty")
+    }
+
+    // MARK: - H.1: userInfo
+
+    func test_encodeTree_userInfo_defaultIsEmpty() throws {
+        let encoder = XMLEncoder()
+        XCTAssertTrue(encoder.configuration.userInfo.isEmpty)
+    }
+
+    func test_encodeTree_userInfo_isForwardedToEncodableImplementation() throws {
+        let infoKey = CodingUserInfoKey(rawValue: "test.greeting")!
+        struct GreetingPayload: Encodable {
+            func encode(to encoder: Encoder) throws {
+                var container = encoder.container(keyedBy: CodingKeys.self)
+                let greeting = encoder.userInfo[CodingUserInfoKey(rawValue: "test.greeting")!] as? String ?? "hello"
+                try container.encode(greeting, forKey: .message)
+            }
+            enum CodingKeys: String, CodingKey { case message }
+        }
+
+        let encoder = XMLEncoder(configuration: .init(userInfo: [infoKey: "ciao"]))
+        let tree = try encoder.encodeTree(GreetingPayload())
+        let messageElement = tree.root.children.compactMap { child -> XMLTreeElement? in
+            guard case .element(let el) = child, el.name.localName == "message" else { return nil }
+            return el
+        }.first
+        XCTAssertNotNil(messageElement)
+        let text = messageElement?.children.compactMap { child -> String? in
+            guard case .text(let v) = child else { return nil }
+            return v
+        }.first
+        XCTAssertEqual(text, "ciao")
+    }
+
+    // MARK: - H.4a: StringEncodingStrategy (global CDATA)
+
+    func test_stringEncodingStrategy_default_emitsPlainText() throws {
+        struct Article: Encodable { let body: String }
+        let encoder = XMLEncoder()  // default: .text
+        let tree = try encoder.encodeTree(Article(body: "Hello <world>"))
+        let bodyEl = tree.root.children.compactMap { child -> XMLTreeElement? in
+            guard case .element(let el) = child else { return nil }
+            return el
+        }.first
+        XCTAssertNotNil(bodyEl)
+        // Should be a plain text node, not CDATA
+        let hasText = bodyEl?.children.contains { child in
+            if case .text = child { return true }
+            return false
+        } ?? false
+        let hasCDATA = bodyEl?.children.contains { child in
+            if case .cdata = child { return true }
+            return false
+        } ?? false
+        XCTAssertTrue(hasText, "Expected plain text node")
+        XCTAssertFalse(hasCDATA, "Expected no CDATA node with default strategy")
+    }
+
+    func test_stringEncodingStrategy_cdata_emitsCDATANode() throws {
+        struct Article: Encodable { let body: String }
+        let encoder = XMLEncoder(configuration: .init(stringEncodingStrategy: .cdata))
+        let tree = try encoder.encodeTree(Article(body: "Hello <world>"))
+        let bodyEl = tree.root.children.compactMap { child -> XMLTreeElement? in
+            guard case .element(let el) = child else { return nil }
+            return el
+        }.first
+        XCTAssertNotNil(bodyEl)
+        let cdataValue = bodyEl?.children.compactMap { child -> String? in
+            if case .cdata(let v) = child { return v }
+            return nil
+        }.first
+        XCTAssertEqual(cdataValue, "Hello <world>", "Expected CDATA node with string content")
+    }
+
+    func test_stringEncodingStrategy_cdata_serialisesToCDATASyntax() throws {
+        struct Article: Encodable { let body: String }
+        let encoder = XMLEncoder(configuration: .init(stringEncodingStrategy: .cdata))
+        let data = try encoder.encode(Article(body: "Hello & <world>"))
+        let xml = String(data: data, encoding: .utf8) ?? ""
+        XCTAssertTrue(xml.contains("<![CDATA["), "Expected CDATA section in serialised XML: \(xml)")
+        XCTAssertTrue(xml.contains("Hello & <world>"), "CDATA content should be unescaped: \(xml)")
+    }
+
+    func test_stringEncodingStrategy_cdata_roundtrip() throws {
+        struct Article: Codable, Equatable { let title: String; let body: String }
+        let original = Article(title: "News", body: "<p>Hello &amp; World</p>")
+        let encoder = XMLEncoder(configuration: .init(stringEncodingStrategy: .cdata))
+        let decoder = XMLDecoder()
+        let data = try encoder.encode(original)
+        let decoded = try decoder.decode(Article.self, from: data)
+        XCTAssertEqual(decoded, original)
     }
 }

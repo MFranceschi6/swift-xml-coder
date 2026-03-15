@@ -1,3 +1,4 @@
+// swiftlint:disable file_length
 import Foundation
 import Logging
 
@@ -48,8 +49,10 @@ struct _XMLDecoderOptions {
     let fieldCodingOverrides: XMLFieldCodingOverrides
     let dateDecodingStrategy: XMLDecoder.DateDecodingStrategy
     let dataDecodingStrategy: XMLDecoder.DataDecodingStrategy
+    let keyTransformStrategy: XMLKeyTransformStrategy
     let validationPolicy: XMLValidationPolicy
     let logger: Logger
+    let userInfo: [CodingUserInfoKey: Any]
     /// Per-property date format hints populated from `XMLDateCodingOverrideProvider`.
     var perPropertyDateHints: [String: XMLDateFormatHint] = [:]
 
@@ -58,8 +61,10 @@ struct _XMLDecoderOptions {
         self.fieldCodingOverrides = configuration.fieldCodingOverrides
         self.dateDecodingStrategy = configuration.dateDecodingStrategy
         self.dataDecodingStrategy = configuration.dataDecodingStrategy
+        self.keyTransformStrategy = configuration.keyTransformStrategy
         self.validationPolicy = configuration.validationPolicy
         self.logger = configuration.logger
+        self.userInfo = configuration.userInfo
     }
 }
 
@@ -88,7 +93,7 @@ final class _XMLTreeDecoder: Decoder {
     let node: XMLTreeElement
     let fieldNodeKinds: [String: XMLFieldNodeKind]
     var codingPath: [CodingKey]
-    var userInfo: [CodingUserInfoKey: Any] { [:] }
+    var userInfo: [CodingUserInfoKey: Any] { options.userInfo }
 
     init(
         options: _XMLDecoderOptions,
@@ -516,16 +521,22 @@ struct _XMLKeyedDecodingContainer<Key: CodingKey>: KeyedDecodingContainerProtoco
         return names.compactMap { Key(stringValue: $0) }.sorted(by: { $0.stringValue < $1.stringValue })
     }
 
+    private func xmlName(for key: Key) -> String {
+        decoder.options.keyTransformStrategy.transform(key.stringValue)
+    }
+
     func contains(_ key: Key) -> Bool {
-        decoder.firstChild(named: key.stringValue, in: decoder.node) != nil ||
-            decoder.attribute(named: key.stringValue, in: decoder.node) != nil
+        let name = xmlName(for: key)
+        return decoder.firstChild(named: name, in: decoder.node) != nil ||
+            decoder.attribute(named: name, in: decoder.node) != nil
     }
 
     func decodeNil(forKey key: Key) throws -> Bool {
-        if decoder.attribute(named: key.stringValue, in: decoder.node) != nil {
+        let name = xmlName(for: key)
+        if decoder.attribute(named: name, in: decoder.node) != nil {
             return false
         }
-        guard let element = decoder.firstChild(named: key.stringValue, in: decoder.node) else {
+        guard let element = decoder.firstChild(named: name, in: decoder.node) else {
             return true
         }
         return decoder.isNilElement(element)
@@ -552,7 +563,7 @@ struct _XMLKeyedDecodingContainer<Key: CodingKey>: KeyedDecodingContainerProtoco
             return try decodeAttribute(type, forKey: key)
         }
 
-        guard let element = decoder.firstChild(named: key.stringValue, in: decoder.node) else {
+        guard let element = decoder.firstChild(named: xmlName(for: key), in: decoder.node) else {
             throw XMLParsingError.parseFailed(
                 message: "[XML6_5_KEY_NOT_FOUND] Missing key '\(key.stringValue)' at path '\(renderPath(codingPath))'."
             )
@@ -590,7 +601,7 @@ struct _XMLKeyedDecodingContainer<Key: CodingKey>: KeyedDecodingContainerProtoco
             )
         }
 
-        guard let element = decoder.firstChild(named: key.stringValue, in: decoder.node) else {
+        guard let element = decoder.firstChild(named: xmlName(for: key), in: decoder.node) else {
             throw XMLParsingError.parseFailed(
                 message: "[XML6_5_KEY_NOT_FOUND] Missing nested key '\(key.stringValue)' at path '\(renderPath(codingPath))'."
             )
@@ -612,7 +623,7 @@ struct _XMLKeyedDecodingContainer<Key: CodingKey>: KeyedDecodingContainerProtoco
             )
         }
 
-        guard let element = decoder.firstChild(named: key.stringValue, in: decoder.node) else {
+        guard let element = decoder.firstChild(named: xmlName(for: key), in: decoder.node) else {
             throw XMLParsingError.parseFailed(
                 message: "[XML6_5_KEY_NOT_FOUND] Missing nested unkeyed key '\(key.stringValue)' at path '\(renderPath(codingPath))'."
             )
@@ -636,7 +647,7 @@ struct _XMLKeyedDecodingContainer<Key: CodingKey>: KeyedDecodingContainerProtoco
     }
 
     func superDecoder(forKey key: Key) throws -> Decoder {
-        guard let element = decoder.firstChild(named: key.stringValue, in: decoder.node) else {
+        guard let element = decoder.firstChild(named: xmlName(for: key), in: decoder.node) else {
             throw XMLParsingError.parseFailed(
                 message: "[XML6_5_KEY_NOT_FOUND] Missing super key '\(key.stringValue)' at path '\(renderPath(codingPath))'."
             )
@@ -655,7 +666,7 @@ struct _XMLKeyedDecodingContainer<Key: CodingKey>: KeyedDecodingContainerProtoco
             return try decodeAttribute(type, forKey: key)
         }
 
-        guard let element = decoder.firstChild(named: key.stringValue, in: decoder.node) else {
+        guard let element = decoder.firstChild(named: xmlName(for: key), in: decoder.node) else {
             throw XMLParsingError.parseFailed(
                 message: "[XML6_5_KEY_NOT_FOUND] Missing scalar key '\(key.stringValue)' at path '\(renderPath(codingPath))'."
             )
@@ -687,7 +698,7 @@ struct _XMLKeyedDecodingContainer<Key: CodingKey>: KeyedDecodingContainerProtoco
     }
 
     private func decodeAttribute<T: Decodable>(_ type: T.Type, forKey key: Key) throws -> T {
-        guard let attribute = decoder.attribute(named: key.stringValue, in: decoder.node) else {
+        guard let attribute = decoder.attribute(named: xmlName(for: key), in: decoder.node) else {
             throw XMLParsingError.parseFailed(
                 message: "[XML6_6_ATTRIBUTE_NOT_FOUND] Missing attribute '\(key.stringValue)' at path '\(renderPath(codingPath))'."
             )

@@ -219,4 +219,30 @@ final class XMLDecoderTests: XCTestCase {
         let payload = try decoder.decode(Payload.self, from: Data(xml.utf8))
         XCTAssertEqual(payload.raw, Data([0x41, 0x42]))
     }
+
+    // MARK: - H.1: userInfo
+
+    func test_decode_userInfo_defaultIsEmpty() throws {
+        let decoder = XMLDecoder()
+        XCTAssertTrue(decoder.configuration.userInfo.isEmpty)
+    }
+
+    func test_decode_userInfo_isForwardedToDecodableImplementation() throws {
+        let infoKey = CodingUserInfoKey(rawValue: "test.multiplier")!
+        struct MultiplierPayload: Decodable {
+            let value: Int
+            init(from decoder: Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                let raw = try container.decode(Int.self, forKey: .value)
+                let multiplier = decoder.userInfo[CodingUserInfoKey(rawValue: "test.multiplier")!] as? Int ?? 1
+                self.value = raw * multiplier
+            }
+            enum CodingKeys: String, CodingKey { case value }
+        }
+
+        let xml = "<MultiplierPayload><value>7</value></MultiplierPayload>"
+        let decoder = XMLDecoder(configuration: .init(userInfo: [infoKey: 3]))
+        let result = try decoder.decode(MultiplierPayload.self, from: Data(xml.utf8))
+        XCTAssertEqual(result.value, 21)
+    }
 }
