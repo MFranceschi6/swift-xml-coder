@@ -27,6 +27,14 @@ jobs:
         with:
           swift-version: "6.1"
 
+      - name: Cache SPM build artifacts
+        uses: actions/cache@v4
+        with:
+          path: .build
+          key: ubuntu-22.04-spm-swift6.1-docc-${{ hashFiles('Package*.swift') }}
+          restore-keys: |
+            ubuntu-22.04-spm-swift6.1-docc-
+
       - name: Install system dependencies
         run: |
           sudo apt-get update
