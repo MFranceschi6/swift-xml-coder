@@ -4,6 +4,48 @@ All notable changes to SwiftXMLCoder will be documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased]
+
+### Added (Pillar I.1 — Benchmark Infrastructure)
+
+- **Benchmark sub-package** at `Benchmarks/` using `ordo-one/package-benchmark` 1.31.0.
+  - Separate `Benchmarks/Package.swift` (macOS 13.0+ minimum, recommended approach when main package supports older OS).
+  - `swift package --disable-sandbox benchmark` from the `Benchmarks/` directory runs all suites.
+  - **4 benchmark suites** covering the core operations at 4 fixture sizes (1 KB, 10 KB, 100 KB, 1 MB):
+    - `Parse/*` — raw `XMLTreeParser.parse(data:)` throughput
+    - `Encode/*` — end-to-end `XMLEncoder.encode(_:)` (struct → XML `Data`)
+    - `Decode/*` — end-to-end `XMLDecoder.decode(_:from:)` (XML `Data` → struct)
+    - `Canonicalize/*` — `XMLDefaultCanonicalizer.canonicalView(for:options:transforms:)`
+  - Additional `Encode/10KB/snakeCase` benchmark isolates key-transform overhead.
+  - Additional `ParseOnly/10KB` benchmark allows parse vs. full-decode comparison.
+  - Metrics: wall-clock time, CPU time, instructions, malloc count, peak resident memory.
+
+**Baseline (release build, Apple M1, macOS 25.3, 2026-03-20):**
+
+| Benchmark             | p50 wall-clock |
+|-----------------------|----------------|
+| Parse/1KB             | 35 µs          |
+| Parse/10KB            | 231 µs         |
+| Parse/100KB           | 2.33 ms        |
+| Parse/1MB             | 23 ms          |
+| Decode/1KB            | 103 µs         |
+| Decode/10KB           | 729 µs         |
+| Decode/100KB          | 7.34 ms        |
+| Decode/1MB            | 71 ms          |
+| Encode/1KB            | 123 µs         |
+| Encode/10KB           | 854 µs         |
+| Encode/10KB/snakeCase | 1.18 ms        |
+| Encode/100KB          | 8.53 ms        |
+| Encode/1MB            | 86 ms          |
+| Canonicalize/1KB      | 107 µs         |
+| Canonicalize/10KB     | 993 µs         |
+
+Key observations:
+
+- Decode overhead vs parse-only at 10 KB: 729 µs vs 231 µs — ~3× (Codable traversal dominates over libxml2 parse time).
+- Snake-case key transform adds ~38% overhead at 10 KB (1.18 ms vs 854 µs) — string allocation on every field.
+- All four operations scale roughly linearly with document size.
+
 ## [1.0.0] — 2026-03-16
 
 ### Added (Epic H — Pre-Release API Completeness)
