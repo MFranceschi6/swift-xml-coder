@@ -58,7 +58,9 @@ jobs:
       # showing a blank DocC SPA shell.
       - name: Add root redirect
         run: |
-          sed -i 's|</head>|<script>if(location.pathname==="/swift-xml-coder/"||location.pathname==="/swift-xml-coder")location.replace("/swift-xml-coder/documentation/swiftxmlcoder/");</script></head>|' ./docs/index.html
+          REDIRECT='<script>if(location.pathname==="/swift-xml-coder/"||location.pathname==="/swift-xml-coder")location.replace("/swift-xml-coder/documentation/swiftxmlcoder/");</script>'
+          cat ./docs/index.html | sed "s@</head>@${REDIRECT}</head>@" > ./docs/index.html.tmp
+          mv ./docs/index.html.tmp ./docs/index.html
 
       # Only upload the Pages artifact on push to main (not on PRs).
       - name: Upload Pages artifact
