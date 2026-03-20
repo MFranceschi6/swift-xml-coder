@@ -6,6 +6,33 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added (Pillar I.2 — Baseline Profiling)
+
+- **Full-metrics baseline** for all four core operations at four fixture sizes (1 KB – 1 MB),
+  covering wall-clock, CPU time, instructions, malloc count, and peak resident memory.
+  Detailed analysis saved to `.claude/benchmarks/baseline-i2.md`.
+- **Named baseline `i2-baseline`** stored in `Benchmarks/.benchmarkBaselines/` via
+  `swift package --allow-writing-to-package-directory benchmark baseline update i2-baseline`.
+  Future PRs can compare against this baseline with `benchmark baseline compare i2-baseline`.
+
+**Key findings — top-5 hotspots identified:**
+
+1. **Encoder allocation cascade** — 116 mallocs/item at 10 KB (vs 37 for parse); ~19
+   allocations per XML element. Root cause: per-element `[_XMLTreeContentBox]` array
+   reallocations and per-value `String` boxing in `_XMLTreeElementBox.makeElement()`.
+2. **Decoder overhead over parse** — +53 mallocs/item, +6 M instructions/10 KB. Root cause:
+   `keysForElement(_:)` builds a `[String]` array on every container init; per-field String
+   extraction in `XMLKeyedDecodingContainer`.
+3. **Snake-case key transform CPU** — +40% wall clock, +27% instructions, zero extra mallocs.
+   `convertToSnakeCase` runs uncached on every field of every encoded item. A small result
+   cache would reduce the overhead to near-zero after the first item.
+4. **Canonicalize allocation overhead** — 7,293 mallocs/iteration vs 6,988 for encode,
+   despite operating on a pre-parsed tree. Temporary `String` objects for namespace prefix
+   resolution and attribute sorting are the likely cause.
+5. **libxml2 tree materialization** — 37 mallocs/item during parse; ~6 Swift heap objects
+   per XML element to bridge the libxml2→Swift boundary. `Substring` / pre-sized children
+   arrays could reduce this.
+
 ### Added (Pillar I.1 — Benchmark Infrastructure)
 
 - **Benchmark sub-package** at `Benchmarks/` using `ordo-one/package-benchmark` 1.31.0.
