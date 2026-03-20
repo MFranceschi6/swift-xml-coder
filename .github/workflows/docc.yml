@@ -53,6 +53,13 @@ jobs:
             --transform-for-static-hosting \
             --hosting-base-path swift-xml-coder
 
+      # Inject a root redirect so https://<owner>.github.io/swift-xml-coder/
+      # immediately navigates to the documentation landing page instead of
+      # showing a blank DocC SPA shell.
+      - name: Add root redirect
+        run: |
+          sed -i 's|</head>|<script>if(location.pathname==="/swift-xml-coder/"||location.pathname==="/swift-xml-coder")location.replace("/swift-xml-coder/documentation/swiftxmlcoder/");</script></head>|' ./docs/index.html
+
       # Only upload the Pages artifact on push to main (not on PRs).
       - name: Upload Pages artifact
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
