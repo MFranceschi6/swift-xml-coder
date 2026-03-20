@@ -82,6 +82,7 @@ struct _XMLEncoderOptions {
     let validationPolicy: XMLValidationPolicy
     let logger: Logger
     let userInfo: [CodingUserInfoKey: Any]
+    let keyNameCache: _XMLKeyNameCache
     /// Per-property date format hints populated from `XMLDateCodingOverrideProvider`.
     var perPropertyDateHints: [String: XMLDateFormatHint] = [:]
     /// Per-property string encoding hints populated from `XMLStringCodingOverrideProvider`.
@@ -108,6 +109,7 @@ struct _XMLEncoderOptions {
         self.validationPolicy = policy
         self.logger = configuration.logger
         self.userInfo = configuration.userInfo
+        self.keyNameCache = _XMLKeyNameCache()
     }
 }
 
@@ -129,6 +131,16 @@ private func _validateXMLFieldName(_ name: String, context: String, policy: XMLV
             message: "[XML6_6_FIELD_NAME_INVALID] '\(name)' is not a valid XML name in \(context)."
         )
     }
+}
+
+/// A per-encode-session cache for transformed XML key names.
+///
+/// Shared across all nested `_XMLTreeEncoder` instances via the `_XMLEncoderOptions` struct
+/// (struct copies carry the same class reference). Eliminates repeated string-transform work
+/// when the same coding keys appear many times (e.g. encoding an array of structs).
+/// Also used by `_XMLDecoderOptions` for the symmetric decode path.
+final class _XMLKeyNameCache {
+    var storage: [String: String] = [:]
 }
 
 enum _XMLTreeContentBox {
@@ -465,7 +477,23 @@ struct _XMLKeyedEncodingContainer<Key: CodingKey>: KeyedEncodingContainerProtoco
     }
 
     private func xmlName(for key: Key) -> String {
-        encoder.options.keyTransformStrategy.transform(key.stringValue)
+        let raw = key.stringValue
+        switch encoder.options.keyTransformStrategy {
+        case .useDefaultKeys:
+            // Identity transform — zero cost, no cache needed.
+            return raw
+        case .custom(let closure):
+            // Custom closures may be stateful — skip cache to preserve semantics.
+            return closure(raw)
+        default:
+            break
+        }
+        if let cached = encoder.options.keyNameCache.storage[raw] {
+            return cached
+        }
+        let transformed = encoder.options.keyTransformStrategy.transform(raw)
+        encoder.options.keyNameCache.storage[raw] = transformed
+        return transformed
     }
 
     private mutating func encodeEncodable<T: Encodable>(_ value: T, forKey key: Key) throws {

@@ -6,6 +6,36 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Changed (Pillar I.3 — Allocation Optimisations)
+
+- **Key-name transform cache** — `_XMLKeyedEncodingContainer` and `_XMLKeyedDecodingContainer`
+  now cache the result of `keyTransformStrategy.transform(_:)` in a per-session
+  `_XMLKeyNameCache` (a `final class` whose reference is shared across all nested encoder/decoder
+  instances). Fast paths for `.useDefaultKeys` (identity, no cache) and `.custom` (stateful
+  closures, no cache). After the first item in an array, all subsequent items resolve key names
+  from the in-memory dictionary at O(1) cost.
+- **`firstChild(named:in:)` direct scan** — replaces `childElements(of:).first(where:)`: no
+  longer materialises an intermediate `[XMLTreeElement]` array for each per-field lookup.
+- **`lexicalText(of:)` accumulate-in-place** — replaces `compactMap + joined`: accumulates text
+  and CDATA content directly into a single optional `String`, allocating at most one string for
+  the common single-text-node case.
+- **`isNilElement(_:)` direct scan** — replaces `childElements(of:).isEmpty` check: iterates
+  `element.children` once without building an intermediate array.
+
+**Measured improvement vs `i2-baseline` (debug build, Apple M1, macOS 25.3, 2026-03-20):**
+
+| Metric                        | Before  | After   | Delta     |
+|:------------------------------|--------:|--------:|----------:|
+| Decode/10KB wall clock        | 721 µs  | 554 µs  | **-23%**  |
+| Decode/10KB mallocs           | 5,387   | 3,890   | **-28%**  |
+| Decode/10KB instructions      | 9,282 K | 7,373 K | **-21%**  |
+| Decode/1MB wall clock         | 70 ms   | 55 ms   | **-21%**  |
+| Decode/1MB mallocs            | 534 K   | 384 K   | **-28%**  |
+| Encode/10KB/snakeCase clock   | 1,174 µs| 889 µs  | **-24%**  |
+| Encode/10KB/snakeCase vs plain| +40%    | +1.6%   | **≈ 0**   |
+| Parse (all sizes)             | —       | —       | unchanged |
+| Encode plain (all sizes)      | —       | —       | unchanged |
+
 ### Added (Pillar I.2 — Baseline Profiling)
 
 - **Full-metrics baseline** for all four core operations at four fixture sizes (1 KB – 1 MB),

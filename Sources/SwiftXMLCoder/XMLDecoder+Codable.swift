@@ -53,6 +53,7 @@ struct _XMLDecoderOptions {
     let validationPolicy: XMLValidationPolicy
     let logger: Logger
     let userInfo: [CodingUserInfoKey: Any]
+    let keyNameCache: _XMLKeyNameCache
     /// Per-property date format hints populated from `XMLDateCodingOverrideProvider`.
     var perPropertyDateHints: [String: XMLDateFormatHint] = [:]
 
@@ -65,6 +66,7 @@ struct _XMLDecoderOptions {
         self.validationPolicy = configuration.validationPolicy
         self.logger = configuration.logger
         self.userInfo = configuration.userInfo
+        self.keyNameCache = _XMLKeyNameCache()
     }
 }
 
@@ -121,7 +123,12 @@ final class _XMLTreeDecoder: Decoder {
     }
 
     func firstChild(named localName: String, in element: XMLTreeElement) -> XMLTreeElement? {
-        childElements(of: element).first(where: { $0.name.localName == localName })
+        for child in element.children {
+            if case .element(let childElement) = child, childElement.name.localName == localName {
+                return childElement
+            }
+        }
+        return nil
     }
 
     func attribute(named localName: String, in element: XMLTreeElement) -> XMLTreeAttribute? {
@@ -138,27 +145,25 @@ final class _XMLTreeDecoder: Decoder {
     }
 
     func lexicalText(of element: XMLTreeElement) -> String? {
-        let textChunks = element.children.compactMap { child -> String? in
+        var accumulated: String? = nil
+        for child in element.children {
             switch child {
-            case .text(let value):
-                return value
-            case .cdata(let value):
-                return value
-            case .element, .comment:
-                return nil
+            case .text(let value), .cdata(let value):
+                if let existing = accumulated {
+                    accumulated = existing + value
+                } else {
+                    accumulated = value
+                }
+            default:
+                break
             }
         }
-
-        guard textChunks.isEmpty == false else {
-            return nil
-        }
-        return textChunks.joined()
+        return accumulated
     }
 
     func isNilElement(_ element: XMLTreeElement) -> Bool {
-        let hasElementChildren = childElements(of: element).isEmpty == false
-        guard hasElementChildren == false else {
-            return false
+        for child in element.children {
+            if case .element = child { return false }
         }
         let lexical = lexicalText(of: element)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         return lexical.isEmpty
@@ -522,7 +527,21 @@ struct _XMLKeyedDecodingContainer<Key: CodingKey>: KeyedDecodingContainerProtoco
     }
 
     private func xmlName(for key: Key) -> String {
-        decoder.options.keyTransformStrategy.transform(key.stringValue)
+        let raw = key.stringValue
+        switch decoder.options.keyTransformStrategy {
+        case .useDefaultKeys:
+            return raw
+        case .custom(let closure):
+            return closure(raw)
+        default:
+            break
+        }
+        if let cached = decoder.options.keyNameCache.storage[raw] {
+            return cached
+        }
+        let transformed = decoder.options.keyTransformStrategy.transform(raw)
+        decoder.options.keyNameCache.storage[raw] = transformed
+        return transformed
     }
 
     func contains(_ key: Key) -> Bool {
