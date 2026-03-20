@@ -98,6 +98,14 @@ jobs:
         with:
           swift-version: "5.9"
 
+      - name: Cache SPM build artifacts
+        uses: actions/cache@v4
+        with:
+          path: .build
+          key: ${{ matrix.os }}-spm-swift5.9-${{ hashFiles('Package*.swift') }}
+          restore-keys: |
+            ${{ matrix.os }}-spm-swift5.9-
+
       - name: Smoke check
         run: swift --version
 
@@ -150,6 +158,14 @@ jobs:
         uses: swift-actions/setup-swift@v2
         with:
           swift-version: "5.10"
+
+      - name: Cache SPM build artifacts
+        uses: actions/cache@v4
+        with:
+          path: .build
+          key: ${{ matrix.os }}-spm-swift5.10-${{ hashFiles('Package*.swift') }}
+          restore-keys: |
+            ${{ matrix.os }}-spm-swift5.10-
 
       - name: Smoke check
         run: swift --version
@@ -245,6 +261,14 @@ jobs:
         with:
           swift-version: "6.1"
 
+      - name: Cache SPM build artifacts
+        uses: actions/cache@v4
+        with:
+          path: .build
+          key: ${{ matrix.os }}-spm-swift6.1-${{ hashFiles('Package*.swift') }}
+          restore-keys: |
+            ${{ matrix.os }}-spm-swift6.1-
+
       - name: Smoke check
         run: swift --version
 
@@ -292,6 +316,14 @@ jobs:
         uses: swift-actions/setup-swift@v2
         with:
           swift-version: "6.1"
+
+      - name: Cache SPM build artifacts
+        uses: actions/cache@v4
+        with:
+          path: .build
+          key: macos-15-spm-swift6.1-ios-simulator-${{ hashFiles('Package*.swift') }}
+          restore-keys: |
+            macos-15-spm-swift6.1-ios-simulator-
 
       - name: Smoke check
         run: swift --version
