@@ -32,24 +32,15 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libxml2-dev
 
-      # Emit symbol graphs into the release build output directory.
-      # docc searches the directory recursively for *.symbols.json files.
-      - name: Build (emit symbol graphs)
+      # swift-docc-plugin handles symbol graph extraction and docc conversion
+      # in a single command. --allow-writing-to-directory is required because
+      # the plugin writes outside the package source tree.
+      - name: Generate static documentation site
         run: |
-          swift build -c release \
-            -Xswiftc -emit-symbol-graph \
-            -Xswiftc -symbol-graph-minimum-access-level \
-            -Xswiftc public
-
-      # Convert the .docc catalog + symbol graphs to a static website.
-      # --hosting-base-path must match the GitHub Pages sub-path
-      # (i.e. the repository name).
-      - name: Convert to static site
-        run: |
-          docc convert Sources/SwiftXMLCoder/SwiftXMLCoder.docc \
-            --fallback-display-name SwiftXMLCoder \
-            --fallback-bundle-identifier io.github.MFranceschi6.swift-xml-coder \
-            --additional-symbol-graph-dir .build/release \
+          swift package \
+            --allow-writing-to-directory ./docs \
+            generate-documentation \
+            --target SwiftXMLCoder \
             --output-path ./docs \
             --transform-for-static-hosting \
             --hosting-base-path swift-xml-coder
