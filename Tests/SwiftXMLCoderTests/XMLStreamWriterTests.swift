@@ -25,7 +25,9 @@ final class XMLStreamWriterTests: XCTestCase {
     func test_write_simpleRoundTrip() throws {
         let xml = "<Root><child>hello</child></Root>"
         let reparsed = try roundTrip(xml: xml)
-        let texts = reparsed.compactMap { if case .text(let s) = $0 { return s } else { return nil } }
+        let texts = reparsed.compactMap { (e: XMLStreamEvent) -> String? in
+            if case .text(let s) = e { return s }; return nil
+        }
         XCTAssertTrue(texts.contains("hello"))
     }
 
@@ -58,7 +60,9 @@ final class XMLStreamWriterTests: XCTestCase {
     func test_write_cdata() throws {
         let xml = "<Root><![CDATA[hello & world]]></Root>"
         let reparsed = try roundTrip(xml: xml)
-        let cdata = reparsed.compactMap { if case .cdata(let s) = $0 { return s } else { return nil } }
+        let cdata = reparsed.compactMap { (e: XMLStreamEvent) -> String? in
+            if case .cdata(let s) = e { return s }; return nil
+        }
         XCTAssertTrue(cdata.contains("hello & world"), "Expected CDATA content to be preserved, got: \(cdata)")
     }
 
@@ -67,7 +71,9 @@ final class XMLStreamWriterTests: XCTestCase {
     func test_write_comment() throws {
         let xml = "<Root><!-- a comment --></Root>"
         let reparsed = try roundTrip(xml: xml)
-        let comments = reparsed.compactMap { if case .comment(let s) = $0 { return s } else { return nil } }
+        let comments = reparsed.compactMap { (e: XMLStreamEvent) -> String? in
+            if case .comment(let s) = e { return s }; return nil
+        }
         XCTAssertTrue(comments.contains(" a comment "))
     }
 
@@ -76,7 +82,9 @@ final class XMLStreamWriterTests: XCTestCase {
     func test_write_processingInstruction() throws {
         let xml = #"<?xml-stylesheet type="text/xsl"?><Root/>"#
         let reparsed = try roundTrip(xml: xml)
-        let pis = reparsed.compactMap { if case .processingInstruction(let t, _) = $0 { return t } else { return nil } }
+        let pis = reparsed.compactMap { (e: XMLStreamEvent) -> String? in
+            if case .processingInstruction(let t, _) = e { return t }; return nil
+        }
         XCTAssertTrue(pis.contains("xml-stylesheet"))
     }
 

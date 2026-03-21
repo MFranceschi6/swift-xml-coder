@@ -77,7 +77,9 @@ final class XMLStreamParserTests: XCTestCase {
     func test_parse_cdata_emittedAsCDATAEvent() throws {
         let xml = "<Root><![CDATA[hello & world]]></Root>"
         let evts = try events(from: xml)
-        let cdata = evts.compactMap { if case .cdata(let s) = $0 { return s } else { return nil } }
+        let cdata = evts.compactMap { (e: XMLStreamEvent) -> String? in
+            if case .cdata(let s) = e { return s }; return nil
+        }
         XCTAssertEqual(cdata, ["hello & world"])
     }
 
@@ -86,7 +88,9 @@ final class XMLStreamParserTests: XCTestCase {
     func test_parse_comment_emittedAsCommentEvent() throws {
         let xml = "<Root><!-- a comment --></Root>"
         let evts = try events(from: xml)
-        let comments = evts.compactMap { if case .comment(let s) = $0 { return s } else { return nil } }
+        let comments = evts.compactMap { (e: XMLStreamEvent) -> String? in
+            if case .comment(let s) = e { return s }; return nil
+        }
         XCTAssertEqual(comments, [" a comment "])
     }
 
@@ -107,8 +111,10 @@ final class XMLStreamParserTests: XCTestCase {
         let xml = "<Root>\n  <child>text</child>\n</Root>"
         let config = XMLTreeParser.Configuration(whitespaceTextNodePolicy: .dropWhitespaceOnly)
         let evts = try events(from: xml, configuration: config)
-        let texts = evts.compactMap { if case .text(let s) = $0 { return s } else { return nil } }
-        XCTAssertFalse(texts.contains { $0.allSatisfy(\.isWhitespace) })
+        let texts = evts.compactMap { (e: XMLStreamEvent) -> String? in
+            if case .text(let s) = e { return s }; return nil
+        }
+        XCTAssertFalse(texts.contains { $0.allSatisfy { $0.isWhitespace } })
     }
 
     // MARK: - Security limits
