@@ -1,0 +1,69 @@
+name: Benchmarks
+
+on:
+  pull_request:
+    branches: ["main"]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ──────────────────────────────────────────────────────────────────────────
+  # benchmark-regression — run benchmarks on PRs and compare against the
+  # committed i2-baseline. Warning-only: regressions annotate the PR but
+  # do not block merging (continue-on-error: true).
+  #
+  # Requires macOS 13+ (Benchmarks/Package.swift: .macOS(.v13)).
+  # ──────────────────────────────────────────────────────────────────────────
+  regression:
+    name: Benchmark Regression
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Swift
+        uses: swift-actions/setup-swift@v2
+        with:
+          swift-version: "6.1"
+
+      - name: Cache Benchmarks SPM
+        uses: actions/cache@v4
+        with:
+          path: Benchmarks/.build
+          key: macos-15-benchmarks-spm-${{ hashFiles('Benchmarks/Package.swift') }}
+          restore-keys: |
+            macos-15-benchmarks-spm-
+
+      - name: Compare benchmarks against i2-baseline
+        id: benchmark
+        run: |
+          set -o pipefail
+          cd Benchmarks
+          swift package --disable-sandbox benchmark baseline check i2-baseline \
+            --format markdown 2>&1 | tee /tmp/benchmark-comparison.md
+        continue-on-error: true
+
+      - name: Post comparison to step summary
+        if: always()
+        run: |
+          echo "## Benchmark Regression Check (vs i2-baseline)" >> "$GITHUB_STEP_SUMMARY"
+          if [ -f /tmp/benchmark-comparison.md ]; then
+            cat /tmp/benchmark-comparison.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "_No benchmark output was generated._" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Warn on regression
+        if: steps.benchmark.outcome == 'failure'
+        run: |
+          echo "::warning file=Benchmarks/Package.swift::Benchmark regression detected vs i2-baseline — see the job step summary for details."
+
+      - name: Upload benchmark results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results-${{ github.sha }}
+          path: /tmp/benchmark-comparison.md
+          if-no-files-found: warn
+          retention-days: 30
