@@ -44,6 +44,7 @@ echo "    BIN_PATH: $BIN_PATH"
 MODULE_DIR="$BIN_PATH/Modules"
 CSHIM_MODULE_DIR="$BIN_PATH/SwiftXMLCoderCShim.build"
 OWNERSHIP_MODULE_DIR="$BIN_PATH/SwiftXMLCoderOwnership6.build"
+CLIBXML2_MODULE_DIR="$REPO_ROOT/Sources/CLibXML2"
 
 if [ ! -d "$MODULE_DIR" ]; then
     echo "error: expected Swift module directory at '$MODULE_DIR'" >&2
@@ -57,6 +58,11 @@ fi
 
 if [ ! -f "$CSHIM_MODULE_DIR/module.modulemap" ]; then
     echo "error: expected SwiftXMLCoderCShim module map at '$CSHIM_MODULE_DIR/module.modulemap'" >&2
+    exit 1
+fi
+
+if [ ! -f "$CLIBXML2_MODULE_DIR/module.modulemap" ]; then
+    echo "error: expected CLibXML2 module map at '$CLIBXML2_MODULE_DIR/module.modulemap'" >&2
     exit 1
 fi
 
@@ -113,6 +119,7 @@ for T in "${TARGETS[@]}"; do
         -I "$MODULE_DIR"
         -I "$CSHIM_MODULE_DIR"
         -I "$OWNERSHIP_MODULE_DIR"
+        -I "$CLIBXML2_MODULE_DIR"
         -L "$BIN_PATH"
         -module-name "$T"
         "${LIBXML2_SWIFTC_FLAGS[@]}"
