@@ -77,7 +77,6 @@ fi
 if [ ${#LIBXML2_SWIFTC_FLAGS[@]} -eq 0 ] && [ -d "/usr/include/libxml2" ]; then
     LIBXML2_SWIFTC_FLAGS+=(-Xcc -I/usr/include/libxml2)
 fi
-
 # ── Build + run each fuzz target ─────────────────────────────────────────────
 OVERALL_EXIT=0
 
