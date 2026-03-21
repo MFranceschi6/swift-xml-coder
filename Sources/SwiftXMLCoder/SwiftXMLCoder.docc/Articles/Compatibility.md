@@ -32,6 +32,7 @@ iOS, tvOS, and watchOS are supported via Track 1: libxml2 is a system library em
 - `XMLEncoder` / `XMLDecoder`
 - `XMLDocument` with XPath
 - `XMLTreeParser` / `XMLTreeWriter`
+- `XMLStreamParser` / `XMLStreamWriter` / `XMLStreamEvent` — SAX-style streaming (async APIs on macOS 12+ / iOS 15+)
 - `XMLNamespaceResolver`, `XMLNamespaceValidator`
 - `XMLCanonicalizer`, `XMLDefaultCanonicalizer`, `XMLTransform`
 - `XMLAttribute<Value>` / `XMLChild<Value>` property wrappers

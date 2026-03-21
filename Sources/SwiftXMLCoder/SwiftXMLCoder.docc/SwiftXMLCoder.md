@@ -47,6 +47,13 @@ let decoded = try decoder.decode(Book.self, from: data)
 - ``XMLNodeStructuralMetadata``
 - ``XMLDocumentStructuralMetadata``
 
+### Streaming
+
+- <doc:Streaming>
+- ``XMLStreamEvent``
+- ``XMLStreamParser``
+- ``XMLStreamWriter``
+
 ### Field Mapping
 
 - <doc:FieldMapping>
