@@ -270,10 +270,9 @@ final class XMLDecoderTests: XCTestCase {
             _ = try decoder.decode(Payload.self, from: Data(xml.utf8))
             XCTFail("Expected parseFailed to be thrown.")
         } catch XMLParsingError.parseFailed(let message) {
-            let msg = try XCTUnwrap(message)
             XCTAssertTrue(
-                msg.contains("line"),
-                "Error message should contain 'line' position info but was: \(msg)"
+                message?.contains("line") == true,
+                "Error message should contain 'line' position info but was: \(message ?? "<nil>")"
             )
         }
     }
@@ -293,10 +292,9 @@ final class XMLDecoderTests: XCTestCase {
             _ = try decoder.decode(Payload.self, from: Data(xml.utf8))
             XCTFail("Expected parseFailed to be thrown.")
         } catch XMLParsingError.parseFailed(let message) {
-            let msg = try XCTUnwrap(message)
             XCTAssertTrue(
-                msg.contains("line"),
-                "Attribute error message should contain 'line' position info but was: \(msg)"
+                message?.contains("line") == true,
+                "Attribute error message should contain 'line' position info but was: \(message ?? "<nil>")"
             )
         }
     }

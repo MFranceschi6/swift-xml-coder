@@ -430,6 +430,41 @@ final class XMLFieldMappingTests: XCTestCase {
 #endif
     }
 
+    func test_ignoredField_nonOptional_throwsOnDecode() throws {
+        // A non-Optional field marked .ignored cannot be decoded: the decoder has no
+        // way to produce a value for it. Expect [XML6_6_IGNORED_FIELD_DECODE].
+        struct Strict: Decodable {
+            var host: String
+            var computed: String
+        }
+        let overrides = XMLFieldCodingOverrides().setting(path: [], key: "computed", as: .ignored)
+        let xml = Data("<Strict><host>localhost</host><computed>ignored</computed></Strict>".utf8)
+        let decoder = XMLDecoder(configuration: .init(rootElementName: "Strict", fieldCodingOverrides: overrides))
+        XCTAssertThrowsError(try decoder.decode(Strict.self, from: xml)) { error in
+            guard case XMLParsingError.parseFailed(let msg) = error else {
+                return XCTFail("Expected XMLParsingError.parseFailed, got \(error)")
+            }
+            XCTAssertTrue(msg?.contains("XML6_6_IGNORED_FIELD_DECODE") == true)
+        }
+    }
+
+    func test_textContentWrapper_nonScalarValue_throwsOnEncode() throws {
+        // XMLTextContent wrapping a non-scalar Codable type cannot be serialised as
+        // text content. Expect [XML6_6_TEXT_CONTENT_ENCODE_UNSUPPORTED].
+        struct Inner: Codable { var x: Int }
+        struct Outer: Codable {
+            var value: XMLTextContent<Inner>
+        }
+        let encoder = XMLEncoder(configuration: .init(rootElementName: "Outer"))
+        let payload = Outer(value: XMLTextContent(wrappedValue: Inner(x: 1)))
+        XCTAssertThrowsError(try encoder.encode(payload)) { error in
+            guard case XMLParsingError.parseFailed(let msg) = error else {
+                return XCTFail("Expected XMLParsingError.parseFailed, got \(error)")
+            }
+            XCTAssertTrue(msg?.contains("XML6_6_TEXT_CONTENT_ENCODE_UNSUPPORTED") == true)
+        }
+    }
+
     private func firstChild(named name: String, in element: XMLTreeElement) -> XMLTreeElement? {
         element.children.compactMap { node -> XMLTreeElement? in
             guard case .element(let child) = node else {
