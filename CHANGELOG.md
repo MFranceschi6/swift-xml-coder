@@ -6,6 +6,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added (Pillar IV.4 — Community Infrastructure)
+
+- **`CONTRIBUTING.md`** — contributor guide covering requirements, branch naming (`feature/<slug>` /
+  `fix/<slug>`), coding standards, testing commands, gitmoji commit style, PR guidelines (squash
+  merge), bug reporting (7-day response target), and feature request process.
+- **`SECURITY.md`** — responsible disclosure policy with contact email, response SLAs (72 h ack,
+  14/30-day patch targets), supported versions table, and in-scope/out-of-scope definitions.
+- **`CODE_OF_CONDUCT.md`** — adopts the [Contributor Covenant 2.1](https://www.contributor-covenant.org/version/2/1/code_of_conduct/)
+  via external link so it tracks upstream updates automatically.
+- **`.github/ISSUE_TEMPLATE/bug_report.md`** — bug report template (environment, expected vs
+  actual, minimal reproducible example, XML snippet).
+- **`.github/ISSUE_TEMPLATE/feature_request.md`** — feature request template (use case, proposed
+  API sketch, alternatives considered).
+- **`.github/pull_request_template.md`** — PR checklist (tests, CHANGELOG, build/test/lint gates,
+  gitmoji title for squash-merge commit).
+
 ### Added (Pillar VII — Macros: @XMLText, @XMLIgnore, @XMLRootNamespace)
 
 - **`XMLFieldNodeKind.textContent`** — new case that routes a Codable field to the text content
