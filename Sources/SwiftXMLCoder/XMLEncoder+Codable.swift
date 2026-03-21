@@ -82,6 +82,7 @@ struct _XMLEncoderOptions {
     let validationPolicy: XMLValidationPolicy
     let logger: Logger
     let userInfo: [CodingUserInfoKey: Any]
+    let keyNameCache: _XMLKeyNameCache
     /// Per-property date format hints populated from `XMLDateCodingOverrideProvider`.
     var perPropertyDateHints: [String: XMLDateFormatHint] = [:]
     /// Per-property string encoding hints populated from `XMLStringCodingOverrideProvider`.
@@ -108,6 +109,7 @@ struct _XMLEncoderOptions {
         self.validationPolicy = policy
         self.logger = configuration.logger
         self.userInfo = configuration.userInfo
+        self.keyNameCache = _XMLKeyNameCache()
     }
 }
 
@@ -129,6 +131,16 @@ private func _validateXMLFieldName(_ name: String, context: String, policy: XMLV
             message: "[XML6_6_FIELD_NAME_INVALID] '\(name)' is not a valid XML name in \(context)."
         )
     }
+}
+
+/// A per-encode-session cache for transformed XML key names.
+///
+/// Shared across all nested `_XMLTreeEncoder` instances via the `_XMLEncoderOptions` struct
+/// (struct copies carry the same class reference). Eliminates repeated string-transform work
+/// when the same coding keys appear many times (e.g. encoding an array of structs).
+/// Also used by `_XMLDecoderOptions` for the symmetric decode path.
+final class _XMLKeyNameCache {
+    var storage: [String: String] = [:]
 }
 
 enum _XMLTreeContentBox {
@@ -406,7 +418,8 @@ struct _XMLKeyedEncodingContainer<Key: CodingKey>: KeyedEncodingContainerProtoco
     }
 
     mutating func encodeNil(forKey key: Key) throws {
-        if resolvedNodeKind(for: key, valueType: Never.self) == .attribute {
+        let nodeKind = resolvedNodeKind(for: key, valueType: Never.self)
+        if nodeKind == .attribute || nodeKind == .ignored {
             return
         }
         try _validateXMLFieldName(key.stringValue, context: "encodeNil field '\(key.stringValue)'", policy: encoder.options.validationPolicy)
@@ -465,7 +478,23 @@ struct _XMLKeyedEncodingContainer<Key: CodingKey>: KeyedEncodingContainerProtoco
     }
 
     private func xmlName(for key: Key) -> String {
-        encoder.options.keyTransformStrategy.transform(key.stringValue)
+        let raw = key.stringValue
+        switch encoder.options.keyTransformStrategy {
+        case .useDefaultKeys:
+            // Identity transform — zero cost, no cache needed.
+            return raw
+        case .custom(let closure):
+            // Custom closures may be stateful — skip cache to preserve semantics.
+            return closure(raw)
+        default:
+            break
+        }
+        if let cached = encoder.options.keyNameCache.storage[raw] {
+            return cached
+        }
+        let transformed = encoder.options.keyTransformStrategy.transform(raw)
+        encoder.options.keyNameCache.storage[raw] = transformed
+        return transformed
     }
 
     private mutating func encodeEncodable<T: Encodable>(_ value: T, forKey key: Key) throws {
@@ -474,6 +503,15 @@ struct _XMLKeyedEncodingContainer<Key: CodingKey>: KeyedEncodingContainerProtoco
         let nodeKind = resolvedNodeKind(for: key, valueType: T.self)
         if nodeKind == .attribute {
             try encodeAttribute(value, forKey: key)
+            return
+        }
+
+        if nodeKind == .ignored {
+            return
+        }
+
+        if nodeKind == .textContent {
+            try encodeTextContent(value, forKey: key)
             return
         }
 
@@ -567,6 +605,34 @@ struct _XMLKeyedEncodingContainer<Key: CodingKey>: KeyedEncodingContainerProtoco
             }
         }
         return encoder.options.stringEncodingStrategy
+    }
+
+    private mutating func encodeTextContent<T: Encodable>(_ value: T, forKey key: Key) throws {
+        let scalar: String
+        if let provider = value as? _XMLTextContentEncodableValue {
+            scalar = try provider._xmlTextContentLexicalValue(
+                using: encoder,
+                codingPath: codingPath + [key],
+                key: key.stringValue
+            )
+        } else if let boxed = try encoder.boxedScalar(
+            value,
+            codingPath: codingPath + [key],
+            localName: key.stringValue
+        ) {
+            scalar = boxed
+        } else {
+            throw XMLParsingError.parseFailed(
+                message: "[XML6_6_TEXT_CONTENT_ENCODE_UNSUPPORTED] Key '\(key.stringValue)' cannot be encoded as text content because value is not scalar."
+            )
+        }
+        let effectiveStringStrategy = resolvedStringStrategy(for: key)
+        switch effectiveStringStrategy {
+        case .text:
+            encoder.node.appendText(scalar)
+        case .cdata:
+            encoder.node.appendCDATA(scalar)
+        }
     }
 
     private mutating func encodeAttribute<T: Encodable>(_ value: T, forKey key: Key) throws {

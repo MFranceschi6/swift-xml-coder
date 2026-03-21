@@ -20,15 +20,22 @@ public struct XMLNodeStructuralMetadata: Sendable, Equatable, Codable {
     public let sourceOrder: Int?
     public let originalPrefix: String?
     public let wasSelfClosing: Bool?
+    /// Source line number of the opening tag in the original XML document, if available.
+    ///
+    /// Populated from libxml2's `xmlGetLineNo` during parsing. `nil` when the element was
+    /// constructed programmatically rather than parsed from XML bytes.
+    public let sourceLine: Int?
 
     public init(
         sourceOrder: Int? = nil,
         originalPrefix: String? = nil,
-        wasSelfClosing: Bool? = nil
+        wasSelfClosing: Bool? = nil,
+        sourceLine: Int? = nil
     ) {
         self.sourceOrder = sourceOrder
         self.originalPrefix = originalPrefix
         self.wasSelfClosing = wasSelfClosing
+        self.sourceLine = sourceLine
     }
 }
 

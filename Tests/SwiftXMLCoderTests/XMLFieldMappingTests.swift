@@ -11,6 +11,52 @@ private struct MacroMappedPayload: Codable, Equatable {
     @XMLAttribute let id: Int
     @XMLChild let name: String
 }
+
+@XMLCodable
+@XMLRootNamespace("http://example.com/orders")
+private struct MacroNamespacePayload: Codable, Equatable {
+    var id: String
+    var total: Double
+
+    init(id: String, total: Double) {
+        self.id = id
+        self.total = total
+    }
+}
+
+@XMLCodable
+private struct MacroIgnorePayload: Codable, Equatable {
+    var name: String
+    var value: Int
+    @XMLIgnore var cachedHash: Int? = nil
+
+    init(name: String, value: Int) {
+        self.name = name
+        self.value = value
+    }
+}
+
+@XMLCodable
+private struct MacroTextPayload: Codable, Equatable {
+    @XMLAttribute var currency: String
+    @XMLText      var value: Double
+
+    init(currency: String, value: Double) {
+        self.currency = currency
+        self.value = value
+    }
+}
+
+@XMLCodable
+private struct MacroTextOptional: Codable, Equatable {
+    @XMLAttribute var id: String
+    @XMLText      var label: String?
+
+    init(id: String, label: String?) {
+        self.id = id
+        self.label = label
+    }
+}
 #endif
 
 final class XMLFieldMappingTests: XCTestCase {
@@ -174,6 +220,268 @@ final class XMLFieldMappingTests: XCTestCase {
 #else
         throw XCTSkip("Macro module not available on this lane.")
 #endif
+    }
+
+    // MARK: - @XMLRootNamespace tests
+
+    func test_macroRootNamespace_encodesNamespaceOnRootElement() throws {
+#if canImport(SwiftXMLCoderMacros)
+        let encoder = XMLEncoder()
+        let input = MacroNamespacePayload(id: "ORD-1", total: 99.9)
+        let tree = try encoder.encodeTree(input)
+
+        XCTAssertEqual(tree.root.name.localName, "MacroNamespacePayload")
+        XCTAssertEqual(tree.root.name.namespaceURI, "http://example.com/orders")
+#else
+        throw XCTSkip("Macro module not available on this lane.")
+#endif
+    }
+
+    func test_macroRootNamespace_roundTrip() throws {
+#if canImport(SwiftXMLCoderMacros)
+        let encoder = XMLEncoder()
+        let decoder = XMLDecoder()
+        let input = MacroNamespacePayload(id: "ORD-42", total: 12.5)
+        let data = try encoder.encode(input)
+        let output = try decoder.decode(MacroNamespacePayload.self, from: data)
+        XCTAssertEqual(output, input)
+#else
+        throw XCTSkip("Macro module not available on this lane.")
+#endif
+    }
+
+    // MARK: - @XMLIgnore / .ignored tests
+
+    func test_ignoredField_runtimeOverride_isSkippedDuringEncode() throws {
+        struct Config: Codable, Equatable {
+            var host: String
+            var port: Int
+            var _secret: String?
+        }
+
+        let overrides = XMLFieldCodingOverrides()
+            .setting(path: [], key: "_secret", as: .ignored)
+        let encoder = XMLEncoder(configuration: .init(rootElementName: "Config", fieldCodingOverrides: overrides))
+
+        let input = Config(host: "localhost", port: 8080, _secret: "s3cr3t")
+        let tree = try encoder.encodeTree(input)
+
+        // _secret must not appear in the output.
+        let childNames = tree.root.children.compactMap { node -> String? in
+            guard case .element(let child) = node else { return nil }
+            return child.name.localName
+        }
+        XCTAssertFalse(childNames.contains("_secret"), "Ignored field must not be serialised.")
+        XCTAssertTrue(childNames.contains("host"))
+        XCTAssertTrue(childNames.contains("port"))
+    }
+
+    func test_ignoredField_runtimeOverride_optionalDecodesAsNil() throws {
+        struct Config: Codable, Equatable {
+            var host: String
+            var port: Int
+            var computed: String?
+        }
+
+        let overrides = XMLFieldCodingOverrides()
+            .setting(path: [], key: "computed", as: .ignored)
+        let encoder = XMLEncoder(configuration: .init(rootElementName: "Config", fieldCodingOverrides: overrides))
+        let decoder = XMLDecoder(configuration: .init(rootElementName: "Config", fieldCodingOverrides: overrides))
+
+        let input = Config(host: "localhost", port: 8080, computed: "will be ignored")
+        let data = try encoder.encode(input)
+        let output = try decoder.decode(Config.self, from: data)
+        XCTAssertEqual(output.host, "localhost")
+        XCTAssertEqual(output.port, 8080)
+        XCTAssertNil(output.computed, "Ignored optional field must decode as nil.")
+    }
+
+    func test_macroIgnore_encodeAndDecode_fieldAbsentFromXML() throws {
+#if canImport(SwiftXMLCoderMacros)
+        let encoder = XMLEncoder(configuration: .init(rootElementName: "item"))
+        let decoder = XMLDecoder(configuration: .init(rootElementName: "item"))
+
+        let input = MacroIgnorePayload(name: "foo", value: 42)
+        let data = try encoder.encode(input)
+
+        let tree = try encoder.encodeTree(input)
+        let childNames = tree.root.children.compactMap { node -> String? in
+            guard case .element(let child) = node else { return nil }
+            return child.name.localName
+        }
+        XCTAssertFalse(childNames.contains("cachedHash"), "Ignored field must not appear in XML.")
+        XCTAssertTrue(childNames.contains("name"))
+        XCTAssertTrue(childNames.contains("value"))
+
+        let output = try decoder.decode(MacroIgnorePayload.self, from: data)
+        XCTAssertEqual(output.name, input.name)
+        XCTAssertEqual(output.value, input.value)
+        XCTAssertNil(output.cachedHash, "Ignored optional field must be nil after decode.")
+#else
+        throw XCTSkip("Macro module not available on this lane.")
+#endif
+    }
+
+    // MARK: - @XMLText / XMLTextContent tests
+
+    func test_textContentWrapper_encodeAndDecode_roundTrip() throws {
+        struct Price: Codable, Equatable {
+            @SwiftXMLCoder.XMLAttribute var currency: String
+            @SwiftXMLCoder.XMLTextContent var amount: Double
+
+            init(currency: String, amount: Double) {
+                self.currency = currency
+                self.amount = amount
+            }
+        }
+
+        let encoder = XMLEncoder(configuration: .init(rootElementName: "price"))
+        let decoder = XMLDecoder(configuration: .init(rootElementName: "price"))
+
+        let input = Price(currency: "USD", amount: 9.99)
+        let data = try encoder.encode(input)
+
+        // Verify the XML structure: attribute on root, text content on root.
+        let tree = try encoder.encodeTree(input)
+        XCTAssertEqual(tree.root.attributes.count, 1)
+        XCTAssertEqual(tree.root.attributes[0].name.localName, "currency")
+        XCTAssertEqual(tree.root.attributes[0].value, "USD")
+        // No child elements — only text content.
+        let childElements = tree.root.children.filter { if case .element = $0 { return true }; return false }
+        XCTAssertTrue(childElements.isEmpty, "Expected no child elements, text content only.")
+        // Text node present.
+        let textNodes = tree.root.children.compactMap { node -> String? in
+            guard case .text(let t) = node else { return nil }
+            return t
+        }
+        XCTAssertFalse(textNodes.isEmpty, "Expected a text node for the amount.")
+
+        let output = try decoder.decode(Price.self, from: data)
+        XCTAssertEqual(output, input)
+    }
+
+    func test_textContentWrapper_decodesFromXML_withAttributeAndTextContent() throws {
+        struct Price: Codable, Equatable {
+            @SwiftXMLCoder.XMLAttribute var currency: String
+            @SwiftXMLCoder.XMLTextContent var amount: Double
+
+            init(currency: String, amount: Double) {
+                self.currency = currency
+                self.amount = amount
+            }
+        }
+
+        let xml = Data("<price currency=\"EUR\">12.5</price>".utf8)
+        let decoder = XMLDecoder(configuration: .init(rootElementName: "price"))
+        let result = try decoder.decode(Price.self, from: xml)
+        XCTAssertEqual(result.currency, "EUR")
+        XCTAssertEqual(result.amount, 12.5)
+    }
+
+    func test_textContentWrapper_runtimeOverride_textContent() throws {
+        struct Price: Codable, Equatable {
+            let currency: String
+            let amount: Double
+        }
+
+        let overrides = XMLFieldCodingOverrides()
+            .setting(path: [], key: "currency", as: .attribute)
+            .setting(path: [], key: "amount", as: .textContent)
+
+        let encoder = XMLEncoder(configuration: .init(rootElementName: "price", fieldCodingOverrides: overrides))
+        let decoder = XMLDecoder(configuration: .init(rootElementName: "price", fieldCodingOverrides: overrides))
+
+        let input = Price(currency: "GBP", amount: 7.0)
+        let data = try encoder.encode(input)
+        let output = try decoder.decode(Price.self, from: data)
+        XCTAssertEqual(output, input)
+    }
+
+    func test_macroTextMapping_encodeAndDecode_roundTrip() throws {
+#if canImport(SwiftXMLCoderMacros)
+        let encoder = XMLEncoder(configuration: .init(rootElementName: "price"))
+        let decoder = XMLDecoder(configuration: .init(rootElementName: "price"))
+
+        let input = MacroTextPayload(currency: "JPY", value: 1500.0)
+        let data = try encoder.encode(input)
+
+        let tree = try encoder.encodeTree(input)
+        XCTAssertEqual(tree.root.attributes.map(\.name.localName), ["currency"])
+        // No child elements.
+        let childElements = tree.root.children.filter { if case .element = $0 { return true }; return false }
+        XCTAssertTrue(childElements.isEmpty)
+
+        let output = try decoder.decode(MacroTextPayload.self, from: data)
+        XCTAssertEqual(output, input)
+#else
+        throw XCTSkip("Macro module not available on this lane.")
+#endif
+    }
+
+    func test_macroTextMapping_decodesFromHandwrittenXML() throws {
+#if canImport(SwiftXMLCoderMacros)
+        let xml = Data("<price currency=\"CHF\">42.0</price>".utf8)
+        let decoder = XMLDecoder(configuration: .init(rootElementName: "price"))
+        let result = try decoder.decode(MacroTextPayload.self, from: xml)
+        XCTAssertEqual(result.currency, "CHF")
+        XCTAssertEqual(result.value, 42.0)
+#else
+        throw XCTSkip("Macro module not available on this lane.")
+#endif
+    }
+
+    func test_ignoredField_nonOptional_throwsOnDecode() throws {
+        // A non-Optional scalar field marked .ignored cannot be decoded.
+        // Expect [XML6_6_IGNORED_FIELD_DECODE] via the scalar decode path.
+        struct Strict: Decodable {
+            var host: String
+            var computed: String
+        }
+        let overrides = XMLFieldCodingOverrides().setting(path: [], key: "computed", as: .ignored)
+        let xml = Data("<Strict><host>localhost</host><computed>ignored</computed></Strict>".utf8)
+        let decoder = XMLDecoder(configuration: .init(rootElementName: "Strict", fieldCodingOverrides: overrides))
+        XCTAssertThrowsError(try decoder.decode(Strict.self, from: xml)) { error in
+            guard case XMLParsingError.parseFailed(let msg) = error else {
+                return XCTFail("Expected XMLParsingError.parseFailed, got \(error)")
+            }
+            XCTAssertTrue(msg?.contains("XML6_6_IGNORED_FIELD_DECODE") == true)
+        }
+    }
+
+    func test_ignoredField_nonOptional_nonScalar_throwsOnDecode() throws {
+        // A non-Optional non-scalar field marked .ignored cannot be decoded.
+        // Expect [XML6_6_IGNORED_FIELD_DECODE] via the generic Decodable decode path.
+        struct Inner: Decodable { var x: Int }
+        struct Outer: Decodable {
+            var name: String
+            var nested: Inner
+        }
+        let overrides = XMLFieldCodingOverrides().setting(path: [], key: "nested", as: .ignored)
+        let xml = Data("<Outer><name>test</name><nested><x>1</x></nested></Outer>".utf8)
+        let decoder = XMLDecoder(configuration: .init(rootElementName: "Outer", fieldCodingOverrides: overrides))
+        XCTAssertThrowsError(try decoder.decode(Outer.self, from: xml)) { error in
+            guard case XMLParsingError.parseFailed(let msg) = error else {
+                return XCTFail("Expected XMLParsingError.parseFailed, got \(error)")
+            }
+            XCTAssertTrue(msg?.contains("XML6_6_IGNORED_FIELD_DECODE") == true)
+        }
+    }
+
+    func test_textContentWrapper_nonScalarValue_throwsOnEncode() throws {
+        // XMLTextContent wrapping a non-scalar Codable type cannot be serialised as
+        // text content. Expect [XML6_6_TEXT_CONTENT_ENCODE_UNSUPPORTED].
+        struct Inner: Codable { var x: Int }
+        struct Outer: Codable {
+            var value: XMLTextContent<Inner>
+        }
+        let encoder = XMLEncoder(configuration: .init(rootElementName: "Outer"))
+        let payload = Outer(value: XMLTextContent(wrappedValue: Inner(x: 1)))
+        XCTAssertThrowsError(try encoder.encode(payload)) { error in
+            guard case XMLParsingError.parseFailed(let msg) = error else {
+                return XCTFail("Expected XMLParsingError.parseFailed, got \(error)")
+            }
+            XCTAssertTrue(msg?.contains("XML6_6_TEXT_CONTENT_ENCODE_UNSUPPORTED") == true)
+        }
     }
 
     private func firstChild(named name: String, in element: XMLTreeElement) -> XMLTreeElement? {

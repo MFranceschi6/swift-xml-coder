@@ -102,6 +102,93 @@ public macro XMLElement() = #externalMacro(
     type: "XMLChildMacro"
 )
 
+/// Declares an XML namespace URI for the root element of a `Codable` type.
+///
+/// Apply this macro alongside `@XMLCodable` on a struct or class to automatically
+/// generate a conformance to ``XMLRootNode`` that supplies a namespace URI for the
+/// root element when encoding and decoding.
+///
+/// ```swift
+/// @XMLCodable
+/// @XMLRootNamespace("http://example.com/ns")
+/// struct Order: Codable {
+///     var id: String
+///     var total: Double
+/// }
+/// // Encodes root element as: <Order xmlns="http://example.com/ns">
+/// ```
+///
+/// To also set a custom element name, implement ``XMLRootNode/xmlRootElementName`` manually
+/// alongside this macro.
+///
+/// - Parameter uri: The XML namespace URI to associate with the root element.
+///   Must be a non-empty string literal; an empty URI is a compile-time error.
+///
+/// - Note: Only `struct` and `class` declarations are supported. Applying
+///   `@XMLRootNamespace` to an `enum` or `actor` emits a compile-time error.
+@attached(extension, conformances: XMLRootNode, names: named(xmlRootElementName), named(xmlRootElementNamespaceURI))
+public macro XMLRootNamespace(_ uri: String) = #externalMacro(
+    module: "SwiftXMLCoderMacroImplementation",
+    type: "XMLNamespaceMacro"
+)
+
+/// Excludes a stored property from XML serialization and deserialization when processed by `@XMLCodable`.
+///
+/// Apply this macro to stored properties inside a type annotated with `@XMLCodable`.
+/// The owning type's `xmlFieldNodeKinds` dictionary (synthesised by `@XMLCodable`) will
+/// map this field's name to `.ignored`, causing the XML encoder to skip the field entirely
+/// and the XML decoder to treat it as absent.
+///
+/// ```swift
+/// @XMLCodable
+/// struct Config: Codable {
+///     var host: String
+///     var port: Int
+///     @XMLIgnore var _cache: [String: Any]? = nil  // not in XML
+/// }
+/// ```
+///
+/// - Important: Ignored fields must be `Optional` or have a default value so that the
+///   Codable synthesised `init(from:)` does not throw when the key is absent from the XML.
+///   Non-optional fields without a default value cause a decode error.
+///
+/// - Note: Without `@XMLCodable` on the enclosing type this annotation compiles
+///   successfully but has no runtime effect — it is a pure syntax marker.
+@attached(peer)
+public macro XMLIgnore() = #externalMacro(
+    module: "SwiftXMLCoderMacroImplementation",
+    type: "XMLIgnoreMacro"
+)
+
+/// Marks a stored property as the **text content** of the parent XML element when encoded or
+/// decoded by `@XMLCodable`.
+///
+/// Use `@XMLText` when the element carries both XML attributes and a scalar value.
+/// The annotated field is encoded as the text node of the parent element rather than
+/// as a child element.
+///
+/// ```swift
+/// @XMLCodable
+/// struct Price: Codable {
+///     @XMLAttribute var currency: String    // <price currency="USD">
+///     @XMLText      var value: Double       //                       9.99</price>
+/// }
+/// ```
+///
+/// Encodes to: `<price currency="USD">9.99</price>`
+///
+/// - Important: Only scalar `Codable` types are supported. At most one `@XMLText` field
+///   per type is meaningful; duplicate annotations encode the last value and decode the
+///   same text into every annotated field.
+///
+/// - Note: Without `@XMLCodable` on the enclosing type this annotation compiles
+///   successfully but has no runtime effect — it is a pure syntax marker.
+@attached(peer)
+public macro XMLText() = #externalMacro(
+    module: "SwiftXMLCoderMacroImplementation",
+    type: "XMLTextMacro"
+)
+
 /// Forces a stored property's XML element to always be serialised in expanded form
 /// (`<field></field>` instead of `<field/>`), even when the element has no content.
 ///

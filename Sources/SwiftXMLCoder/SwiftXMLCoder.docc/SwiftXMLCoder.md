@@ -44,6 +44,8 @@ let decoded = try decoder.decode(Book.self, from: data)
 - ``XMLTreeAttribute``
 - ``XMLTreeParser``
 - ``XMLTreeWriter``
+- ``XMLNodeStructuralMetadata``
+- ``XMLDocumentStructuralMetadata``
 
 ### Field Mapping
 
@@ -53,6 +55,7 @@ let decoded = try decoder.decode(Book.self, from: data)
 - ``XMLFieldNodeKind``
 - ``XMLAttribute``
 - ``XMLChild``
+- ``XMLTextContent``
 - ``XMLRootNode``
 - ``XMLStringEncodingHint``
 - ``XMLStringCodingOverrideProvider``

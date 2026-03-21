@@ -4,6 +4,149 @@ All notable changes to SwiftXMLCoder will be documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased]
+
+### Added (Pillar VII.5 — Source Position Diagnostics)
+
+- **`XMLNodeStructuralMetadata.sourceLine`** — new optional `Int` property that carries the
+  source line number of an XML element's opening tag as reported by libxml2's `xmlGetLineNo`.
+  `nil` for programmatically constructed elements.
+- **Decode error messages now include source position** — `[XML6_5_KEY_NOT_FOUND]`,
+  `[XML6_5_SCALAR_PARSE_FAILED]`, and `[XML6_6_ATTRIBUTE_NOT_FOUND]` errors append
+  `(line N)` when the relevant element carries source line information, making it easier
+  to locate the offending node in the original XML document.
+
+### Added (Pillar IV.4 — Community Infrastructure)
+
+- **`CONTRIBUTING.md`** — contributor guide covering requirements, branch naming (`feature/<slug>` /
+  `fix/<slug>`), coding standards, testing commands, gitmoji commit style, PR guidelines (squash
+  merge), bug reporting (7-day response target), and feature request process.
+- **`SECURITY.md`** — responsible disclosure policy with contact email, response SLAs (72 h ack,
+  14/30-day patch targets), supported versions table, and in-scope/out-of-scope definitions.
+- **`CODE_OF_CONDUCT.md`** — adopts the [Contributor Covenant 2.1](https://www.contributor-covenant.org/version/2/1/code_of_conduct/)
+  via external link so it tracks upstream updates automatically.
+- **`.github/ISSUE_TEMPLATE/bug_report.md`** — bug report template (environment, expected vs
+  actual, minimal reproducible example, XML snippet).
+- **`.github/ISSUE_TEMPLATE/feature_request.md`** — feature request template (use case, proposed
+  API sketch, alternatives considered).
+- **`.github/pull_request_template.md`** — PR checklist (tests, CHANGELOG, build/test/lint gates,
+  gitmoji title for squash-merge commit).
+
+### Added (Pillar VII — Macros: @XMLText, @XMLIgnore, @XMLRootNamespace)
+
+- **`XMLFieldNodeKind.textContent`** — new case that routes a Codable field to the text content
+  of the parent XML element (rather than a child element). Enables the `<price currency="USD">9.99</price>`
+  pattern where attributes and a scalar value coexist on the same element.
+- **`XMLTextContent<Value>` property wrapper** — mechanism A (highest precedence) conformance to
+  `.textContent` node kind. Mirrors the existing `XMLAttribute<Value>` pattern.
+- **`@XMLText` macro** — peer macro detected by `@XMLCodable`; synthesises `.textContent` into
+  `xmlFieldNodeKinds`. Requires a scalar `Codable` type on the annotated property.
+- **`XMLFieldNodeKind.ignored`** — new case that silently skips a field during encode and treats it
+  as absent during decode (so `Optional` fields decode as `nil`; non-optional fields with a default
+  value are unaffected by XML round-trips).
+- **`@XMLIgnore` macro** — peer macro detected by `@XMLCodable`; synthesises `.ignored` into
+  `xmlFieldNodeKinds`. Fields must be `Optional` or have a default value to avoid decode errors.
+- **`@XMLRootNamespace(uri:)` macro** — extension macro that generates an `XMLRootNode` conformance
+  supplying `xmlRootElementName` (type name as default) and `xmlRootElementNamespaceURI` on the
+  annotated struct or class.
+
+### Changed (Pillar I.3 — Allocation Optimisations)
+
+- **Key-name transform cache** — `_XMLKeyedEncodingContainer` and `_XMLKeyedDecodingContainer`
+  now cache the result of `keyTransformStrategy.transform(_:)` in a per-session
+  `_XMLKeyNameCache` (a `final class` whose reference is shared across all nested encoder/decoder
+  instances). Fast paths for `.useDefaultKeys` (identity, no cache) and `.custom` (stateful
+  closures, no cache). After the first item in an array, all subsequent items resolve key names
+  from the in-memory dictionary at O(1) cost.
+- **`firstChild(named:in:)` direct scan** — replaces `childElements(of:).first(where:)`: no
+  longer materialises an intermediate `[XMLTreeElement]` array for each per-field lookup.
+- **`lexicalText(of:)` accumulate-in-place** — replaces `compactMap + joined`: accumulates text
+  and CDATA content directly into a single optional `String`, allocating at most one string for
+  the common single-text-node case.
+- **`isNilElement(_:)` direct scan** — replaces `childElements(of:).isEmpty` check: iterates
+  `element.children` once without building an intermediate array.
+
+**Measured improvement vs `i2-baseline` (debug build, Apple M1, macOS 25.3, 2026-03-20):**
+
+| Metric                        | Before  | After   | Delta     |
+|:------------------------------|--------:|--------:|----------:|
+| Decode/10KB wall clock        | 721 µs  | 554 µs  | **-23%**  |
+| Decode/10KB mallocs           | 5,387   | 3,890   | **-28%**  |
+| Decode/10KB instructions      | 9,282 K | 7,373 K | **-21%**  |
+| Decode/1MB wall clock         | 70 ms   | 55 ms   | **-21%**  |
+| Decode/1MB mallocs            | 534 K   | 384 K   | **-28%**  |
+| Encode/10KB/snakeCase clock   | 1,174 µs| 889 µs  | **-24%**  |
+| Encode/10KB/snakeCase vs plain| +40%    | +1.6%   | **≈ 0**   |
+| Parse (all sizes)             | —       | —       | unchanged |
+| Encode plain (all sizes)      | —       | —       | unchanged |
+
+### Added (Pillar I.2 — Baseline Profiling)
+
+- **Full-metrics baseline** for all four core operations at four fixture sizes (1 KB – 1 MB),
+  covering wall-clock, CPU time, instructions, malloc count, and peak resident memory.
+  Detailed analysis saved to `.claude/benchmarks/baseline-i2.md`.
+- **Named baseline `i2-baseline`** stored in `Benchmarks/.benchmarkBaselines/` via
+  `swift package --allow-writing-to-package-directory benchmark baseline update i2-baseline`.
+  Future PRs can compare against this baseline with `benchmark baseline compare i2-baseline`.
+
+**Key findings — top-5 hotspots identified:**
+
+1. **Encoder allocation cascade** — 116 mallocs/item at 10 KB (vs 37 for parse); ~19
+   allocations per XML element. Root cause: per-element `[_XMLTreeContentBox]` array
+   reallocations and per-value `String` boxing in `_XMLTreeElementBox.makeElement()`.
+2. **Decoder overhead over parse** — +53 mallocs/item, +6 M instructions/10 KB. Root cause:
+   `keysForElement(_:)` builds a `[String]` array on every container init; per-field String
+   extraction in `XMLKeyedDecodingContainer`.
+3. **Snake-case key transform CPU** — +40% wall clock, +27% instructions, zero extra mallocs.
+   `convertToSnakeCase` runs uncached on every field of every encoded item. A small result
+   cache would reduce the overhead to near-zero after the first item.
+4. **Canonicalize allocation overhead** — 7,293 mallocs/iteration vs 6,988 for encode,
+   despite operating on a pre-parsed tree. Temporary `String` objects for namespace prefix
+   resolution and attribute sorting are the likely cause.
+5. **libxml2 tree materialization** — 37 mallocs/item during parse; ~6 Swift heap objects
+   per XML element to bridge the libxml2→Swift boundary. `Substring` / pre-sized children
+   arrays could reduce this.
+
+### Added (Pillar I.1 — Benchmark Infrastructure)
+
+- **Benchmark sub-package** at `Benchmarks/` using `ordo-one/package-benchmark` 1.31.0.
+  - Separate `Benchmarks/Package.swift` (macOS 13.0+ minimum, recommended approach when main package supports older OS).
+  - `swift package --disable-sandbox benchmark` from the `Benchmarks/` directory runs all suites.
+  - **4 benchmark suites** covering the core operations at 4 fixture sizes (1 KB, 10 KB, 100 KB, 1 MB):
+    - `Parse/*` — raw `XMLTreeParser.parse(data:)` throughput
+    - `Encode/*` — end-to-end `XMLEncoder.encode(_:)` (struct → XML `Data`)
+    - `Decode/*` — end-to-end `XMLDecoder.decode(_:from:)` (XML `Data` → struct)
+    - `Canonicalize/*` — `XMLDefaultCanonicalizer.canonicalView(for:options:transforms:)`
+  - Additional `Encode/10KB/snakeCase` benchmark isolates key-transform overhead.
+  - Additional `ParseOnly/10KB` benchmark allows parse vs. full-decode comparison.
+  - Metrics: wall-clock time, CPU time, instructions, malloc count, peak resident memory.
+
+**Baseline (release build, Apple M1, macOS 25.3, 2026-03-20):**
+
+| Benchmark             | p50 wall-clock |
+|-----------------------|----------------|
+| Parse/1KB             | 35 µs          |
+| Parse/10KB            | 231 µs         |
+| Parse/100KB           | 2.33 ms        |
+| Parse/1MB             | 23 ms          |
+| Decode/1KB            | 103 µs         |
+| Decode/10KB           | 729 µs         |
+| Decode/100KB          | 7.34 ms        |
+| Decode/1MB            | 71 ms          |
+| Encode/1KB            | 123 µs         |
+| Encode/10KB           | 854 µs         |
+| Encode/10KB/snakeCase | 1.18 ms        |
+| Encode/100KB          | 8.53 ms        |
+| Encode/1MB            | 86 ms          |
+| Canonicalize/1KB      | 107 µs         |
+| Canonicalize/10KB     | 993 µs         |
+
+Key observations:
+
+- Decode overhead vs parse-only at 10 KB: 729 µs vs 231 µs — ~3× (Codable traversal dominates over libxml2 parse time).
+- Snake-case key transform adds ~38% overhead at 10 KB (1.18 ms vs 854 µs) — string allocation on every field.
+- All four operations scale roughly linearly with document size.
+
 ## [1.0.0] — 2026-03-16
 
 ### Added (Epic H — Pre-Release API Completeness)

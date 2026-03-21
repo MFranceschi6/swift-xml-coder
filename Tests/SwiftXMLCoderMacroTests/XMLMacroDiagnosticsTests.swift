@@ -11,6 +11,10 @@ private let testMacros: [String: any Macro.Type] = [
     "XMLCDATA": XMLCDATAMacro.self,
     "XMLChild": XMLChildMacro.self,
     "XMLDateFormat": XMLDateFormatMacro.self,
+    "XMLIgnore": XMLIgnoreMacro.self,
+    "XMLNamespace": XMLNamespaceMacro.self,
+    "XMLRootNamespace": XMLNamespaceMacro.self,
+    "XMLText": XMLTextMacro.self,
 ]
 
 final class XMLMacroDiagnosticsTests: XCTestCase {
@@ -350,6 +354,122 @@ final class XMLMacroDiagnosticsTests: XCTestCase {
                 }
             }
             """,
+            macros: testMacros
+        )
+    }
+
+    // MARK: - @XMLText expansion
+
+    func test_xmlCodable_withXMLText_generatesTextContentEntry() {
+        assertMacroExpansion(
+            """
+            @XMLCodable
+            struct Price: Codable {
+                @XMLAttribute var currency: String
+                @XMLText var amount: Double
+            }
+            """,
+            expandedSource:
+            """
+            struct Price: Codable {
+                var currency: String
+                var amount: Double
+            }
+
+            extension Price: XMLFieldCodingOverrideProvider {
+                static var xmlFieldNodeKinds: [String: XMLFieldNodeKind] {
+                    [
+                    "currency": .attribute,
+                    "amount": .textContent
+                ]
+                }
+            }
+            """,
+            macros: testMacros
+        )
+    }
+
+    // MARK: - @XMLIgnore expansion
+
+    func test_xmlCodable_withXMLIgnore_generatesIgnoredEntry() {
+        assertMacroExpansion(
+            """
+            @XMLCodable
+            struct Config: Codable {
+                var host: String
+                @XMLIgnore var _cache: Int?
+            }
+            """,
+            expandedSource:
+            """
+            struct Config: Codable {
+                var host: String
+                var _cache: Int?
+            }
+
+            extension Config: XMLFieldCodingOverrideProvider {
+                static var xmlFieldNodeKinds: [String: XMLFieldNodeKind] {
+                    [
+                    "_cache": .ignored
+                ]
+                }
+            }
+            """,
+            macros: testMacros
+        )
+    }
+
+    // MARK: - @XMLRootNamespace expansion
+
+    func test_xmlRootNamespace_onStruct_generatesXMLRootNodeConformance() {
+        assertMacroExpansion(
+            """
+            @XMLRootNamespace("http://example.com/orders")
+            struct Order: Codable {
+                var id: String
+            }
+            """,
+            expandedSource:
+            """
+            struct Order: Codable {
+                var id: String
+            }
+
+            extension Order: XMLRootNode {
+                static var xmlRootElementName: String {
+                    "Order"
+                }
+                static var xmlRootElementNamespaceURI: String? {
+                    "http://example.com/orders"
+                }
+            }
+            """,
+            macros: testMacros
+        )
+    }
+
+    func test_xmlRootNamespace_onEnum_emitsDiagnostic() {
+        assertMacroExpansion(
+            """
+            @XMLRootNamespace("http://example.com")
+            enum Status {
+                case active
+            }
+            """,
+            expandedSource:
+            """
+            enum Status {
+                case active
+            }
+            """,
+            diagnostics: [
+                DiagnosticSpec(
+                    message: "@XMLNamespace can only be attached to a struct or class declaration.",
+                    line: 1,
+                    column: 1,
+                    severity: .error
+                )
+            ],
             macros: testMacros
         )
     }

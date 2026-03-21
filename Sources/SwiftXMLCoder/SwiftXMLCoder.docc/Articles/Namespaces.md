@@ -67,3 +67,24 @@ try XMLNamespaceValidator.validate(document: tree)
 ```
 
 Use `.strict` mode to also reject default-namespace shadowing and duplicate prefix declarations.
+
+## Declaring a Root Namespace via Macro (Swift 5.9+)
+
+`@XMLRootNamespace` generates an ``XMLRootNode`` conformance that sets both the root element name and its namespace URI. Import `SwiftXMLCoderMacros` and annotate the type:
+
+```swift
+import SwiftXMLCoder
+import SwiftXMLCoderMacros
+
+@XMLRootNamespace("http://schemas.example.com/orders/v2")
+struct Order: Codable {
+    var id: String
+    var total: Double
+}
+// Encodes as:
+// <Order xmlns="http://schemas.example.com/orders/v2">
+//     <id>...</id><total>...</total>
+// </Order>
+```
+
+The macro uses the type name as the root element name by default. To customise the element name, conform to ``XMLRootNode`` manually instead.

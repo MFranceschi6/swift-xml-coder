@@ -35,7 +35,7 @@ import Foundation
 //
 // `XMLElement` is a deprecated alias for `XMLChild` (renamed to avoid Foundation.XMLElement collision).
 
-/// Whether a Codable field maps to an XML element or an XML attribute.
+/// Whether a Codable field maps to an XML element, XML attribute, or text content.
 ///
 /// Used as the value type in ``XMLFieldCodingOverrides`` and ``XMLFieldCodingOverrideProvider``.
 /// See the architecture block at the top of this file for the full priority chain.
@@ -44,6 +44,29 @@ public enum XMLFieldNodeKind: String, Sendable, Hashable, Codable {
     case element
     /// The field is encoded as an XML attribute on the parent element.
     case attribute
+    /// The field is encoded as the text content of the parent element.
+    ///
+    /// Use this when you need to map both attributes and a scalar value to the same element:
+    /// ```xml
+    /// <price currency="USD">9.99</price>
+    /// ```
+    /// ```swift
+    /// @XMLCodable
+    /// struct Price: Codable {
+    ///     @XMLAttribute var currency: String
+    ///     @XMLText var value: Double
+    /// }
+    /// ```
+    case textContent
+    /// The field is excluded from XML serialization and deserialization entirely.
+    ///
+    /// When encoding, the field is silently skipped. When decoding, the field receives
+    /// its default value as provided by the `Decodable` implementation (typically via
+    /// a default value in the property declaration or `init(from:)`).
+    ///
+    /// Use `@XMLIgnore` or the `@XMLCodable`-synthesised dictionary to mark fields
+    /// that exist in the Swift model but have no XML representation.
+    case ignored
 }
 
 /// A runtime dictionary of per-field ``XMLFieldNodeKind`` overrides, keyed by
@@ -138,6 +161,23 @@ protocol _XMLAttributeEncodableValue {
 
 protocol _XMLAttributeDecodableValue {
     static func _xmlDecodeAttributeLexicalValue(
+        _ lexicalValue: String,
+        using decoder: _XMLTreeDecoder,
+        codingPath: [CodingKey],
+        key: String
+    ) throws -> Self
+}
+
+protocol _XMLTextContentEncodableValue {
+    func _xmlTextContentLexicalValue(
+        using encoder: _XMLTreeEncoder,
+        codingPath: [CodingKey],
+        key: String
+    ) throws -> String
+}
+
+protocol _XMLTextContentDecodableValue {
+    static func _xmlDecodeTextContentLexicalValue(
         _ lexicalValue: String,
         using decoder: _XMLTreeDecoder,
         codingPath: [CodingKey],
@@ -281,3 +321,93 @@ extension XMLChild: _XMLFieldKindOverrideType {
 ///   `Foundation.XMLElement`. The old name is preserved for source compatibility.
 @available(*, deprecated, renamed: "XMLChild")
 public typealias XMLElement<Value: Codable> = XMLChild<Value>
+
+/// A property wrapper that marks a `Codable` field as the text content of the parent XML element.
+///
+/// Use `@XMLTextContent` when the XML element carries both attributes and a scalar value:
+/// ```xml
+/// <price currency="USD">9.99</price>
+/// ```
+/// ```swift
+/// struct Price: Codable {
+///     @XMLTextContent var value: Double
+///     @XMLAttribute   var currency: String
+/// }
+/// ```
+///
+/// - Important: Only scalar `Codable` types that can be represented as a single string value
+///   are supported (e.g. `String`, `Int`, `Bool`, `Double`, `URL`, `UUID`).
+///   At most one `@XMLTextContent` field per type is meaningful; if multiple are present
+///   the encoder writes the last value, and the decoder reads the same text for all of them.
+///
+/// - Note: Without `@XMLCodable` on the enclosing type this property wrapper is mechanism A
+///   (highest precedence) in the field-node-kind priority chain.
+@propertyWrapper
+public struct XMLTextContent<Value: Codable>: Codable {
+    /// The wrapped `Codable` value.
+    public var wrappedValue: Value
+
+    /// Creates an `XMLTextContent` wrapper around the given value.
+    public init(wrappedValue: Value) {
+        self.wrappedValue = wrappedValue
+    }
+
+    /// Decodes the wrapped value by delegating to `Value`'s `Decodable` conformance.
+    public init(from decoder: Decoder) throws {
+        self.wrappedValue = try Value(from: decoder)
+    }
+
+    /// Encodes the wrapped value by delegating to `Value`'s `Encodable` conformance.
+    public func encode(to encoder: Encoder) throws {
+        try wrappedValue.encode(to: encoder)
+    }
+}
+
+extension XMLTextContent: Equatable where Value: Equatable {}
+extension XMLTextContent: Hashable where Value: Hashable {}
+
+extension XMLTextContent: _XMLFieldKindOverrideType {
+    static var _xmlFieldNodeKindOverride: XMLFieldNodeKind { .textContent }
+}
+
+extension XMLTextContent: _XMLTextContentEncodableValue {
+    func _xmlTextContentLexicalValue(
+        using encoder: _XMLTreeEncoder,
+        codingPath: [CodingKey],
+        key: String
+    ) throws -> String {
+        guard let lexical = try encoder.boxedScalar(
+            wrappedValue,
+            codingPath: codingPath,
+            localName: key,
+            isAttribute: false
+        ) else {
+            throw XMLParsingError.parseFailed(
+                message: "[XML6_6_TEXT_CONTENT_ENCODE_UNSUPPORTED] Unable to encode text content '\(key)' from non-scalar value."
+            )
+        }
+        return lexical
+    }
+}
+
+extension XMLTextContent: _XMLTextContentDecodableValue {
+    static func _xmlDecodeTextContentLexicalValue(
+        _ lexicalValue: String,
+        using decoder: _XMLTreeDecoder,
+        codingPath: [CodingKey],
+        key: String
+    ) throws -> XMLTextContent<Value> {
+        guard let value = try decoder.decodeScalarFromLexical(
+            lexicalValue,
+            as: Value.self,
+            codingPath: codingPath,
+            localName: key,
+            isAttribute: false
+        ) else {
+            throw XMLParsingError.parseFailed(
+                message: "[XML6_6_TEXT_CONTENT_DECODE_UNSUPPORTED] Unable to decode text content '\(key)' into target value type."
+            )
+        }
+        return XMLTextContent(wrappedValue: value)
+    }
+}

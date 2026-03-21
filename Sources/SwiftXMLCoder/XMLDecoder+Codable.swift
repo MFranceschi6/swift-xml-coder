@@ -53,6 +53,7 @@ struct _XMLDecoderOptions {
     let validationPolicy: XMLValidationPolicy
     let logger: Logger
     let userInfo: [CodingUserInfoKey: Any]
+    let keyNameCache: _XMLKeyNameCache
     /// Per-property date format hints populated from `XMLDateCodingOverrideProvider`.
     var perPropertyDateHints: [String: XMLDateFormatHint] = [:]
 
@@ -65,6 +66,7 @@ struct _XMLDecoderOptions {
         self.validationPolicy = configuration.validationPolicy
         self.logger = configuration.logger
         self.userInfo = configuration.userInfo
+        self.keyNameCache = _XMLKeyNameCache()
     }
 }
 
@@ -121,7 +123,12 @@ final class _XMLTreeDecoder: Decoder {
     }
 
     func firstChild(named localName: String, in element: XMLTreeElement) -> XMLTreeElement? {
-        childElements(of: element).first(where: { $0.name.localName == localName })
+        for child in element.children {
+            if case .element(let childElement) = child, childElement.name.localName == localName {
+                return childElement
+            }
+        }
+        return nil
     }
 
     func attribute(named localName: String, in element: XMLTreeElement) -> XMLTreeAttribute? {
@@ -138,27 +145,32 @@ final class _XMLTreeDecoder: Decoder {
     }
 
     func lexicalText(of element: XMLTreeElement) -> String? {
-        let textChunks = element.children.compactMap { child -> String? in
+        var accumulated: String? = nil
+        for child in element.children {
             switch child {
-            case .text(let value):
-                return value
-            case .cdata(let value):
-                return value
-            case .element, .comment:
-                return nil
+            case .text(let value), .cdata(let value):
+                if let existing = accumulated {
+                    accumulated = existing + value
+                } else {
+                    accumulated = value
+                }
+            default:
+                break
             }
         }
+        return accumulated
+    }
 
-        guard textChunks.isEmpty == false else {
-            return nil
-        }
-        return textChunks.joined()
+    /// Returns a location suffix like `" (line 42)"` when the element carries source position
+    /// information, or an empty string when the element was constructed programmatically.
+    func sourceLocation(of element: XMLTreeElement) -> String {
+        guard let line = element.metadata.sourceLine else { return "" }
+        return " (line \(line))"
     }
 
     func isNilElement(_ element: XMLTreeElement) -> Bool {
-        let hasElementChildren = childElements(of: element).isEmpty == false
-        guard hasElementChildren == false else {
-            return false
+        for child in element.children {
+            if case .element = child { return false }
         }
         let lexical = lexicalText(of: element)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         return lexical.isEmpty
@@ -522,16 +534,38 @@ struct _XMLKeyedDecodingContainer<Key: CodingKey>: KeyedDecodingContainerProtoco
     }
 
     private func xmlName(for key: Key) -> String {
-        decoder.options.keyTransformStrategy.transform(key.stringValue)
+        let raw = key.stringValue
+        switch decoder.options.keyTransformStrategy {
+        case .useDefaultKeys:
+            return raw
+        case .custom(let closure):
+            return closure(raw)
+        default:
+            break
+        }
+        if let cached = decoder.options.keyNameCache.storage[raw] {
+            return cached
+        }
+        let transformed = decoder.options.keyTransformStrategy.transform(raw)
+        decoder.options.keyNameCache.storage[raw] = transformed
+        return transformed
     }
 
     func contains(_ key: Key) -> Bool {
+        // Ignored fields are treated as absent.
+        if resolvedNodeKind(for: key, valueType: Never.self) == .ignored {
+            return false
+        }
         let name = xmlName(for: key)
         return decoder.firstChild(named: name, in: decoder.node) != nil ||
             decoder.attribute(named: name, in: decoder.node) != nil
     }
 
     func decodeNil(forKey key: Key) throws -> Bool {
+        // Ignored fields are always nil.
+        if resolvedNodeKind(for: key, valueType: Never.self) == .ignored {
+            return true
+        }
         let name = xmlName(for: key)
         if decoder.attribute(named: name, in: decoder.node) != nil {
             return false
@@ -563,9 +597,21 @@ struct _XMLKeyedDecodingContainer<Key: CodingKey>: KeyedDecodingContainerProtoco
             return try decodeAttribute(type, forKey: key)
         }
 
+        if nodeKind == .ignored {
+            throw XMLParsingError.parseFailed(
+                message: "[XML6_6_IGNORED_FIELD_DECODE] Field '\(key.stringValue)' is marked @XMLIgnore — " +
+                    "use an Optional type or provide a default value via init(from:) to suppress this error."
+            )
+        }
+
+        if nodeKind == .textContent {
+            return try decodeTextContent(type, forKey: key)
+        }
+
         guard let element = decoder.firstChild(named: xmlName(for: key), in: decoder.node) else {
             throw XMLParsingError.parseFailed(
-                message: "[XML6_5_KEY_NOT_FOUND] Missing key '\(key.stringValue)' at path '\(renderPath(codingPath))'."
+                message: "[XML6_5_KEY_NOT_FOUND] Missing key '\(key.stringValue)' " +
+                    "at path '\(renderPath(codingPath))'\(decoder.sourceLocation(of: decoder.node))."
             )
         }
 
@@ -575,7 +621,8 @@ struct _XMLKeyedDecodingContainer<Key: CodingKey>: KeyedDecodingContainerProtoco
         }
         if decoder.isKnownScalarType(type) {
             throw XMLParsingError.parseFailed(
-                message: "[XML6_5_SCALAR_PARSE_FAILED] Unable to decode scalar key '\(key.stringValue)' at path '\(renderPath(childPath))'."
+                message: "[XML6_5_SCALAR_PARSE_FAILED] Unable to decode scalar key '\(key.stringValue)' " +
+                    "at path '\(renderPath(childPath))'\(decoder.sourceLocation(of: element))."
             )
         }
 
@@ -603,7 +650,8 @@ struct _XMLKeyedDecodingContainer<Key: CodingKey>: KeyedDecodingContainerProtoco
 
         guard let element = decoder.firstChild(named: xmlName(for: key), in: decoder.node) else {
             throw XMLParsingError.parseFailed(
-                message: "[XML6_5_KEY_NOT_FOUND] Missing nested key '\(key.stringValue)' at path '\(renderPath(codingPath))'."
+                message: "[XML6_5_KEY_NOT_FOUND] Missing nested key '\(key.stringValue)' " +
+                    "at path '\(renderPath(codingPath))'\(decoder.sourceLocation(of: decoder.node))."
             )
         }
 
@@ -625,7 +673,8 @@ struct _XMLKeyedDecodingContainer<Key: CodingKey>: KeyedDecodingContainerProtoco
 
         guard let element = decoder.firstChild(named: xmlName(for: key), in: decoder.node) else {
             throw XMLParsingError.parseFailed(
-                message: "[XML6_5_KEY_NOT_FOUND] Missing nested unkeyed key '\(key.stringValue)' at path '\(renderPath(codingPath))'."
+                message: "[XML6_5_KEY_NOT_FOUND] Missing nested unkeyed key '\(key.stringValue)' " +
+                    "at path '\(renderPath(codingPath))'\(decoder.sourceLocation(of: decoder.node))."
             )
         }
 
@@ -649,7 +698,8 @@ struct _XMLKeyedDecodingContainer<Key: CodingKey>: KeyedDecodingContainerProtoco
     func superDecoder(forKey key: Key) throws -> Decoder {
         guard let element = decoder.firstChild(named: xmlName(for: key), in: decoder.node) else {
             throw XMLParsingError.parseFailed(
-                message: "[XML6_5_KEY_NOT_FOUND] Missing super key '\(key.stringValue)' at path '\(renderPath(codingPath))'."
+                message: "[XML6_5_KEY_NOT_FOUND] Missing super key '\(key.stringValue)' " +
+                    "at path '\(renderPath(codingPath))'\(decoder.sourceLocation(of: decoder.node))."
             )
         }
 
@@ -666,14 +716,61 @@ struct _XMLKeyedDecodingContainer<Key: CodingKey>: KeyedDecodingContainerProtoco
             return try decodeAttribute(type, forKey: key)
         }
 
+        if nodeKind == .ignored {
+            throw XMLParsingError.parseFailed(
+                message: "[XML6_6_IGNORED_FIELD_DECODE] Field '\(key.stringValue)' is marked @XMLIgnore — " +
+                    "use an Optional type or provide a default value via init(from:) to suppress this error."
+            )
+        }
+
+        if nodeKind == .textContent {
+            return try decodeTextContent(type, forKey: key)
+        }
+
         guard let element = decoder.firstChild(named: xmlName(for: key), in: decoder.node) else {
             throw XMLParsingError.parseFailed(
-                message: "[XML6_5_KEY_NOT_FOUND] Missing scalar key '\(key.stringValue)' at path '\(renderPath(codingPath))'."
+                message: "[XML6_5_KEY_NOT_FOUND] Missing scalar key '\(key.stringValue)' " +
+                    "at path '\(renderPath(codingPath))'\(decoder.sourceLocation(of: decoder.node))."
             )
         }
         guard let scalar: T = try decoder.decodeScalar(type, from: element, codingPath: codingPath + [key]) else {
             throw XMLParsingError.parseFailed(
-                message: "[XML6_5_SCALAR_PARSE_FAILED] Unable to decode scalar key '\(key.stringValue)' at path '\(renderPath(codingPath))'."
+                message: "[XML6_5_SCALAR_PARSE_FAILED] Unable to decode scalar key '\(key.stringValue)' " +
+                    "at path '\(renderPath(codingPath))'\(decoder.sourceLocation(of: element))."
+            )
+        }
+        return scalar
+    }
+
+    private func decodeTextContent<T: Decodable>(_ type: T.Type, forKey key: Key) throws -> T {
+        let textPath = codingPath + [key]
+        let lexical = decoder.lexicalText(of: decoder.node)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+
+        if let wrapperType = type as? _XMLTextContentDecodableValue.Type {
+            let wrapped = try wrapperType._xmlDecodeTextContentLexicalValue(
+                lexical,
+                using: decoder,
+                codingPath: textPath,
+                key: key.stringValue
+            )
+            guard let typed = wrapped as? T else {
+                throw XMLParsingError.parseFailed(
+                    message: "[XML6_6_TEXT_CONTENT_DECODE_CAST_FAILED] Unable to cast decoded text content '\(key.stringValue)' to expected type."
+                )
+            }
+            return typed
+        }
+
+        guard let scalar: T = try decoder.decodeScalarFromLexical(
+            lexical,
+            as: type,
+            codingPath: textPath,
+            localName: key.stringValue,
+            isAttribute: false
+        ) else {
+            throw XMLParsingError.parseFailed(
+                message: "[XML6_6_TEXT_CONTENT_DECODE_UNSUPPORTED] Key '\(key.stringValue)' is marked as text content " +
+                    "but the value could not be decoded as a scalar at path '\(renderPath(codingPath))'."
             )
         }
         return scalar
@@ -700,7 +797,8 @@ struct _XMLKeyedDecodingContainer<Key: CodingKey>: KeyedDecodingContainerProtoco
     private func decodeAttribute<T: Decodable>(_ type: T.Type, forKey key: Key) throws -> T {
         guard let attribute = decoder.attribute(named: xmlName(for: key), in: decoder.node) else {
             throw XMLParsingError.parseFailed(
-                message: "[XML6_6_ATTRIBUTE_NOT_FOUND] Missing attribute '\(key.stringValue)' at path '\(renderPath(codingPath))'."
+                message: "[XML6_6_ATTRIBUTE_NOT_FOUND] Missing attribute '\(key.stringValue)' " +
+                    "at path '\(renderPath(codingPath))'\(decoder.sourceLocation(of: decoder.node))."
             )
         }
 
