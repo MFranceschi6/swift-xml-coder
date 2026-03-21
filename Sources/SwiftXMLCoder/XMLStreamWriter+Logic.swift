@@ -31,13 +31,13 @@ extension XMLStreamWriter {
         LibXML2.ensureInitialized()
 
         let buf = xmlBufferCreate()
-        guard let buf else {
+        guard let buf = buf else {
             throw XMLParsingError.documentCreationFailed(message: "xmlBufferCreate failed.")
         }
         defer { xmlBufferFree(buf) }
 
         let writer = xmlNewTextWriterMemory(buf, 0)
-        guard let writer else {
+        guard let writer = writer else {
             throw XMLParsingError.documentCreationFailed(message: "xmlNewTextWriterMemory failed.")
         }
         defer { xmlFreeTextWriter(writer) }

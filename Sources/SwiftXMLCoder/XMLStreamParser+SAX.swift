@@ -120,7 +120,7 @@ extension XMLStreamParser {
                 if incrementAndCheckNodeCount(ctx: ctx) { return }
                 let name = saxQName(localname: localname, prefix: prefix, uri: URI)
                 var nsDeclarations: [XMLNamespaceDeclaration] = []
-                if let namespaces, nbNamespaces > 0 {
+                if let namespaces = namespaces, nbNamespaces > 0 {
                     for nsIdx in 0..<Int(nbNamespaces) {
                         let pfx = saxString(from: namespaces[nsIdx * 2])
                         let uri = saxString(from: namespaces[nsIdx * 2 + 1]) ?? ""
@@ -129,7 +129,7 @@ extension XMLStreamParser {
                 }
                 var attrs: [XMLTreeAttribute] = []
                 let totalAttrs = Int(nbAttributes) + Int(nbDefaulted)
-                if let attributes, totalAttrs > 0 {
+                if let attributes = attributes, totalAttrs > 0 {
                     if let maxAttrs = ctx.limits.maxAttributesPerElement, totalAttrs > maxAttrs {
                         ctx.error = XMLParsingError.parseFailed(
                             message: "[XML6_2H_MAX_ATTRS] Attribute count \(totalAttrs) exceeds limit \(maxAttrs)."
@@ -168,7 +168,7 @@ extension XMLStreamParser {
                 ctx.onEvent(.endElement(name: saxQName(localname: localname, prefix: prefix, uri: URI)))
             }
             handler.characters = { userCtx, chars, len in
-                guard let ctx = saxContext(from: userCtx), let chars else { return }
+                guard let ctx = saxContext(from: userCtx), let chars = chars else { return }
                 guard ctx.error == nil else { return }
                 let byteCount = Int(len)
                 if checkByteLimit(byteCount, limit: ctx.limits.maxTextNodeBytes,
@@ -195,7 +195,7 @@ extension XMLStreamParser {
                 ctx.onEvent(.text(text))
             }
             handler.cdataBlock = { userCtx, value, len in
-                guard let ctx = saxContext(from: userCtx), let value else { return }
+                guard let ctx = saxContext(from: userCtx), let value = value else { return }
                 guard ctx.error == nil else { return }
                 let byteCount = Int(len)
                 if checkByteLimit(byteCount, limit: ctx.limits.maxCDATABlockBytes,
@@ -258,7 +258,7 @@ extension XMLStreamParser {
     }
 
     private func ensureLimitSAX(actual: Int, limit: Int?, code: String, context: String) throws {
-        guard let limit else { return }
+        guard let limit = limit else { return }
         guard actual <= limit else {
             configuration.logger.warning(
                 "XML stream parse limit exceeded",
@@ -279,7 +279,7 @@ extension XMLStreamParser {
 // MARK: - Helper: retrieve SAXContext from opaque pointer
 
 private func saxContext(from ptr: UnsafeMutableRawPointer?) -> SAXContext? {
-    guard let ptr else { return nil }
+    guard let ptr = ptr else { return nil }
     return Unmanaged<SAXContext>.fromOpaque(ptr).takeUnretainedValue()
 }
 
@@ -291,7 +291,7 @@ private func checkByteLimit(
     code: String,
     ctx: SAXContext
 ) -> Bool {
-    guard let limit, bytes > limit else { return false }
+    guard let limit = limit, bytes > limit else { return false }
     ctx.error = XMLParsingError.parseFailed(
         message: "[\(code)] Content size \(bytes) bytes exceeds limit \(limit) bytes."
     )
@@ -320,12 +320,12 @@ private func incrementAndCheckNodeCount(ctx: SAXContext) -> Bool {
 // MARK: - String helpers
 
 private func saxString(from ptr: UnsafePointer<xmlChar>?) -> String? {
-    guard let ptr else { return nil }
+    guard let ptr = ptr else { return nil }
     return String(cString: UnsafeRawPointer(ptr).assumingMemoryBound(to: CChar.self))
 }
 
 private func saxString(from ptr: UnsafePointer<xmlChar>?, length: Int32) -> String? {
-    guard let ptr, length > 0 else { return nil }
+    guard let ptr = ptr, length > 0 else { return nil }
     return String(bytes: UnsafeBufferPointer(start: ptr, count: Int(length)), encoding: .utf8)
 }
 
