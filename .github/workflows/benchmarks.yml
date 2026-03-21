@@ -101,8 +101,12 @@ jobs:
           cd Benchmarks
           swift package --allow-writing-to-package-directory \
             benchmark baseline update ci-main
+          # Save baseline before switching branches (git checkout would drop it)
           cp -r .benchmarkBaselines/SwiftXMLCoderBenchmarks/ci-main /tmp/ci-main-baseline
+          # Return to repo root, then switch back to PR code
+          cd ..
           git checkout ${{ github.sha }}
+          # Restore baseline into the PR workspace from the tmp copy
           mkdir -p Benchmarks/.benchmarkBaselines/SwiftXMLCoderBenchmarks/
           cp -r /tmp/ci-main-baseline \
             Benchmarks/.benchmarkBaselines/SwiftXMLCoderBenchmarks/ci-main
