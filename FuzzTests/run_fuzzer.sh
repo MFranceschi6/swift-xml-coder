@@ -41,6 +41,25 @@ swift build -c release -Xswiftc -sanitize=address
 BIN_PATH=$(swift build -c release --show-bin-path)
 echo "    BIN_PATH: $BIN_PATH"
 
+MODULE_DIR="$BIN_PATH/Modules"
+CSHIM_MODULE_DIR="$BIN_PATH/SwiftXMLCoderCShim.build"
+OWNERSHIP_MODULE_DIR="$BIN_PATH/SwiftXMLCoderOwnership6.build"
+
+if [ ! -d "$MODULE_DIR" ]; then
+    echo "error: expected Swift module directory at '$MODULE_DIR'" >&2
+    exit 1
+fi
+
+if [ ! -f "$MODULE_DIR/SwiftXMLCoder.swiftmodule" ]; then
+    echo "error: expected SwiftXMLCoder.swiftmodule at '$MODULE_DIR/SwiftXMLCoder.swiftmodule'" >&2
+    exit 1
+fi
+
+if [ ! -f "$CSHIM_MODULE_DIR/module.modulemap" ]; then
+    echo "error: expected SwiftXMLCoderCShim module map at '$CSHIM_MODULE_DIR/module.modulemap'" >&2
+    exit 1
+fi
+
 # ── Build + run each fuzz target ─────────────────────────────────────────────
 OVERALL_EXIT=0
 
@@ -53,22 +72,44 @@ for T in "${TARGETS[@]}"; do
 
     echo "==> Compiling $T with libFuzzer + ASan..."
 
-    # Collect all static archives produced by SPM so transitive deps are linked.
-    ARCHIVES=()
-    while IFS= read -r f; do ARCHIVES+=("$f"); done \
+    # Prefer static archives (Linux CI). Fall back to SPM-produced object files on
+    # platforms like macOS where release library builds may not emit .a archives.
+    LINK_INPUTS=()
+    while IFS= read -r f; do LINK_INPUTS+=("$f"); done \
         < <(find "$BIN_PATH" -maxdepth 1 -name "*.a" 2>/dev/null)
 
-    swiftc \
-        -parse-as-library \
-        -sanitize=address,fuzzer \
-        -O \
-        -I "$BIN_PATH" \
-        -L "$BIN_PATH" \
-        -module-name "$T" \
-        "$SCRIPT_DIR/Sources/$T/$T.swift" \
-        "${ARCHIVES[@]}" \
-        -lxml2 \
+    if [ ${#LINK_INPUTS[@]} -eq 0 ]; then
+        while IFS= read -r f; do LINK_INPUTS+=("$f"); done \
+            < <(find \
+                "$BIN_PATH/SwiftXMLCoder.build" \
+                "$BIN_PATH/SwiftXMLCoderCShim.build" \
+                "$BIN_PATH/SwiftXMLCoderOwnership6.build" \
+                "$BIN_PATH/XMLCoderCompatibility.build" \
+                "$BIN_PATH/Logging.build" \
+                -name "*.o" 2>/dev/null)
+    fi
+
+    if [ ${#LINK_INPUTS[@]} -eq 0 ]; then
+        echo "error: could not find link inputs under '$BIN_PATH'" >&2
+        exit 1
+    fi
+
+    SWIFTC_ARGS=(
+        -parse-as-library
+        -sanitize=address,fuzzer
+        -O
+        -I "$MODULE_DIR"
+        -I "$CSHIM_MODULE_DIR"
+        -I "$OWNERSHIP_MODULE_DIR"
+        -L "$BIN_PATH"
+        -module-name "$T"
+        "$SCRIPT_DIR/Sources/$T/$T.swift"
+        -lxml2
         -o "$OUTDIR/$T"
+    )
+    SWIFTC_ARGS+=("${LINK_INPUTS[@]}")
+
+    swiftc "${SWIFTC_ARGS[@]}"
 
     echo "==> Running $T for ${FUZZ_TIME}s (crash artifacts → $OUTDIR)..."
     "$OUTDIR/$T" \
