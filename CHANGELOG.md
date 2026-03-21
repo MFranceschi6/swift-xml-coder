@@ -33,6 +33,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   90-day artifacts. A separate `typecheck` job runs on every push/PR to ensure the
   harness code compiles and does not silently rot.
 
+### Added (Pillar III.2 — Concurrency Stress Testing)
+
+- **`Tests/SwiftXMLCoderTests/XMLConcurrencyStressTests.swift`** — six stress tests that
+  exercise `XMLEncoder`, `XMLDecoder`, and `XMLTreeParser` from 100 concurrent
+  `DispatchQueue` tasks, covering: shared encoder, shared decoder, per-task round-trip,
+  shared parser, concurrent `xmlInitParser()` first-use, and a mixed encode/decode/parse
+  workload. Designed to run under ThreadSanitizer to surface any latent data races.
+- **`.github/workflows/ci.yml`** — new `concurrency` job runs `XMLConcurrencyStressTests`
+  with `swift test -Xswiftc -sanitize=thread` on `ubuntu-22.04` / Swift 6.1 on every
+  push and PR.
+
 ## [1.1.0] — 2026-03-21
 
 ### Added (Pillar VII.5 — Source Position Diagnostics)
