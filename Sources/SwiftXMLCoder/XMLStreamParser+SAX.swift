@@ -8,7 +8,7 @@ import XMLCoderCompatibility
 // Architecture:
 //   parseSAX(data:onEvent:)
 //     → creates SAXContext (holds closure + state + limits)
-//     → zero-inits xmlSAXHandler, assigns top-level @convention(c) callbacks
+//     → zero-inits xmlSAXHandler, assigns local @convention(c) callbacks
 //     → xmlSAXUserParseMemory(&handler, ctxPtr, bytes, len) — drives SAX parse
 //     → each C callback retrieves SAXContext via Unmanaged, calls onEvent
 //     → on limit violation: sets ctx.error (libxml2 terminates after error)
@@ -17,6 +17,11 @@ import XMLCoderCompatibility
 // C callback bridging:
 //   Unmanaged<SAXContext>.passRetained → opaque pointer → passed as SAX user data
 //   Each callback uses Unmanaged.fromOpaque to retrieve the Swift object (no ARC cost).
+//
+//   The SAX callbacks are defined as local let constants inside parseSAX rather than
+//   module-level globals. They are non-capturing closures (all context flows through
+//   the SAX userCtx parameter), so they remain valid C function pointers on all Swift
+//   versions. This avoids nonisolated(unsafe), which requires Swift 5.10+.
 //
 // Note on errorSAXFunc: libxml2's error/fatalError SAX fields use a variadic C typedef
 // which Swift imports as OpaquePointer and cannot be assigned a Swift closure.
@@ -53,6 +58,7 @@ final class SAXContext {
 // MARK: - parseSAX entry point
 
 extension XMLStreamParser {
+    // swiftlint:disable:next function_body_length cyclomatic_complexity
     func parseSAX(data: Data, onEvent: (XMLStreamEvent) -> Void) throws {
         try ensureLimitSAX(
             actual: data.count,
@@ -80,14 +86,146 @@ extension XMLStreamParser {
 
             var handler = xmlSAXHandler()
             handler.initialized = UInt32(XML_SAX2_MAGIC)
-            handler.startDocument = saxStartDocument
-            handler.endDocument = saxEndDocument
-            handler.startElementNs = saxStartElementNs
-            handler.endElementNs = saxEndElementNs
-            handler.characters = saxCharacters
-            handler.cdataBlock = saxCDATABlock
-            handler.comment = saxComment
-            handler.processingInstruction = saxPI
+
+            // SAX callbacks — local non-capturing closures, valid C function pointers.
+            handler.startDocument = { userCtx in
+                guard let ctx = saxContext(from: userCtx) else { return }
+                ctx.onEvent(.startDocument(version: nil, encoding: nil, standalone: nil))
+            }
+            handler.endDocument = { userCtx in
+                guard let ctx = saxContext(from: userCtx) else { return }
+                ctx.onEvent(.endDocument)
+            }
+            // swiftlint:disable closure_parameter_position
+            handler.startElementNs = {
+                userCtx, localname, prefix, URI,
+                nbNamespaces, namespaces,
+                nbAttributes, nbDefaulted, attributes in
+            // swiftlint:enable closure_parameter_position
+                guard let ctx = saxContext(from: userCtx) else { return }
+                guard ctx.error == nil else { return }
+                ctx.depth += 1
+                let maxDepth = ctx.limits.maxDepth
+                if ctx.depth > maxDepth {
+                    ctx.error = XMLParsingError.parseFailed(
+                        message: "[XML6_2H_MAX_DEPTH] Element nesting depth \(ctx.depth) exceeds limit \(maxDepth)."
+                    )
+                    return
+                }
+                if !ctx.warnedDepthApproaching && ctx.depth > maxDepth * 4 / 5 {
+                    ctx.warnedDepthApproaching = true
+                    ctx.logger.warning("XML stream depth approaching limit",
+                                       metadata: ["depth": "\(ctx.depth)", "limit": "\(maxDepth)"])
+                }
+                if incrementAndCheckNodeCount(ctx: ctx) { return }
+                let name = saxQName(localname: localname, prefix: prefix, uri: URI)
+                var nsDeclarations: [XMLNamespaceDeclaration] = []
+                if let namespaces, nbNamespaces > 0 {
+                    for nsIdx in 0..<Int(nbNamespaces) {
+                        let pfx = saxString(from: namespaces[nsIdx * 2])
+                        let uri = saxString(from: namespaces[nsIdx * 2 + 1]) ?? ""
+                        nsDeclarations.append(XMLNamespaceDeclaration(prefix: pfx, uri: uri))
+                    }
+                }
+                var attrs: [XMLTreeAttribute] = []
+                let totalAttrs = Int(nbAttributes) + Int(nbDefaulted)
+                if let attributes, totalAttrs > 0 {
+                    if let maxAttrs = ctx.limits.maxAttributesPerElement, totalAttrs > maxAttrs {
+                        ctx.error = XMLParsingError.parseFailed(
+                            message: "[XML6_2H_MAX_ATTRS] Attribute count \(totalAttrs) exceeds limit \(maxAttrs)."
+                        )
+                        return
+                    }
+                    for attrIdx in 0..<totalAttrs {
+                        let base = attrIdx * 5
+                        let attrName = saxQName(
+                            localname: attributes[base],
+                            prefix: attributes[base + 1],
+                            uri: attributes[base + 2]
+                        )
+                        let valueStart = attributes[base + 3]
+                        let valueEnd = attributes[base + 4]
+                        let value: String
+                        if let beginPtr = valueStart, let endPtr = valueEnd, endPtr >= beginPtr {
+                            let len = endPtr - beginPtr
+                            value = String(bytes: UnsafeBufferPointer(start: beginPtr, count: len),
+                                           encoding: .utf8) ?? ""
+                        } else {
+                            value = ""
+                        }
+                        attrs.append(XMLTreeAttribute(name: attrName, value: value))
+                    }
+                }
+                ctx.onEvent(.startElement(name: name, attributes: attrs, namespaceDeclarations: nsDeclarations))
+            }
+            // swiftlint:disable closure_parameter_position
+            handler.endElementNs = {
+                userCtx, localname, prefix, URI in
+            // swiftlint:enable closure_parameter_position
+                guard let ctx = saxContext(from: userCtx) else { return }
+                guard ctx.error == nil else { return }
+                ctx.depth -= 1
+                ctx.onEvent(.endElement(name: saxQName(localname: localname, prefix: prefix, uri: URI)))
+            }
+            handler.characters = { userCtx, chars, len in
+                guard let ctx = saxContext(from: userCtx), let chars else { return }
+                guard ctx.error == nil else { return }
+                let byteCount = Int(len)
+                if checkByteLimit(byteCount, limit: ctx.limits.maxTextNodeBytes,
+                                  code: "XML6_2H_MAX_TEXT_NODE_BYTES", ctx: ctx) { return }
+                guard let raw = String(bytes: UnsafeBufferPointer(start: chars, count: byteCount),
+                                       encoding: .utf8) else { return }
+                let text: String
+                switch ctx.whitespacePolicy {
+                case .preserve:
+                    text = raw
+                case .dropWhitespaceOnly:
+                    guard !raw.allSatisfy(\.isWhitespace) else { return }
+                    text = raw
+                case .trim:
+                    let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard !trimmed.isEmpty else { return }
+                    text = trimmed
+                case .normalizeAndTrim:
+                    let trimmed = raw.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+                    guard !trimmed.isEmpty else { return }
+                    text = trimmed
+                }
+                if incrementAndCheckNodeCount(ctx: ctx) { return }
+                ctx.onEvent(.text(text))
+            }
+            handler.cdataBlock = { userCtx, value, len in
+                guard let ctx = saxContext(from: userCtx), let value else { return }
+                guard ctx.error == nil else { return }
+                let byteCount = Int(len)
+                if checkByteLimit(byteCount, limit: ctx.limits.maxCDATABlockBytes,
+                                  code: "XML6_2H_MAX_CDATA_BYTES", ctx: ctx) { return }
+                guard let text = String(bytes: UnsafeBufferPointer(start: value, count: byteCount),
+                                        encoding: .utf8) else { return }
+                if incrementAndCheckNodeCount(ctx: ctx) { return }
+                ctx.onEvent(.cdata(text))
+            }
+            handler.comment = { userCtx, value in
+                guard let ctx = saxContext(from: userCtx) else { return }
+                guard ctx.error == nil else { return }
+                let text = saxString(from: value) ?? ""
+                let byteCount = text.utf8.count
+                if checkByteLimit(byteCount, limit: ctx.limits.maxCommentBytes,
+                                  code: "XML6_2H_MAX_COMMENT_BYTES", ctx: ctx) { return }
+                if incrementAndCheckNodeCount(ctx: ctx) { return }
+                ctx.onEvent(.comment(text))
+            }
+            // swiftlint:disable closure_parameter_position
+            handler.processingInstruction = {
+                userCtx, target, data in
+            // swiftlint:enable closure_parameter_position
+                guard let ctx = saxContext(from: userCtx) else { return }
+                guard ctx.error == nil else { return }
+                ctx.onEvent(.processingInstruction(
+                    target: saxString(from: target) ?? "",
+                    data: saxString(from: data)
+                ))
+            }
             // handler.error / handler.fatalError: variadic C typedefs — not assignable
             // from Swift. Parse errors are captured via xmlGetLastError() below.
 
@@ -203,168 +341,3 @@ private func saxQName(
     )
 }
 
-// MARK: - SAX callbacks
-
-// Using nonisolated(unsafe) because the function pointer types imported from C are not
-// Sendable in Swift 6. The values are immutable C function pointers (no shared state).
-
-nonisolated(unsafe) private let saxStartDocument: startDocumentSAXFunc = { userCtx in
-    guard let ctx = saxContext(from: userCtx) else { return }
-    ctx.onEvent(.startDocument(version: nil, encoding: nil, standalone: nil))
-}
-
-nonisolated(unsafe) private let saxEndDocument: endDocumentSAXFunc = { userCtx in
-    guard let ctx = saxContext(from: userCtx) else { return }
-    ctx.onEvent(.endDocument)
-}
-
-// swiftlint:disable closure_parameter_position
-nonisolated(unsafe) private let saxStartElementNs: startElementNsSAX2Func = {
-    userCtx, localname, prefix, URI,
-    nbNamespaces, namespaces,
-    nbAttributes, nbDefaulted, attributes in
-// swiftlint:enable closure_parameter_position
-
-    guard let ctx = saxContext(from: userCtx) else { return }
-    guard ctx.error == nil else { return }
-
-    // Depth check
-    ctx.depth += 1
-    let maxDepth = ctx.limits.maxDepth
-    if ctx.depth > maxDepth {
-        ctx.error = XMLParsingError.parseFailed(
-            message: "[XML6_2H_MAX_DEPTH] Element nesting depth \(ctx.depth) exceeds limit \(maxDepth)."
-        )
-        return
-    }
-    if !ctx.warnedDepthApproaching && ctx.depth > maxDepth * 4 / 5 {
-        ctx.warnedDepthApproaching = true
-        ctx.logger.warning("XML stream depth approaching limit",
-                           metadata: ["depth": "\(ctx.depth)", "limit": "\(maxDepth)"])
-    }
-    if incrementAndCheckNodeCount(ctx: ctx) { return }
-
-    let name = saxQName(localname: localname, prefix: prefix, uri: URI)
-
-    // Namespace declarations — libxml2 provides pairs [prefix, uri]
-    var nsDeclarations: [XMLNamespaceDeclaration] = []
-    if let namespaces, nbNamespaces > 0 {
-        for nsIdx in 0..<Int(nbNamespaces) {
-            let pfx = saxString(from: namespaces[nsIdx * 2])
-            let uri = saxString(from: namespaces[nsIdx * 2 + 1]) ?? ""
-            nsDeclarations.append(XMLNamespaceDeclaration(prefix: pfx, uri: uri))
-        }
-    }
-
-    // Attributes — libxml2 packs each as 5 pointers: [localname, prefix, URI, valueBegin, valueEnd]
-    var attrs: [XMLTreeAttribute] = []
-    let totalAttrs = Int(nbAttributes) + Int(nbDefaulted)
-    if let attributes, totalAttrs > 0 {
-        if let maxAttrs = ctx.limits.maxAttributesPerElement, totalAttrs > maxAttrs {
-            ctx.error = XMLParsingError.parseFailed(
-                message: "[XML6_2H_MAX_ATTRS] Attribute count \(totalAttrs) exceeds limit \(maxAttrs)."
-            )
-            return
-        }
-        for attrIdx in 0..<totalAttrs {
-            let base = attrIdx * 5
-            let attrName = saxQName(
-                localname: attributes[base],
-                prefix: attributes[base + 1],
-                uri: attributes[base + 2]
-            )
-            let valueStart = attributes[base + 3]
-            let valueEnd = attributes[base + 4]
-            let value: String
-            if let beginPtr = valueStart, let endPtr = valueEnd, endPtr >= beginPtr {
-                let len = endPtr - beginPtr
-                value = String(bytes: UnsafeBufferPointer(start: beginPtr, count: len), encoding: .utf8) ?? ""
-            } else {
-                value = ""
-            }
-            attrs.append(XMLTreeAttribute(name: attrName, value: value))
-        }
-    }
-
-    ctx.onEvent(.startElement(name: name, attributes: attrs, namespaceDeclarations: nsDeclarations))
-}
-
-// swiftlint:disable closure_parameter_position
-nonisolated(unsafe) private let saxEndElementNs: endElementNsSAX2Func = {
-    userCtx, localname, prefix, URI in
-    // swiftlint:enable closure_parameter_position
-    guard let ctx = saxContext(from: userCtx) else { return }
-    guard ctx.error == nil else { return }
-    ctx.depth -= 1
-    ctx.onEvent(.endElement(name: saxQName(localname: localname, prefix: prefix, uri: URI)))
-}
-
-nonisolated(unsafe) private let saxCharacters: charactersSAXFunc = { userCtx, chars, len in
-    guard let ctx = saxContext(from: userCtx), let chars else { return }
-    guard ctx.error == nil else { return }
-
-    let byteCount = Int(len)
-    if checkByteLimit(byteCount, limit: ctx.limits.maxTextNodeBytes,
-                      code: "XML6_2H_MAX_TEXT_NODE_BYTES", ctx: ctx) { return }
-
-    guard let raw = String(bytes: UnsafeBufferPointer(start: chars, count: byteCount), encoding: .utf8) else { return }
-
-    let text: String
-    switch ctx.whitespacePolicy {
-    case .preserve:
-        text = raw
-    case .dropWhitespaceOnly:
-        guard !raw.allSatisfy(\.isWhitespace) else { return }
-        text = raw
-    case .trim:
-        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-        text = trimmed
-    case .normalizeAndTrim:
-        let trimmed = raw.split(whereSeparator: \.isWhitespace).joined(separator: " ")
-        guard !trimmed.isEmpty else { return }
-        text = trimmed
-    }
-
-    if incrementAndCheckNodeCount(ctx: ctx) { return }
-    ctx.onEvent(.text(text))
-}
-
-nonisolated(unsafe) private let saxCDATABlock: cdataBlockSAXFunc = { userCtx, value, len in
-    guard let ctx = saxContext(from: userCtx), let value else { return }
-    guard ctx.error == nil else { return }
-
-    let byteCount = Int(len)
-    if checkByteLimit(byteCount, limit: ctx.limits.maxCDATABlockBytes,
-                      code: "XML6_2H_MAX_CDATA_BYTES", ctx: ctx) { return }
-
-    guard let text = String(bytes: UnsafeBufferPointer(start: value, count: byteCount),
-                            encoding: .utf8) else { return }
-    if incrementAndCheckNodeCount(ctx: ctx) { return }
-    ctx.onEvent(.cdata(text))
-}
-
-nonisolated(unsafe) private let saxComment: commentSAXFunc = { userCtx, value in
-    guard let ctx = saxContext(from: userCtx) else { return }
-    guard ctx.error == nil else { return }
-
-    let text = saxString(from: value) ?? ""
-    let byteCount = text.utf8.count
-    if checkByteLimit(byteCount, limit: ctx.limits.maxCommentBytes,
-                      code: "XML6_2H_MAX_COMMENT_BYTES", ctx: ctx) { return }
-
-    if incrementAndCheckNodeCount(ctx: ctx) { return }
-    ctx.onEvent(.comment(text))
-}
-
-// swiftlint:disable closure_parameter_position
-nonisolated(unsafe) private let saxPI: processingInstructionSAXFunc = {
-    userCtx, target, data in
-    // swiftlint:enable closure_parameter_position
-    guard let ctx = saxContext(from: userCtx) else { return }
-    guard ctx.error == nil else { return }
-    ctx.onEvent(.processingInstruction(
-        target: saxString(from: target) ?? "",
-        data: saxString(from: data)
-    ))
-}
