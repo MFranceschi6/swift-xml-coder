@@ -6,6 +6,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- `FuzzTests/run_fuzzer.sh`: tightened manual `swiftc` module search paths to use `Modules/`,
+  `SwiftXMLCoderCShim.build`, and `SwiftXMLCoderOwnership6.build` explicitly instead of the whole
+  release bin directory. This avoids `SwiftXMLCoderCShim` module redefinition collisions from
+  sibling `*-tool.build` outputs in GitHub Actions fuzz runs. The script now also falls back to
+  linking SPM-produced object files when static archives are unavailable on the host platform.
+
 ### Added (Pillar I.5 — Benchmark Regression CI)
 
 - **`.github/workflows/benchmarks.yml`** — new CI workflow that runs on every PR to `main`.
