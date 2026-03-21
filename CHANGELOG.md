@@ -14,6 +14,25 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   on the PR but do **not** block merging (`continue-on-error: true`). Results are uploaded
   as a GitHub Actions artifact (30-day retention, keyed by commit SHA).
 
+### Added (Pillar III.1 — Fuzz Testing)
+
+- **`FuzzTests/`** — standalone SPM package containing two libFuzzer harnesses:
+  - `FuzzXMLParser` — exercises `XMLTreeParser.parse(data:)` with arbitrary byte sequences.
+    Invariant: any input must produce either a valid `XMLTreeDocument` or a typed
+    `XMLParsingError`; crashes and memory errors are reported as failures.
+  - `FuzzXMLDecoder` — exercises the full `XMLDecoder` pipeline (parse → tree → Codable)
+    against a representative `FuzzPayload` type with optional fields.
+- **`FuzzTests/run_fuzzer.sh`** — builds each harness with `swiftc -parse-as-library
+  -sanitize=address,fuzzer` (linking all SPM-produced static archives) and runs it against
+  the seed corpus for `FUZZ_TIME` seconds (default 60). Crash reproducers are saved to
+  `ARTIFACT_DIR`.
+- **`FuzzTests/corpus/xml/`** — seed corpus with 5 XML inputs covering well-formed elements,
+  attributes, namespaces, CDATA, and self-closing tags to guide initial coverage.
+- **`.github/workflows/fuzz.yml`** — nightly CI job (02:00 UTC) running both harnesses
+  for 120 seconds on `ubuntu-22.04` with Swift 6.1. Crash reproducers are uploaded as
+  90-day artifacts. A separate `typecheck` job runs on every push/PR to ensure the
+  harness code compiles and does not silently rot.
+
 ## [1.1.0] — 2026-03-21
 
 ### Added (Pillar VII.5 — Source Position Diagnostics)
