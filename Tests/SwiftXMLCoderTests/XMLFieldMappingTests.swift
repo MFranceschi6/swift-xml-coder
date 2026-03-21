@@ -431,8 +431,8 @@ final class XMLFieldMappingTests: XCTestCase {
     }
 
     func test_ignoredField_nonOptional_throwsOnDecode() throws {
-        // A non-Optional field marked .ignored cannot be decoded: the decoder has no
-        // way to produce a value for it. Expect [XML6_6_IGNORED_FIELD_DECODE].
+        // A non-Optional scalar field marked .ignored cannot be decoded.
+        // Expect [XML6_6_IGNORED_FIELD_DECODE] via the scalar decode path.
         struct Strict: Decodable {
             var host: String
             var computed: String
@@ -441,6 +441,25 @@ final class XMLFieldMappingTests: XCTestCase {
         let xml = Data("<Strict><host>localhost</host><computed>ignored</computed></Strict>".utf8)
         let decoder = XMLDecoder(configuration: .init(rootElementName: "Strict", fieldCodingOverrides: overrides))
         XCTAssertThrowsError(try decoder.decode(Strict.self, from: xml)) { error in
+            guard case XMLParsingError.parseFailed(let msg) = error else {
+                return XCTFail("Expected XMLParsingError.parseFailed, got \(error)")
+            }
+            XCTAssertTrue(msg?.contains("XML6_6_IGNORED_FIELD_DECODE") == true)
+        }
+    }
+
+    func test_ignoredField_nonOptional_nonScalar_throwsOnDecode() throws {
+        // A non-Optional non-scalar field marked .ignored cannot be decoded.
+        // Expect [XML6_6_IGNORED_FIELD_DECODE] via the generic Decodable decode path.
+        struct Inner: Decodable { var x: Int }
+        struct Outer: Decodable {
+            var name: String
+            var nested: Inner
+        }
+        let overrides = XMLFieldCodingOverrides().setting(path: [], key: "nested", as: .ignored)
+        let xml = Data("<Outer><name>test</name><nested><x>1</x></nested></Outer>".utf8)
+        let decoder = XMLDecoder(configuration: .init(rootElementName: "Outer", fieldCodingOverrides: overrides))
+        XCTAssertThrowsError(try decoder.decode(Outer.self, from: xml)) { error in
             guard case XMLParsingError.parseFailed(let msg) = error else {
                 return XCTFail("Expected XMLParsingError.parseFailed, got \(error)")
             }

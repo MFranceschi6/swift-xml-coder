@@ -266,12 +266,12 @@ final class XMLDecoderTests: XCTestCase {
         // Line 1: <Root>, line 2: <name> — 'missing' is absent
         let xml = "<Root>\n<name>Alice</name>\n</Root>"
         let decoder = XMLDecoder(configuration: .init(rootElementName: "Root"))
-        do {
-            _ = try decoder.decode(Payload.self, from: Data(xml.utf8))
-            XCTFail("Expected parseFailed to be thrown.")
-        } catch XMLParsingError.parseFailed(let message) {
+        XCTAssertThrowsError(try decoder.decode(Payload.self, from: Data(xml.utf8))) { error in
+            guard case XMLParsingError.parseFailed(let message) = error else {
+                return XCTFail("Expected XMLParsingError.parseFailed, got \(error)")
+            }
             XCTAssertTrue(
-                message?.contains("line") == true,
+                (message ?? "").contains("line"),
                 "Error message should contain 'line' position info but was: \(message ?? "<nil>")"
             )
         }
@@ -288,12 +288,12 @@ final class XMLDecoderTests: XCTestCase {
             rootElementName: "Root",
             fieldCodingOverrides: overrides
         ))
-        do {
-            _ = try decoder.decode(Payload.self, from: Data(xml.utf8))
-            XCTFail("Expected parseFailed to be thrown.")
-        } catch XMLParsingError.parseFailed(let message) {
+        XCTAssertThrowsError(try decoder.decode(Payload.self, from: Data(xml.utf8))) { error in
+            guard case XMLParsingError.parseFailed(let message) = error else {
+                return XCTFail("Expected XMLParsingError.parseFailed, got \(error)")
+            }
             XCTAssertTrue(
-                message?.contains("line") == true,
+                (message ?? "").contains("line"),
                 "Attribute error message should contain 'line' position info but was: \(message ?? "<nil>")"
             )
         }
