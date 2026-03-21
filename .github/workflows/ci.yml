@@ -303,6 +303,42 @@ jobs:
         run: swift test --jobs 1 --parallel --num-workers 1
 
   # ──────────────────────────────────────────────────────────────────────────
+  # concurrency — runs XMLConcurrencyStressTests under ThreadSanitizer.
+  # Detects data races in the encode/decode/parse pipelines and verifies that
+  # the LibXML2.ensureInitialized() dispatch-once pattern is race-free.
+  # Linux-only: TSan is most reliable on the LLVM-backed Linux toolchain.
+  # ──────────────────────────────────────────────────────────────────────────
+  concurrency:
+    name: Concurrency (TSan, ubuntu-22.04)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Swift
+        uses: swift-actions/setup-swift@v2
+        with:
+          swift-version: "6.1"
+
+      - name: Cache SPM build artifacts
+        uses: actions/cache@v4
+        with:
+          path: .build
+          key: ubuntu-22.04-spm-swift6.1-tsan-${{ hashFiles('Package*.swift') }}
+          restore-keys: |
+            ubuntu-22.04-spm-swift6.1-tsan-
+
+      - name: Install System Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxml2-dev
+
+      - name: Run stress tests with ThreadSanitizer
+        run: |
+          swift test \
+            --filter XMLConcurrencyStressTests \
+            -Xswiftc -sanitize=thread
+
+  # ──────────────────────────────────────────────────────────────────────────
   # ios-simulator — iOS Simulator build (build only, no test run)
   # Verifies Track 1 (libxml2 via sysroot) compiles for iOS without pkgConfig.
   # ──────────────────────────────────────────────────────────────────────────
