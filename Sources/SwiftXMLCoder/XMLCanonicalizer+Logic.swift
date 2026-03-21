@@ -53,7 +53,14 @@ extension XMLDefaultCanonicalizer {
             standalone: document.metadata.standalone,
             canonicalization: canonicalizationMetadata
         )
-        return XMLTreeDocument(root: normalizedRoot, metadata: normalizedMetadata)
+        let normalizedPrologueNodes = normalizeDocumentLevelNodes(document.prologueNodes, options: options)
+        let normalizedEpilogueNodes = normalizeDocumentLevelNodes(document.epilogueNodes, options: options)
+        return XMLTreeDocument(
+            root: normalizedRoot,
+            metadata: normalizedMetadata,
+            prologueNodes: normalizedPrologueNodes,
+            epilogueNodes: normalizedEpilogueNodes
+        )
     }
 
     private func normalize(
@@ -76,6 +83,7 @@ extension XMLDefaultCanonicalizer {
         )
     }
 
+    // swiftlint:disable:next cyclomatic_complexity
     private func normalize(
         children: [XMLTreeNode],
         options: XMLNormalizationOptions
@@ -103,10 +111,28 @@ extension XMLDefaultCanonicalizer {
                 if options.includeComments {
                     normalizedChildren.append(.comment(value))
                 }
+            case .processingInstruction(let target, let data):
+                if options.includeProcessingInstructions {
+                    normalizedChildren.append(.processingInstruction(target: target, data: data))
+                }
             }
         }
 
         return normalizedChildren
+    }
+
+    private func normalizeDocumentLevelNodes(
+        _ nodes: [XMLDocumentNode],
+        options: XMLNormalizationOptions
+    ) -> [XMLDocumentNode] {
+        nodes.filter { node in
+            switch node {
+            case .comment:
+                return options.includeComments
+            case .processingInstruction:
+                return options.includeProcessingInstructions
+            }
+        }
     }
 
     private func normalizeText(

@@ -6,6 +6,42 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added (XML-R2 — PI/Doctype/Comment Fidelity)
+
+- **`XMLDocumentNode`** — new `Sendable, Equatable, Codable` enum representing nodes that can
+  appear at the document level (outside the root element): `.comment(String)` and
+  `.processingInstruction(target:data:)`.
+- **`XMLTreeNode.processingInstruction(target:data:)`** — new case enabling processing
+  instructions inside element children to survive parse → write round-trips. Previously silently
+  dropped by `XMLTreeParser`.
+- **`XMLTreeDocument.prologueNodes`** / **`XMLTreeDocument.epilogueNodes`** — `[XMLDocumentNode]`
+  arrays capturing PIs and comments that appear before/after the root element in the parsed
+  document. Default `[]`; backward-compatible.
+- **`XMLDoctype`** — new `Sendable, Equatable, Codable` struct holding the `name`, `systemID`,
+  and `publicID` of a `<!DOCTYPE ...>` declaration.
+- **`XMLDocumentStructuralMetadata.doctype`** — `XMLDoctype?` field populated from libxml2's
+  internal DTD subset when parsing XML with a DOCTYPE declaration. Decoded as `nil` from older
+  encoded data (backward-compatible optional field).
+- **`XMLNormalizationOptions.includeProcessingInstructions`** — new `Bool` flag (default
+  `false`) controlling whether PI nodes are preserved during canonicalization, analogous to the
+  existing `includeComments` flag.
+- **15 new tests** in `XMLStructuralFidelityTests` covering PI round-trips inside elements,
+  document-level prologue/epilogue parsing and writing, SYSTEM/PUBLIC DOCTYPE extraction, and
+  `XMLTreeDocument` equality with the new fields.
+
+### Changed (XML-R2 — PI/Doctype/Comment Fidelity)
+
+- `XMLTreeParser` now captures `XML_PI_NODE` children inside elements, walks the document-level
+  node list to populate `prologueNodes`/`epilogueNodes`, and extracts DOCTYPE from
+  `xmlDocPtr->intSubset`.
+- `XMLTreeWriter` now writes `.processingInstruction` children via `xmlNewPI`, inserts prologue
+  nodes as prev-siblings of the root element (`xmlAddPrevSibling`), appends epilogue nodes as
+  next-siblings (`xmlAddNextSibling`), and writes DOCTYPE via `xmlCreateIntSubset`.
+- `XMLCanonicalizer` propagates `prologueNodes`/`epilogueNodes` through normalization, filtering
+  them by `includeProcessingInstructions` and `includeComments` options.
+- `SwiftXMLCoder.docc/SwiftXMLCoder.md`: `XMLDocumentNode` and `XMLDoctype` added to the
+  "Document & Tree" topics section.
+
 ## [1.2.0] — 2026-03-21
 
 ### Changed

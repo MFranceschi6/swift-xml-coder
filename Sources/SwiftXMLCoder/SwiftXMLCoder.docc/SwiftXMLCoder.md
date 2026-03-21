@@ -41,11 +41,13 @@ let decoded = try decoder.decode(Book.self, from: data)
 - ``XMLTreeDocument``
 - ``XMLTreeElement``
 - ``XMLTreeNode``
+- ``XMLDocumentNode``
 - ``XMLTreeAttribute``
 - ``XMLTreeParser``
 - ``XMLTreeWriter``
 - ``XMLNodeStructuralMetadata``
 - ``XMLDocumentStructuralMetadata``
+- ``XMLDoctype``
 
 ### Streaming
 

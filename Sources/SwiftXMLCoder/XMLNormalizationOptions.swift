@@ -15,6 +15,8 @@ public struct XMLNormalizationOptions: Sendable, Hashable {
     public let deterministicSerializationMode: XMLTreeWriter.DeterministicSerializationMode
     /// When `true`, XML comment nodes are preserved in the output. Defaults to `false`.
     public let includeComments: Bool
+    /// When `true`, processing instruction nodes are preserved in the output. Defaults to `false`.
+    public let includeProcessingInstructions: Bool
     /// When `true`, CDATA sections are converted to plain text nodes. Defaults to `true`.
     public let convertCDATAIntoText: Bool
     /// The output encoding declaration written in the XML prolog (e.g. `"UTF-8"`).
@@ -31,6 +33,7 @@ public struct XMLNormalizationOptions: Sendable, Hashable {
         whitespaceTextNodePolicy: XMLTreeWriter.WhitespaceTextNodePolicy = .normalizeAndTrim,
         deterministicSerializationMode: XMLTreeWriter.DeterministicSerializationMode = .stable,
         includeComments: Bool = false,
+        includeProcessingInstructions: Bool = false,
         convertCDATAIntoText: Bool = true,
         outputEncoding: String = "UTF-8",
         prettyPrintedOutput: Bool = false
@@ -40,6 +43,7 @@ public struct XMLNormalizationOptions: Sendable, Hashable {
         self.whitespaceTextNodePolicy = whitespaceTextNodePolicy
         self.deterministicSerializationMode = deterministicSerializationMode
         self.includeComments = includeComments
+        self.includeProcessingInstructions = includeProcessingInstructions
         self.convertCDATAIntoText = convertCDATAIntoText
         self.outputEncoding = outputEncoding
         self.prettyPrintedOutput = prettyPrintedOutput
