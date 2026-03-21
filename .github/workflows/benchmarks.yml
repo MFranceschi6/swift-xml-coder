@@ -1,6 +1,8 @@
 name: Benchmarks
 
 on:
+  push:
+    branches: ["main"]
   pull_request:
     branches: ["main"]
 
@@ -10,14 +12,13 @@ concurrency:
 
 jobs:
   # ──────────────────────────────────────────────────────────────────────────
-  # benchmark-regression — run benchmarks on PRs and compare against the
-  # committed i2-baseline. Warning-only: regressions annotate the PR but
-  # do not block merging (continue-on-error: true).
-  #
-  # Requires macOS 13+ (Benchmarks/Package.swift: .macOS(.v13)).
+  # update-baseline: runs on every push to main.
+  # Generates a ci-main baseline on the CI runner and stores it in the
+  # Actions cache so PRs can restore it without re-running on main.
   # ──────────────────────────────────────────────────────────────────────────
-  regression:
-    name: Benchmark Regression
+  update-baseline:
+    name: Update Benchmark Baseline (main)
+    if: github.event_name == 'push'
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
@@ -38,19 +39,88 @@ jobs:
       - name: Install jemalloc
         run: brew install jemalloc
 
-      - name: Compare benchmarks against i2-baseline
+      - name: Generate ci-main baseline
+        run: |
+          cd Benchmarks
+          swift package --allow-writing-to-package-directory \
+            benchmark baseline update ci-main
+
+      - name: Cache ci-main baseline
+        uses: actions/cache/save@v4
+        with:
+          path: Benchmarks/.benchmarkBaselines/SwiftXMLCoderBenchmarks/ci-main
+          key: benchmark-baseline-main-${{ github.sha }}
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # regression: runs on every PR to main.
+  # Restores the ci-main baseline from cache (written by update-baseline on
+  # the last main push). Falls back to regenerating it from origin/main on
+  # the same runner if the cache is cold. Then runs PR benchmarks and
+  # compares. Warning-only: does not block merging.
+  # ──────────────────────────────────────────────────────────────────────────
+  regression:
+    name: Benchmark Regression
+    if: github.event_name == 'pull_request'
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # needed for the fallback git checkout of origin/main
+
+      - name: Setup Swift
+        uses: swift-actions/setup-swift@v2
+        with:
+          swift-version: "6.1"
+
+      - name: Cache Benchmarks SPM
+        uses: actions/cache@v4
+        with:
+          path: Benchmarks/.build
+          key: macos-15-benchmarks-spm-${{ hashFiles('Benchmarks/Package.swift') }}
+          restore-keys: |
+            macos-15-benchmarks-spm-
+
+      - name: Install jemalloc
+        run: brew install jemalloc
+
+      - name: Restore ci-main baseline from cache
+        id: cache-restore
+        uses: actions/cache/restore@v4
+        with:
+          # Exact key will never match on a PR — the restore-key picks up the
+          # latest entry written by update-baseline on any main push.
+          key: benchmark-baseline-main-${{ github.sha }}
+          restore-keys: |
+            benchmark-baseline-main-
+          path: Benchmarks/.benchmarkBaselines/SwiftXMLCoderBenchmarks/ci-main
+
+      - name: Generate ci-main baseline (cold-cache fallback)
+        if: steps.cache-restore.outputs.cache-matched-key == ''
+        run: |
+          git checkout origin/main
+          cd Benchmarks
+          swift package --allow-writing-to-package-directory \
+            benchmark baseline update ci-main
+          cp -r .benchmarkBaselines/SwiftXMLCoderBenchmarks/ci-main /tmp/ci-main-baseline
+          git checkout ${{ github.sha }}
+          mkdir -p Benchmarks/.benchmarkBaselines/SwiftXMLCoderBenchmarks/
+          cp -r /tmp/ci-main-baseline \
+            Benchmarks/.benchmarkBaselines/SwiftXMLCoderBenchmarks/ci-main
+
+      - name: Compare PR benchmarks against main baseline
         id: benchmark
         run: |
           set -o pipefail
           cd Benchmarks
-          swift package --disable-sandbox benchmark baseline check i2-baseline \
+          swift package --allow-writing-to-package-directory \
+            benchmark baseline check ci-main \
             --format markdown 2>&1 | tee /tmp/benchmark-comparison.md
         continue-on-error: true
 
       - name: Post comparison to step summary
         if: always()
         run: |
-          echo "## Benchmark Regression Check (vs i2-baseline)" >> "$GITHUB_STEP_SUMMARY"
+          echo "## Benchmark Regression Check (PR vs main)" >> "$GITHUB_STEP_SUMMARY"
           if [ -f /tmp/benchmark-comparison.md ]; then
             cat /tmp/benchmark-comparison.md >> "$GITHUB_STEP_SUMMARY"
           else
@@ -60,7 +130,7 @@ jobs:
       - name: Warn on regression
         if: steps.benchmark.outcome == 'failure'
         run: |
-          echo "::warning file=Benchmarks/Package.swift::Benchmark regression detected vs i2-baseline — see the job step summary for details."
+          echo "::warning file=Benchmarks/Package.swift::Benchmark regression detected (PR vs main) — see the job step summary for details."
 
       - name: Upload benchmark results
         if: always()
