@@ -6,6 +6,24 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added (Pillar VII — Macros: @XMLText, @XMLIgnore, @XMLRootNamespace)
+
+- **`XMLFieldNodeKind.textContent`** — new case that routes a Codable field to the text content
+  of the parent XML element (rather than a child element). Enables the `<price currency="USD">9.99</price>`
+  pattern where attributes and a scalar value coexist on the same element.
+- **`XMLTextContent<Value>` property wrapper** — mechanism A (highest precedence) conformance to
+  `.textContent` node kind. Mirrors the existing `XMLAttribute<Value>` pattern.
+- **`@XMLText` macro** — peer macro detected by `@XMLCodable`; synthesises `.textContent` into
+  `xmlFieldNodeKinds`. Requires a scalar `Codable` type on the annotated property.
+- **`XMLFieldNodeKind.ignored`** — new case that silently skips a field during encode and treats it
+  as absent during decode (so `Optional` fields decode as `nil`; non-optional fields with a default
+  value are unaffected by XML round-trips).
+- **`@XMLIgnore` macro** — peer macro detected by `@XMLCodable`; synthesises `.ignored` into
+  `xmlFieldNodeKinds`. Fields must be `Optional` or have a default value to avoid decode errors.
+- **`@XMLRootNamespace(uri:)` macro** — extension macro that generates an `XMLRootNode` conformance
+  supplying `xmlRootElementName` (type name as default) and `xmlRootElementNamespaceURI` on the
+  annotated struct or class.
+
 ### Changed (Pillar I.3 — Allocation Optimisations)
 
 - **Key-name transform cache** — `_XMLKeyedEncodingContainer` and `_XMLKeyedDecodingContainer`

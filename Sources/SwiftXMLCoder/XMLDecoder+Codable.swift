@@ -545,12 +545,20 @@ struct _XMLKeyedDecodingContainer<Key: CodingKey>: KeyedDecodingContainerProtoco
     }
 
     func contains(_ key: Key) -> Bool {
+        // Ignored fields are treated as absent.
+        if resolvedNodeKind(for: key, valueType: Never.self) == .ignored {
+            return false
+        }
         let name = xmlName(for: key)
         return decoder.firstChild(named: name, in: decoder.node) != nil ||
             decoder.attribute(named: name, in: decoder.node) != nil
     }
 
     func decodeNil(forKey key: Key) throws -> Bool {
+        // Ignored fields are always nil.
+        if resolvedNodeKind(for: key, valueType: Never.self) == .ignored {
+            return true
+        }
         let name = xmlName(for: key)
         if decoder.attribute(named: name, in: decoder.node) != nil {
             return false
@@ -580,6 +588,17 @@ struct _XMLKeyedDecodingContainer<Key: CodingKey>: KeyedDecodingContainerProtoco
         let nodeKind = resolvedNodeKind(for: key, valueType: type)
         if nodeKind == .attribute {
             return try decodeAttribute(type, forKey: key)
+        }
+
+        if nodeKind == .ignored {
+            throw XMLParsingError.parseFailed(
+                message: "[XML6_6_IGNORED_FIELD_DECODE] Field '\(key.stringValue)' is marked @XMLIgnore — " +
+                    "use an Optional type or provide a default value via init(from:) to suppress this error."
+            )
+        }
+
+        if nodeKind == .textContent {
+            return try decodeTextContent(type, forKey: key)
         }
 
         guard let element = decoder.firstChild(named: xmlName(for: key), in: decoder.node) else {
@@ -685,6 +704,17 @@ struct _XMLKeyedDecodingContainer<Key: CodingKey>: KeyedDecodingContainerProtoco
             return try decodeAttribute(type, forKey: key)
         }
 
+        if nodeKind == .ignored {
+            throw XMLParsingError.parseFailed(
+                message: "[XML6_6_IGNORED_FIELD_DECODE] Field '\(key.stringValue)' is marked @XMLIgnore — " +
+                    "use an Optional type or provide a default value via init(from:) to suppress this error."
+            )
+        }
+
+        if nodeKind == .textContent {
+            return try decodeTextContent(type, forKey: key)
+        }
+
         guard let element = decoder.firstChild(named: xmlName(for: key), in: decoder.node) else {
             throw XMLParsingError.parseFailed(
                 message: "[XML6_5_KEY_NOT_FOUND] Missing scalar key '\(key.stringValue)' at path '\(renderPath(codingPath))'."
@@ -693,6 +723,40 @@ struct _XMLKeyedDecodingContainer<Key: CodingKey>: KeyedDecodingContainerProtoco
         guard let scalar: T = try decoder.decodeScalar(type, from: element, codingPath: codingPath + [key]) else {
             throw XMLParsingError.parseFailed(
                 message: "[XML6_5_SCALAR_PARSE_FAILED] Unable to decode scalar key '\(key.stringValue)' at path '\(renderPath(codingPath))'."
+            )
+        }
+        return scalar
+    }
+
+    private func decodeTextContent<T: Decodable>(_ type: T.Type, forKey key: Key) throws -> T {
+        let textPath = codingPath + [key]
+        let lexical = decoder.lexicalText(of: decoder.node)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+
+        if let wrapperType = type as? _XMLTextContentDecodableValue.Type {
+            let wrapped = try wrapperType._xmlDecodeTextContentLexicalValue(
+                lexical,
+                using: decoder,
+                codingPath: textPath,
+                key: key.stringValue
+            )
+            guard let typed = wrapped as? T else {
+                throw XMLParsingError.parseFailed(
+                    message: "[XML6_6_TEXT_CONTENT_DECODE_CAST_FAILED] Unable to cast decoded text content '\(key.stringValue)' to expected type."
+                )
+            }
+            return typed
+        }
+
+        guard let scalar: T = try decoder.decodeScalarFromLexical(
+            lexical,
+            as: type,
+            codingPath: textPath,
+            localName: key.stringValue,
+            isAttribute: false
+        ) else {
+            throw XMLParsingError.parseFailed(
+                message: "[XML6_6_TEXT_CONTENT_DECODE_UNSUPPORTED] Key '\(key.stringValue)' is marked as text content " +
+                    "but the value could not be decoded as a scalar at path '\(renderPath(codingPath))'."
             )
         }
         return scalar

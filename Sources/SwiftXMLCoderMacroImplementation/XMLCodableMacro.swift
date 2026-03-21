@@ -175,13 +175,15 @@ public struct XMLCodableMacro: ExtensionMacro {
 // MARK: - AttributeListSyntax helpers
 
 private extension AttributeListSyntax {
-    /// Returns `.attribute` or `.element` if a recognised annotation is present, else `nil`.
+    /// Returns `.attribute`, `.element`, `.textContent`, or `.ignored` if a recognised annotation is present, else `nil`.
     var xmlFieldAnnotationKind: String? {
         for attr in self {
             guard let attrSyntax = attr.as(AttributeSyntax.self) else { continue }
             let name = attrSyntax.attributeName.trimmedDescription
             if name == "XMLAttribute" { return ".attribute" }
             if name == "XMLChild"     { return ".element" }
+            if name == "XMLText"      { return ".textContent" }
+            if name == "XMLIgnore"    { return ".ignored" }
         }
         return nil
     }

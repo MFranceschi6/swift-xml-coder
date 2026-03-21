@@ -10,5 +10,8 @@ struct SwiftXMLCoderMacroPlugin: CompilerPlugin {
         XMLCodableMacro.self,
         XMLDateFormatMacro.self,
         XMLExpandEmptyMacro.self,
+        XMLIgnoreMacro.self,
+        XMLNamespaceMacro.self,
+        XMLTextMacro.self,
     ]
 }
