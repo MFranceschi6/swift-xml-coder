@@ -117,10 +117,12 @@ extension XMLTreeParser {
             depth: depth,
             parseState: &parseState
         )
+        let lineNo = Int(xmlGetLineNo(nodePointer))
         let metadata = XMLNodeStructuralMetadata(
             sourceOrder: sourceOrder,
             originalPrefix: prefix,
-            wasSelfClosing: nil
+            wasSelfClosing: nil,
+            sourceLine: lineNo > 0 ? lineNo : nil
         )
 
         return XMLTreeElement(

@@ -245,4 +245,59 @@ final class XMLDecoderTests: XCTestCase {
         let result = try decoder.decode(MultiplierPayload.self, from: Data(xml.utf8))
         XCTAssertEqual(result.value, 21)
     }
+
+    // MARK: - VII.5 Source position diagnostics
+
+    func test_sourceLine_populatedAfterParsing() throws {
+        let xml = """
+            <Root>
+                <Child>hello</Child>
+            </Root>
+            """
+        let parser = XMLTreeParser()
+        let doc = try parser.parse(data: Data(xml.utf8))
+        XCTAssertNotNil(doc.root.metadata.sourceLine, "Root element should carry a source line number after parsing.")
+    }
+
+    func test_decode_keyNotFound_errorMessageIncludesLineNumber() throws {
+        struct Payload: Decodable {
+            let missing: String
+        }
+        // Line 1: <Root>, line 2: <name> — 'missing' is absent
+        let xml = "<Root>\n<name>Alice</name>\n</Root>"
+        let decoder = XMLDecoder(configuration: .init(rootElementName: "Root"))
+        do {
+            _ = try decoder.decode(Payload.self, from: Data(xml.utf8))
+            XCTFail("Expected parseFailed to be thrown.")
+        } catch XMLParsingError.parseFailed(let message) {
+            let msg = try XCTUnwrap(message)
+            XCTAssertTrue(
+                msg.contains("line"),
+                "Error message should contain 'line' position info but was: \(msg)"
+            )
+        }
+    }
+
+    func test_decode_attributeNotFound_errorMessageIncludesLineNumber() throws {
+        struct Payload: Decodable {
+            let id: String
+            enum CodingKeys: String, CodingKey { case id }
+        }
+        let xml = "<Root>\n</Root>"
+        let overrides = XMLFieldCodingOverrides().setting(path: [], key: "id", as: .attribute)
+        let decoder = XMLDecoder(configuration: .init(
+            rootElementName: "Root",
+            fieldCodingOverrides: overrides
+        ))
+        do {
+            _ = try decoder.decode(Payload.self, from: Data(xml.utf8))
+            XCTFail("Expected parseFailed to be thrown.")
+        } catch XMLParsingError.parseFailed(let message) {
+            let msg = try XCTUnwrap(message)
+            XCTAssertTrue(
+                msg.contains("line"),
+                "Attribute error message should contain 'line' position info but was: \(msg)"
+            )
+        }
+    }
 }

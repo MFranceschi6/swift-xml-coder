@@ -161,6 +161,13 @@ final class _XMLTreeDecoder: Decoder {
         return accumulated
     }
 
+    /// Returns a location suffix like `" (line 42)"` when the element carries source position
+    /// information, or an empty string when the element was constructed programmatically.
+    func sourceLocation(of element: XMLTreeElement) -> String {
+        guard let line = element.metadata.sourceLine else { return "" }
+        return " (line \(line))"
+    }
+
     func isNilElement(_ element: XMLTreeElement) -> Bool {
         for child in element.children {
             if case .element = child { return false }
@@ -603,7 +610,8 @@ struct _XMLKeyedDecodingContainer<Key: CodingKey>: KeyedDecodingContainerProtoco
 
         guard let element = decoder.firstChild(named: xmlName(for: key), in: decoder.node) else {
             throw XMLParsingError.parseFailed(
-                message: "[XML6_5_KEY_NOT_FOUND] Missing key '\(key.stringValue)' at path '\(renderPath(codingPath))'."
+                message: "[XML6_5_KEY_NOT_FOUND] Missing key '\(key.stringValue)' " +
+                    "at path '\(renderPath(codingPath))'\(decoder.sourceLocation(of: decoder.node))."
             )
         }
 
@@ -613,7 +621,8 @@ struct _XMLKeyedDecodingContainer<Key: CodingKey>: KeyedDecodingContainerProtoco
         }
         if decoder.isKnownScalarType(type) {
             throw XMLParsingError.parseFailed(
-                message: "[XML6_5_SCALAR_PARSE_FAILED] Unable to decode scalar key '\(key.stringValue)' at path '\(renderPath(childPath))'."
+                message: "[XML6_5_SCALAR_PARSE_FAILED] Unable to decode scalar key '\(key.stringValue)' " +
+                    "at path '\(renderPath(childPath))'\(decoder.sourceLocation(of: element))."
             )
         }
 
@@ -641,7 +650,8 @@ struct _XMLKeyedDecodingContainer<Key: CodingKey>: KeyedDecodingContainerProtoco
 
         guard let element = decoder.firstChild(named: xmlName(for: key), in: decoder.node) else {
             throw XMLParsingError.parseFailed(
-                message: "[XML6_5_KEY_NOT_FOUND] Missing nested key '\(key.stringValue)' at path '\(renderPath(codingPath))'."
+                message: "[XML6_5_KEY_NOT_FOUND] Missing nested key '\(key.stringValue)' " +
+                    "at path '\(renderPath(codingPath))'\(decoder.sourceLocation(of: decoder.node))."
             )
         }
 
@@ -663,7 +673,8 @@ struct _XMLKeyedDecodingContainer<Key: CodingKey>: KeyedDecodingContainerProtoco
 
         guard let element = decoder.firstChild(named: xmlName(for: key), in: decoder.node) else {
             throw XMLParsingError.parseFailed(
-                message: "[XML6_5_KEY_NOT_FOUND] Missing nested unkeyed key '\(key.stringValue)' at path '\(renderPath(codingPath))'."
+                message: "[XML6_5_KEY_NOT_FOUND] Missing nested unkeyed key '\(key.stringValue)' " +
+                    "at path '\(renderPath(codingPath))'\(decoder.sourceLocation(of: decoder.node))."
             )
         }
 
@@ -687,7 +698,8 @@ struct _XMLKeyedDecodingContainer<Key: CodingKey>: KeyedDecodingContainerProtoco
     func superDecoder(forKey key: Key) throws -> Decoder {
         guard let element = decoder.firstChild(named: xmlName(for: key), in: decoder.node) else {
             throw XMLParsingError.parseFailed(
-                message: "[XML6_5_KEY_NOT_FOUND] Missing super key '\(key.stringValue)' at path '\(renderPath(codingPath))'."
+                message: "[XML6_5_KEY_NOT_FOUND] Missing super key '\(key.stringValue)' " +
+                    "at path '\(renderPath(codingPath))'\(decoder.sourceLocation(of: decoder.node))."
             )
         }
 
@@ -717,12 +729,14 @@ struct _XMLKeyedDecodingContainer<Key: CodingKey>: KeyedDecodingContainerProtoco
 
         guard let element = decoder.firstChild(named: xmlName(for: key), in: decoder.node) else {
             throw XMLParsingError.parseFailed(
-                message: "[XML6_5_KEY_NOT_FOUND] Missing scalar key '\(key.stringValue)' at path '\(renderPath(codingPath))'."
+                message: "[XML6_5_KEY_NOT_FOUND] Missing scalar key '\(key.stringValue)' " +
+                    "at path '\(renderPath(codingPath))'\(decoder.sourceLocation(of: decoder.node))."
             )
         }
         guard let scalar: T = try decoder.decodeScalar(type, from: element, codingPath: codingPath + [key]) else {
             throw XMLParsingError.parseFailed(
-                message: "[XML6_5_SCALAR_PARSE_FAILED] Unable to decode scalar key '\(key.stringValue)' at path '\(renderPath(codingPath))'."
+                message: "[XML6_5_SCALAR_PARSE_FAILED] Unable to decode scalar key '\(key.stringValue)' " +
+                    "at path '\(renderPath(codingPath))'\(decoder.sourceLocation(of: element))."
             )
         }
         return scalar
@@ -783,7 +797,8 @@ struct _XMLKeyedDecodingContainer<Key: CodingKey>: KeyedDecodingContainerProtoco
     private func decodeAttribute<T: Decodable>(_ type: T.Type, forKey key: Key) throws -> T {
         guard let attribute = decoder.attribute(named: xmlName(for: key), in: decoder.node) else {
             throw XMLParsingError.parseFailed(
-                message: "[XML6_6_ATTRIBUTE_NOT_FOUND] Missing attribute '\(key.stringValue)' at path '\(renderPath(codingPath))'."
+                message: "[XML6_6_ATTRIBUTE_NOT_FOUND] Missing attribute '\(key.stringValue)' " +
+                    "at path '\(renderPath(codingPath))'\(decoder.sourceLocation(of: decoder.node))."
             )
         }
 

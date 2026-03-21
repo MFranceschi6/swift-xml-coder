@@ -6,6 +6,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added (Pillar VII.5 — Source Position Diagnostics)
+
+- **`XMLNodeStructuralMetadata.sourceLine`** — new optional `Int` property that carries the
+  source line number of an XML element's opening tag as reported by libxml2's `xmlGetLineNo`.
+  `nil` for programmatically constructed elements.
+- **Decode error messages now include source position** — `[XML6_5_KEY_NOT_FOUND]`,
+  `[XML6_5_SCALAR_PARSE_FAILED]`, and `[XML6_6_ATTRIBUTE_NOT_FOUND]` errors append
+  `(line N)` when the relevant element carries source line information, making it easier
+  to locate the offending node in the original XML document.
+
 ### Added (Pillar IV.4 — Community Infrastructure)
 
 - **`CONTRIBUTING.md`** — contributor guide covering requirements, branch naming (`feature/<slug>` /

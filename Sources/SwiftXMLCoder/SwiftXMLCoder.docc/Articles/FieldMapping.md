@@ -67,6 +67,44 @@ The `path` parameter is the dotted coding-key path leading to the field. For top
 
 When using `@XMLCodable`, additional peer macros let you set per-property encoding behaviour without touching the encoder/decoder configuration.
 
+### Text Content
+
+`@XMLText` marks a field as the text content of the parent element, rather than a child element. Use this when the XML pattern mixes attributes and a scalar value on the same element:
+
+```swift
+@XMLCodable
+struct Price: Codable {
+    @XMLAttribute var currency: String
+    @XMLText var amount: Double
+}
+
+// Encodes as: <Price currency="USD">9.99</Price>
+// Decodes from the same.
+```
+
+Without macros, the equivalent property wrapper is ``XMLTextContent``:
+
+```swift
+struct Price: Codable {
+    @XMLAttribute var currency: String
+    var amount: XMLTextContent<Double>
+}
+```
+
+> Note: Only one field per type may use `.textContent`. Multiple text-content fields are undefined behaviour.
+
+### Ignoring Fields
+
+`@XMLIgnore` excludes a field from XML serialisation entirely. It is silently skipped on encode and treated as absent on decode. The field must be `Optional` or have a default value, otherwise the decoder throws `[XML6_6_IGNORED_FIELD_DECODE]`:
+
+```swift
+@XMLCodable
+struct Config: Codable {
+    var host: String
+    @XMLIgnore var _cachedChecksum: String?  // never written to or read from XML
+}
+```
+
 ### Date Format
 
 `@XMLDateFormat` declares the XSD date strategy for a single `Date` or `Date?` property, overriding the global `dateEncodingStrategy`/`dateDecodingStrategy`:
@@ -110,11 +148,18 @@ The decoded value is semantically identical either way.
 
 ## Priority Chain
 
-When encoding or decoding a field, the encoder/decoder evaluates:
+When encoding or decoding a field, the encoder/decoder evaluates the following in order and uses the first match:
 
-1. Property wrapper (`XMLAttribute<Value>` or `XMLChild<Value>` Swift type)
-2. `XMLFieldCodingOverrideProvider.xmlFieldNodeKinds` (synthesised by `@XMLCodable`)
-3. `XMLFieldCodingOverrides` in configuration
-4. Default: `.element`
+1. **Property wrapper** — `XMLAttribute<Value>`, `XMLChild<Value>`, or `XMLTextContent<Value>` Swift type
+2. **Macro dict** — `XMLFieldCodingOverrideProvider.xmlFieldNodeKinds` (synthesised by `@XMLCodable`)
+3. **Runtime overrides** — `XMLFieldCodingOverrides` in encoder/decoder configuration
+4. **Default** — `.element`
 
-The first match wins.
+The four possible ``XMLFieldNodeKind`` values are:
+
+| Kind | Behaviour |
+|------|-----------|
+| `.element` | Default. Encodes as a child element `<key>value</key>`. |
+| `.attribute` | Encodes as an attribute `key="value"` on the parent element. |
+| `.textContent` | Encodes as the text content of the parent element. |
+| `.ignored` | Skipped on encode; treated as absent on decode. |
