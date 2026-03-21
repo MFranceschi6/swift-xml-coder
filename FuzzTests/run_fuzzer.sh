@@ -44,6 +44,7 @@ echo "    BIN_PATH: $BIN_PATH"
 MODULE_DIR="$BIN_PATH/Modules"
 CSHIM_MODULE_DIR="$BIN_PATH/SwiftXMLCoderCShim.build"
 OWNERSHIP_MODULE_DIR="$BIN_PATH/SwiftXMLCoderOwnership6.build"
+CLIBXML2_MODULE_DIR="$REPO_ROOT/Sources/CLibXML2"
 
 if [ ! -d "$MODULE_DIR" ]; then
     echo "error: expected Swift module directory at '$MODULE_DIR'" >&2
@@ -60,6 +61,22 @@ if [ ! -f "$CSHIM_MODULE_DIR/module.modulemap" ]; then
     exit 1
 fi
 
+if [ ! -f "$CLIBXML2_MODULE_DIR/module.modulemap" ]; then
+    echo "error: expected CLibXML2 module map at '$CLIBXML2_MODULE_DIR/module.modulemap'" >&2
+    exit 1
+fi
+
+LIBXML2_SWIFTC_FLAGS=()
+if command -v pkg-config >/dev/null 2>&1; then
+    read -r -a LIBXML2_CFLAGS <<< "$(pkg-config --cflags libxml-2.0 2>/dev/null)"
+    for flag in "${LIBXML2_CFLAGS[@]}"; do
+        LIBXML2_SWIFTC_FLAGS+=(-Xcc "$flag")
+    done
+fi
+
+if [ ${#LIBXML2_SWIFTC_FLAGS[@]} -eq 0 ] && [ -d "/usr/include/libxml2" ]; then
+    LIBXML2_SWIFTC_FLAGS+=(-Xcc -I/usr/include/libxml2)
+fi
 # ── Build + run each fuzz target ─────────────────────────────────────────────
 OVERALL_EXIT=0
 
@@ -101,8 +118,10 @@ for T in "${TARGETS[@]}"; do
         -I "$MODULE_DIR"
         -I "$CSHIM_MODULE_DIR"
         -I "$OWNERSHIP_MODULE_DIR"
+        -I "$CLIBXML2_MODULE_DIR"
         -L "$BIN_PATH"
         -module-name "$T"
+        "${LIBXML2_SWIFTC_FLAGS[@]}"
         "$SCRIPT_DIR/Sources/$T/$T.swift"
         -lxml2
         -o "$OUTDIR/$T"
