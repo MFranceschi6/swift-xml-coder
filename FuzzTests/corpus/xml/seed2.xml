@@ -1,0 +1,10 @@
+<Root id="1">
+    <items>
+        <item>a</item>
+        <item>b</item>
+    </items>
+    <nested>
+        <x>3.14</x>
+        <flag>true</flag>
+    </nested>
+</Root>
