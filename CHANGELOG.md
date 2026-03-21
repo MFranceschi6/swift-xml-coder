@@ -14,6 +14,43 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   sibling `*-tool.build` outputs in GitHub Actions fuzz runs. The script now also falls back to
   linking SPM-produced object files when static archives are unavailable on the host platform.
 
+### Added (Pillar II.1 — XMLStreamParser)
+
+- **`XMLStreamEvent`** — new `Sendable, Equatable` enum with 8 cases covering the full XML
+  event set: `startDocument`, `endDocument`, `startElement`, `endElement`, `text`, `cdata`,
+  `comment`, `processingInstruction`.
+- **`XMLStreamParser`** — SAX-style streaming parser backed by libxml2's `xmlSAXHandler`.
+  Emits `XMLStreamEvent` values in document order without materialising the full DOM tree,
+  making it suitable for large documents or pipeline processing.
+  - Sync callback API: `parse(data:onEvent:)` — synchronous, works on all Swift versions.
+    Swift 6.0+ overload uses typed throws (`throws(XMLParsingError)`).
+  - Async API: `events(for:) -> AsyncThrowingStream<XMLStreamEvent, Error>` (macOS 12+,
+    iOS 15+). Checks `Task.isCancelled` before each yield.
+  - Reuses `XMLTreeParser.Configuration` — whitespace policy, security limits, and logger
+    are fully shared between the two parser types.
+  - Enforces all security limits: `maxDepth`, `maxNodeCount`, `maxTextNodeBytes`,
+    `maxCDATABlockBytes`, `maxCommentBytes`, `maxInputBytes`, `maxAttributesPerElement`.
+- **`XMLTreeParser.Limits.maxCommentBytes`** — new backwards-compatible `Int?` limit
+  (default `nil`; `untrustedInputDefault()` caps at 256 KiB). Enforced by both
+  `XMLStreamParser` and `XMLTreeParser`.
+
+### Added (Pillar II.3 — XMLStreamWriter)
+
+- **`XMLStreamWriter`** — event-driven XML serialiser backed by libxml2's `xmlTextWriter`.
+  Consumes any `Sequence<XMLStreamEvent>` and produces well-formed UTF-8 `Data` without
+  passing through `XMLTreeDocument`.
+  - Sync API: `write<S: Sequence>(_ events: S) throws -> Data`. Swift 6.0+ uses typed throws.
+  - Async API: `write<S: AsyncSequence>(_ events: S) async throws -> Data` (macOS 12+).
+    Enables symmetric round-trip: `XMLStreamWriter().write(XMLStreamParser().events(for: data))`.
+  - `XMLStreamWriter.Configuration` — `encoding`, `prettyPrinted`, `expandEmptyElements`, `limits`.
+  - `XMLStreamWriter.WriterLimits` — `maxDepth`, `maxNodeCount`, `maxOutputBytes`,
+    `maxTextNodeBytes`, `maxCDATABlockBytes`, `maxCommentBytes`.
+    `untrustedOutputDefault()` static factory applies conservative caps.
+  - `expandEmptyElements: true` forces `<tag></tag>` long form instead of `<tag/>`.
+  - `prettyPrinted: true` emits indented, human-readable output (2-space indent via libxml2).
+  - Namespace declarations are written as explicit `xmlns[:prefix]="uri"` attributes, avoiding
+    libxml2's auto-emission which conflicted with manually specified declarations.
+
 ### Added (Pillar I.5 — Benchmark Regression CI)
 
 - **`.github/workflows/benchmarks.yml`** — new CI workflow that runs on every PR to `main`.
@@ -40,6 +77,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   for 120 seconds on `ubuntu-22.04` with Swift 6.1. Crash reproducers are uploaded as
   90-day artifacts. A separate `typecheck` job runs on every push/PR to ensure the
   harness code compiles and does not silently rot.
+
+### Added (Pillar III.2 — Concurrency Stress Testing)
+
+- **`Tests/SwiftXMLCoderTests/XMLConcurrencyStressTests.swift`** — eleven stress tests
+  covering both GCD (`DispatchQueue`) and Swift structured concurrency (`async/await`
+  with `TaskGroup`): shared encoder, shared decoder, per-task round-trip, shared parser,
+  concurrent `xmlInitParser()` first-use, and a mixed encode/decode/parse workload.
+  All six scenarios are exercised under both schedulers so TSan detects races regardless
+  of which threading model the caller uses.
+- **`.github/workflows/ci.yml`** — new `concurrency` job runs `XMLConcurrencyStressTests`
+  with `swift test -Xswiftc -sanitize=thread` on `ubuntu-22.04` / Swift 6.1 on every
+  push and PR.
 
 ## [1.1.0] — 2026-03-21
 

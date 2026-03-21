@@ -44,6 +44,8 @@ public struct XMLTreeParser: Sendable {
         public let maxTextNodeBytes: Int?
         /// Maximum size of any CDATA block in bytes. `nil` = unlimited.
         public let maxCDATABlockBytes: Int?
+        /// Maximum size of any XML comment in bytes. `nil` = unlimited.
+        public let maxCommentBytes: Int?
 
         /// Creates parser limits.
         public init(
@@ -52,7 +54,8 @@ public struct XMLTreeParser: Sendable {
             maxNodeCount: Int? = nil,
             maxAttributesPerElement: Int? = nil,
             maxTextNodeBytes: Int? = nil,
-            maxCDATABlockBytes: Int? = nil
+            maxCDATABlockBytes: Int? = nil,
+            maxCommentBytes: Int? = nil
         ) {
             self.maxInputBytes = maxInputBytes
             self.maxDepth = max(1, maxDepth)
@@ -60,12 +63,14 @@ public struct XMLTreeParser: Sendable {
             self.maxAttributesPerElement = maxAttributesPerElement
             self.maxTextNodeBytes = maxTextNodeBytes
             self.maxCDATABlockBytes = maxCDATABlockBytes
+            self.maxCommentBytes = maxCommentBytes
         }
 
         /// Sensible conservative limits for parsing input from untrusted sources.
         ///
         /// Caps: `maxInputBytes`=16 MiB, `maxDepth`=256, `maxNodeCount`=200,000,
-        /// `maxAttributesPerElement`=256, `maxTextNodeBytes`=1 MiB, `maxCDATABlockBytes`=4 MiB.
+        /// `maxAttributesPerElement`=256, `maxTextNodeBytes`=1 MiB, `maxCDATABlockBytes`=4 MiB,
+        /// `maxCommentBytes`=256 KiB.
         public static func untrustedInputDefault() -> Limits {
             Limits(
                 maxInputBytes: 16 * 1024 * 1024,
@@ -73,7 +78,8 @@ public struct XMLTreeParser: Sendable {
                 maxNodeCount: 200_000,
                 maxAttributesPerElement: 256,
                 maxTextNodeBytes: 1 * 1024 * 1024,
-                maxCDATABlockBytes: 4 * 1024 * 1024
+                maxCDATABlockBytes: 4 * 1024 * 1024,
+                maxCommentBytes: 256 * 1024
             )
         }
     }

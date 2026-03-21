@@ -6,3 +6,4 @@
 #include <libxml/xpathInternals.h>
 #include <libxml/xmlerror.h>
 #include <libxml/xmlsave.h>
+#include <libxml/xmlwriter.h>
