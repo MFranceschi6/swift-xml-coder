@@ -6,6 +6,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added (Pillar I.5 — Benchmark Regression CI)
+
+- **`.github/workflows/benchmarks.yml`** — new CI workflow that runs on every PR to `main`.
+  Executes `swift package benchmark baseline check i2-baseline` and posts a markdown
+  comparison table to the job step summary. Regressions emit a `::warning::` annotation
+  on the PR but do **not** block merging (`continue-on-error: true`). Results are uploaded
+  as a GitHub Actions artifact (30-day retention, keyed by commit SHA).
+
 ## [1.1.0] — 2026-03-21
 
 ### Added (Pillar VII.5 — Source Position Diagnostics)
