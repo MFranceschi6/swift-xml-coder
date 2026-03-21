@@ -12,7 +12,7 @@ final class XMLConcurrencyStressTests: XCTestCase {
     // CI runtime reasonable.
     private let iterations = 100
 
-    // MARK: - Shared encoder
+    // MARK: - Shared encoder (DispatchQueue)
 
     func test_encode_sharedEncoder_noDataRace() {
         // The same XMLEncoder instance is used from all concurrent tasks.
@@ -23,7 +23,7 @@ final class XMLConcurrencyStressTests: XCTestCase {
         }
     }
 
-    // MARK: - Shared decoder
+    // MARK: - Shared decoder (DispatchQueue)
 
     func test_decode_sharedDecoder_noDataRace() {
         let decoder = XMLDecoder(configuration: .init(rootElementName: "Payload"))
@@ -33,7 +33,7 @@ final class XMLConcurrencyStressTests: XCTestCase {
         }
     }
 
-    // MARK: - Concurrent round-trip
+    // MARK: - Concurrent round-trip (DispatchQueue)
 
     func test_encodeDecode_concurrent_roundTrip() {
         // Each task uses separate encoder/decoder instances so we exercise
@@ -50,7 +50,7 @@ final class XMLConcurrencyStressTests: XCTestCase {
         }
     }
 
-    // MARK: - Shared parser
+    // MARK: - Shared parser (DispatchQueue)
 
     func test_parse_sharedParser_noDataRace() {
         let parser = XMLTreeParser()
@@ -60,7 +60,7 @@ final class XMLConcurrencyStressTests: XCTestCase {
         }
     }
 
-    // MARK: - xmlInitParser concurrent first-use
+    // MARK: - xmlInitParser concurrent first-use (DispatchQueue)
 
     func test_xmlInitParser_concurrentFirstUse_noRace() {
         // Swift's `lazy static let` is backed by dispatch_once and is thread-safe.
@@ -72,7 +72,7 @@ final class XMLConcurrencyStressTests: XCTestCase {
         }
     }
 
-    // MARK: - Mixed encode + decode + parse
+    // MARK: - Mixed encode + decode + parse (DispatchQueue)
 
     func test_mixed_concurrent_noDataRace() {
         let encoder = XMLEncoder(configuration: .init(rootElementName: "Item"))
@@ -81,6 +81,72 @@ final class XMLConcurrencyStressTests: XCTestCase {
         let rawXML  = Data("<Item><id>7</id><label>mix</label></Item>".utf8)
 
         stressRun {
+            switch Int.random(in: 0..<3) {
+            case 0: _ = try? encoder.encode(StressPayload.sample)
+            case 1: _ = try? decoder.decode(StressPayload.self, from: rawXML)
+            default: _ = try? parser.parse(data: rawXML)
+            }
+        }
+    }
+
+    // MARK: - Shared encoder (async/await TaskGroup)
+
+    @available(macOS 10.15, iOS 13, watchOS 6, tvOS 13, *)
+    func test_encode_sharedEncoder_noDataRace_async() async {
+        let encoder = XMLEncoder(configuration: .init(rootElementName: "Payload"))
+        await asyncStressRun {
+            _ = try? encoder.encode(StressPayload.sample)
+        }
+    }
+
+    // MARK: - Shared decoder (async/await TaskGroup)
+
+    @available(macOS 10.15, iOS 13, watchOS 6, tvOS 13, *)
+    func test_decode_sharedDecoder_noDataRace_async() async {
+        let decoder = XMLDecoder(configuration: .init(rootElementName: "Payload"))
+        let xml = StressPayload.sampleXML
+        await asyncStressRun {
+            _ = try? decoder.decode(StressPayload.self, from: xml)
+        }
+    }
+
+    // MARK: - Concurrent round-trip (async/await TaskGroup)
+
+    @available(macOS 10.15, iOS 13, watchOS 6, tvOS 13, *)
+    func test_encodeDecode_concurrent_roundTrip_async() async {
+        await asyncStressRun {
+            let encoder = XMLEncoder(configuration: .init(rootElementName: "P"))
+            let decoder = XMLDecoder(configuration: .init(rootElementName: "P"))
+            let input = StressPayload(id: Int.random(in: 0..<10_000), label: "stress")
+            guard
+                let data = try? encoder.encode(input),
+                let decoded = try? decoder.decode(StressPayload.self, from: data)
+            else { return }
+            XCTAssertEqual(decoded, input)
+        }
+    }
+
+    // MARK: - Shared parser (async/await TaskGroup)
+
+    @available(macOS 10.15, iOS 13, watchOS 6, tvOS 13, *)
+    func test_parse_sharedParser_noDataRace_async() async {
+        let parser = XMLTreeParser()
+        let xml = Data("<Root><child>hello</child></Root>".utf8)
+        await asyncStressRun {
+            _ = try? parser.parse(data: xml)
+        }
+    }
+
+    // MARK: - Mixed encode + decode + parse (async/await TaskGroup)
+
+    @available(macOS 10.15, iOS 13, watchOS 6, tvOS 13, *)
+    func test_mixed_concurrent_noDataRace_async() async {
+        let encoder = XMLEncoder(configuration: .init(rootElementName: "Item"))
+        let decoder = XMLDecoder(configuration: .init(rootElementName: "Item"))
+        let parser  = XMLTreeParser()
+        let rawXML  = Data("<Item><id>7</id><label>mix</label></Item>".utf8)
+
+        await asyncStressRun {
             switch Int.random(in: 0..<3) {
             case 0: _ = try? encoder.encode(StressPayload.sample)
             case 1: _ = try? decoder.decode(StressPayload.self, from: rawXML)
@@ -101,8 +167,8 @@ final class XMLConcurrencyStressTests: XCTestCase {
         )
     }
 
-    /// Submits `block` to a concurrent queue `iterations` times and waits for
-    /// all tasks to complete. Under TSan the runtime instruments every memory
+    /// Submits `block` to a concurrent DispatchQueue `iterations` times and waits
+    /// for all tasks to complete. Under TSan the runtime instruments every memory
     /// access, so genuine races will be reported as test failures.
     private func stressRun(_ block: @escaping @Sendable () -> Void) {
         let group = DispatchGroup()
@@ -118,5 +184,17 @@ final class XMLConcurrencyStressTests: XCTestCase {
             }
         }
         group.wait()
+    }
+
+    /// Spawns `iterations` child Tasks inside a TaskGroup and awaits all of them.
+    /// Exercises Swift structured concurrency's cooperative thread pool instead of
+    /// GCD, ensuring both scheduling models are race-free under TSan.
+    @available(macOS 10.15, iOS 13, watchOS 6, tvOS 13, *)
+    private func asyncStressRun(_ block: @escaping @Sendable () -> Void) async {
+        await withTaskGroup(of: Void.self) { group in
+            for _ in 0..<iterations {
+                group.addTask { block() }
+            }
+        }
     }
 }
