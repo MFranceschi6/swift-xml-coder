@@ -434,5 +434,5 @@ Examples:
 | C | API Review & Breaking Changes | ✅ Done | commit `b53bb95` — XMLChild rename, Equatable, typed code, preserveWhitespace removal, makeXMLSafeName fix |
 | D | Quality & Hardening | ✅ Done | commit `89d68d2`–`00b13c9` — D.1 name validation, D.2 macro diagnostics, D.3 XSD temporal (all 8 types), D.4 security factory |
 | E | Ergonomics | ✅ Done | commit `fcad15f` (E.1 @XMLDateFormat) + `88ef636` (E.2 structured logging, all levels + metadata) |
-| G | iOS Support | ⏳ Pending | Independent of C/D/E; Track 1 (module map) first |
+| G | iOS Support | ✅ Done | commit `85752a2` — platform declarations + ios-simulator CI job; libxml2 resolves via Xcode sysroot, no module.modulemap changes needed |
 | F | Release 1.0 | ⏳ Pending | Last; depends on all epics |

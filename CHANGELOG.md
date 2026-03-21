@@ -6,13 +6,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.2.0] — 2026-03-21
+
 ### Changed
 
-- `FuzzTests/run_fuzzer.sh`: tightened manual `swiftc` module search paths to use `Modules/`,
-  `SwiftXMLCoderCShim.build`, and `SwiftXMLCoderOwnership6.build` explicitly instead of the whole
-  release bin directory. This avoids `SwiftXMLCoderCShim` module redefinition collisions from
-  sibling `*-tool.build` outputs in GitHub Actions fuzz runs. The script now also falls back to
-  linking SPM-produced object files when static archives are unavailable on the host platform.
+- `FuzzTests/run_fuzzer.sh`: hardened harness compile flags — tightened module search paths to
+  `Modules/`, `SwiftXMLCoderCShim.build`, `SwiftXMLCoderOwnership6.build`, and `CLibXML2`
+  explicitly; adds `CLibXML2` module dir and auto-detects libxml2 header flags via `pkg-config`
+  (with fallback to `-I/usr/include/libxml2`); falls back to linking SPM-produced object files
+  when static archives are unavailable on the host platform. Fixes `SwiftXMLCoderCShim` module
+  redefinition collisions in GitHub Actions fuzz runs.
 
 ### Added (Pillar II.1 — XMLStreamParser)
 
