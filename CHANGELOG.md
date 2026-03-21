@@ -6,6 +6,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.1.0] — 2026-03-21
+
 ### Added (Pillar VII.5 — Source Position Diagnostics)
 
 - **`XMLNodeStructuralMetadata.sourceLine`** — new optional `Int` property that carries the
