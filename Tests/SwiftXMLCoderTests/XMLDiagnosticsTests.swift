@@ -88,12 +88,10 @@ final class XMLDiagnosticsTests: XCTestCase {
     func test_missingKey_throwsDecodeFailed_withCodingPath() throws {
         let xml = Data("<Root><name>Alice</name></Root>".utf8)
         let decoder = XMLDecoder(configuration: .init(rootElementName: "Root"))
-        do {
-            _ = try decoder.decode(Person.self, from: xml)
-            XCTFail("Expected decode to throw")
-        } catch let error as XMLParsingError {
-            guard case .decodeFailed(let path, _, let message) = error else {
-                XCTFail("Expected decodeFailed, got \(error)")
+        XCTAssertThrowsError(try decoder.decode(Person.self, from: xml)) { error in
+            guard let xmlError = error as? XMLParsingError,
+                  case .decodeFailed(let path, _, let message) = xmlError else {
+                XCTFail("Expected XMLParsingError.decodeFailed, got \(error)")
                 return
             }
             XCTAssertTrue(path.contains("age"), "Expected 'age' in coding path \(path)")
@@ -104,12 +102,13 @@ final class XMLDiagnosticsTests: XCTestCase {
     func test_missingKey_throwsDecodeFailed_notParseFailed() throws {
         let xml = Data("<Root><name>Alice</name></Root>".utf8)
         let decoder = XMLDecoder(configuration: .init(rootElementName: "Root"))
-        do {
-            _ = try decoder.decode(Person.self, from: xml)
-            XCTFail("Expected decode to throw")
-        } catch let error as XMLParsingError {
-            if case .parseFailed = error {
-                XCTFail("Should not throw parseFailed for Codable decode errors; got \(error)")
+        XCTAssertThrowsError(try decoder.decode(Person.self, from: xml)) { error in
+            guard let xmlError = error as? XMLParsingError else {
+                XCTFail("Expected XMLParsingError, got \(type(of: error))")
+                return
+            }
+            if case .parseFailed = xmlError {
+                XCTFail("Should not throw parseFailed for Codable decode errors; got \(xmlError)")
             }
             // decodeFailed or any other case is acceptable (test above asserts decodeFailed)
         }
@@ -120,12 +119,10 @@ final class XMLDiagnosticsTests: XCTestCase {
     func test_badInt_throwsDecodeFailed_withCode() throws {
         let xml = Data("<Root><name>Alice</name><age>notanumber</age></Root>".utf8)
         let decoder = XMLDecoder(configuration: .init(rootElementName: "Root"))
-        do {
-            _ = try decoder.decode(Person.self, from: xml)
-            XCTFail("Expected decode to throw")
-        } catch let error as XMLParsingError {
-            guard case .decodeFailed(let path, _, let message) = error else {
-                XCTFail("Expected decodeFailed, got \(error)")
+        XCTAssertThrowsError(try decoder.decode(Person.self, from: xml)) { error in
+            guard let xmlError = error as? XMLParsingError,
+                  case .decodeFailed(let path, _, let message) = xmlError else {
+                XCTFail("Expected XMLParsingError.decodeFailed, got \(error)")
                 return
             }
             XCTAssertFalse(path.isEmpty, "Coding path should not be empty")
@@ -145,12 +142,10 @@ final class XMLDiagnosticsTests: XCTestCase {
         </Root>
         """.utf8)
         let decoder = XMLDecoder(configuration: .init(rootElementName: "Root"))
-        do {
-            _ = try decoder.decode(Person.self, from: xml)
-            XCTFail("Expected decode to throw")
-        } catch let error as XMLParsingError {
-            guard case .decodeFailed(_, let location, _) = error else {
-                XCTFail("Expected decodeFailed, got \(error)")
+        XCTAssertThrowsError(try decoder.decode(Person.self, from: xml)) { error in
+            guard let xmlError = error as? XMLParsingError,
+                  case .decodeFailed(_, let location, _) = xmlError else {
+                XCTFail("Expected XMLParsingError.decodeFailed, got \(error)")
                 return
             }
             if let loc = location {
@@ -167,12 +162,10 @@ final class XMLDiagnosticsTests: XCTestCase {
     func test_nestedMissingKey_codingPathReflectsNesting() throws {
         let xml = Data("<Root><person><name>Alice</name></person></Root>".utf8)
         let decoder = XMLDecoder(configuration: .init(rootElementName: "Root"))
-        do {
-            _ = try decoder.decode(Wrapper.self, from: xml)
-            XCTFail("Expected decode to throw")
-        } catch let error as XMLParsingError {
-            guard case .decodeFailed(let path, _, _) = error else {
-                XCTFail("Expected decodeFailed, got \(error)")
+        XCTAssertThrowsError(try decoder.decode(Wrapper.self, from: xml)) { error in
+            guard let xmlError = error as? XMLParsingError,
+                  case .decodeFailed(let path, _, _) = xmlError else {
+                XCTFail("Expected XMLParsingError.decodeFailed, got \(error)")
                 return
             }
             XCTAssertFalse(path.isEmpty, "Nested coding path should not be empty")
@@ -189,12 +182,10 @@ final class XMLDiagnosticsTests: XCTestCase {
                 dateDecodingStrategy: .xsdDate
             )
         )
-        do {
-            _ = try decoder.decode(WithDate.self, from: xml)
-            XCTFail("Expected decode to throw")
-        } catch let error as XMLParsingError {
-            guard case .decodeFailed(_, _, let message) = error else {
-                XCTFail("Expected decodeFailed, got \(error)")
+        XCTAssertThrowsError(try decoder.decode(WithDate.self, from: xml)) { error in
+            guard let xmlError = error as? XMLParsingError,
+                  case .decodeFailed(_, _, let message) = xmlError else {
+                XCTFail("Expected XMLParsingError.decodeFailed, got \(error)")
                 return
             }
             XCTAssertTrue(message?.contains("XML6_5C_DATE_PARSE_FAILED") == true,
@@ -207,13 +198,14 @@ final class XMLDiagnosticsTests: XCTestCase {
     func test_invalidXML_throwsParseFailedNotDecodeFailed() throws {
         let xml = Data("<unclosed".utf8)
         let decoder = XMLDecoder(configuration: .init(rootElementName: "Root"))
-        do {
-            _ = try decoder.decode(Person.self, from: xml)
-            XCTFail("Expected decode to throw")
-        } catch let error as XMLParsingError {
+        XCTAssertThrowsError(try decoder.decode(Person.self, from: xml)) { error in
+            guard let xmlError = error as? XMLParsingError else {
+                XCTFail("Expected XMLParsingError, got \(type(of: error))")
+                return
+            }
             // XML-level failures (libxml2 parse errors) must NOT use decodeFailed.
-            if case .decodeFailed = error {
-                XCTFail("XML parse errors must use parseFailed or invalidUTF8, not decodeFailed; got \(error)")
+            if case .decodeFailed = xmlError {
+                XCTFail("XML parse errors must use parseFailed or invalidUTF8, not decodeFailed; got \(xmlError)")
             }
             // parseFailed or other non-Codable case is expected
         }

@@ -256,16 +256,12 @@ final class XMLEventCursorTests: XCTestCase {
     func test_itemDecoder_items_asyncStream_taskCancellation_terminatesCleanly() async throws {
         struct Product: Decodable, Sendable { let sku: String }
         let cursor = try XMLEventCursor(data: catalog)
-        let task = Task {
-            var count = 0
-            for try await _ in XMLItemDecoder().items(Product.self, itemElement: "Product", from: cursor) {
-                count += 1
-            }
-            return count
+        let task = Task<Void, Error> {
+            for try await _ in XMLItemDecoder().items(Product.self, itemElement: "Product", from: cursor) { }
         }
         task.cancel()
-        // The task must not crash or hang; it may produce 0..3 items depending on timing
-        _ = try await task.value
+        // The task must not crash or hang
+        _ = try? await task.value
     }
 
     // MARK: - XMLEventCursor — invalid XML

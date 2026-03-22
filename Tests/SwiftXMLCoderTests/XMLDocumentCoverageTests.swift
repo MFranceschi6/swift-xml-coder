@@ -228,6 +228,57 @@ final class XMLDocumentCoverageTests: XCTestCase {
         XCTAssertEqual(root.namespaceURI, "urn:default")
     }
 
+    // MARK: - XMLNode additional coverage
+
+    func test_addChild_ancestorCycle_throws() throws {
+        let document = try SwiftXMLCoder.XMLDocument(rootElementName: "Root")
+        let root = try XCTUnwrap(document.rootElement())
+        let child = try document.createElement(named: "Child")
+        try document.appendChild(child, to: root)
+
+        // Appending root (an ancestor) to its own child must throw a cycle error
+        XCTAssertThrowsError(try child.addChild(root)) { error in
+            guard case XMLParsingError.nodeOperationFailed = error else {
+                return XCTFail("Expected nodeOperationFailed, got: \(error)")
+            }
+        }
+    }
+
+    func test_setAndGetText_roundTrips() throws {
+        let document = try SwiftXMLCoder.XMLDocument(rootElementName: "Root")
+        let root = try XCTUnwrap(document.rootElement())
+        root.setText("hello")
+        XCTAssertEqual(root.text(), "hello")
+    }
+
+    func test_namespaceDeclarationsInScope_walksAncestors() throws {
+        let document = try SwiftXMLCoder.XMLDocument(rootElementName: "Root")
+        let root = try XCTUnwrap(document.rootElement())
+        try root.addNamespace(SwiftXMLCoder.XMLNamespace(prefix: "outer", uri: "urn:outer"))
+
+        let child = try document.createElement(named: "Child")
+        try document.appendChild(child, to: root)
+        try child.addNamespace(SwiftXMLCoder.XMLNamespace(prefix: "inner", uri: "urn:inner"))
+
+        let scopedDecls = child.namespaceDeclarationsInScope()
+        XCTAssertEqual(scopedDecls["outer"], "urn:outer", "Outer namespace must be visible from child scope")
+        XCTAssertEqual(scopedDecls["inner"], "urn:inner", "Inner namespace must be in child scope")
+
+        let rootDecls = root.namespaceDeclarationsInScope()
+        XCTAssertNil(rootDecls["inner"], "Child namespace must not be visible in root scope")
+    }
+
+    func test_parent_returnsParentElement() throws {
+        let document = try SwiftXMLCoder.XMLDocument(rootElementName: "Root")
+        let root = try XCTUnwrap(document.rootElement())
+        let child = try document.createElement(named: "Child")
+        try document.appendChild(child, to: root)
+
+        let parentNode = child.parent()
+        XCTAssertEqual(parentNode?.name, "Root")
+        XCTAssertNil(root.parent(), "Root element has no element parent")
+    }
+
     // MARK: - XMLParsingError Equatable
 
     func test_xmlParsingError_equatable_sameCase_equal() {
