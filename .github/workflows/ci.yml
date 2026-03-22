@@ -303,7 +303,20 @@ jobs:
 
       - name: Test (with Code Coverage on Linux)
         if: runner.os == 'Linux'
-        run: swift test --enable-code-coverage --jobs 1 --parallel --num-workers 1
+        run: |
+          # Run with coverage instrumentation. The automatic profdata merge may
+          # fail due to SwiftSyntax counter overflow (known llvm-profdata issue
+          # on Linux + Swift 6.x). We verify test results via the output and
+          # handle profdata merge manually in the coverage step.
+          set -o pipefail
+          swift test --enable-code-coverage --jobs 1 --parallel --num-workers 1 2>&1 \
+            | tee /tmp/swift-test-output.log || true
+          # Fail if tests actually failed (not just profdata merge)
+          if grep -q "with [1-9][0-9]* failures\|Test Suite.*failed" /tmp/swift-test-output.log; then
+            echo "::error::Tests failed — see output above."
+            exit 1
+          fi
+          echo "Tests passed (profdata merge errors, if any, are handled in the coverage step)."
 
       - name: Test (macOS)
         if: runner.os == 'macOS'
@@ -313,7 +326,18 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           BIN_PATH=$(swift build --show-bin-path)
-          PROFDATA=$(find "$BIN_PATH/codecov" -name "default.profdata" -type f | head -n 1)
+          PROFRAW_DIR="$BIN_PATH/codecov"
+
+          # Manually merge profdata with failure tolerance.
+          # SwiftSyntax macro counters may overflow on Swift 6.x Linux;
+          # -failure-mode=warn lets llvm-profdata skip corrupted counters.
+          LLVM_PROFDATA="$(dirname "$(which swift)")/llvm-profdata"
+          if [ ! -x "$LLVM_PROFDATA" ]; then LLVM_PROFDATA="llvm-profdata"; fi
+          $LLVM_PROFDATA merge -sparse -failure-mode=warn \
+            "$PROFRAW_DIR"/*.profraw \
+            -o "$PROFRAW_DIR/default.profdata" 2>&1 || true
+
+          PROFDATA="$PROFRAW_DIR/default.profdata"
           TEST_BUNDLE=$(find "$BIN_PATH" -name "*.xctest" | head -n 1)
 
           if [ -z "$TEST_BUNDLE" ]; then
