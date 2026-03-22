@@ -189,6 +189,46 @@ public macro XMLText() = #externalMacro(
     type: "XMLTextMacro"
 )
 
+/// Declares a per-field XML namespace for a stored property when encoded or decoded by `@XMLCodable`.
+///
+/// Apply this macro to stored properties inside a type annotated with `@XMLCodable`.
+/// The owning type's `xmlFieldNamespaces` dictionary (synthesised by `@XMLCodable`) will
+/// map this field's name to the specified ``XMLNamespace``, causing the XML encoder and decoder
+/// to qualify the field's element or attribute with the given namespace URI and optional prefix.
+///
+/// ```swift
+/// @XMLCodable
+/// struct Envelope: Codable {
+///     @XMLFieldNamespace(prefix: "soap", uri: "http://schemas.xmlsoap.org/soap/envelope/")
+///     @XMLChild var body: Body
+/// }
+/// // Encodes body as: <soap:body xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">…</soap:body>
+/// ```
+///
+/// Omit `prefix` to use the element as the default namespace bearer (`xmlns="..."`).
+///
+/// - Parameters:
+///   - prefix: The namespace prefix to use (e.g. `"soap"`), or omit for a default namespace element.
+///   - uri: The namespace URI string. Must be a non-empty string literal.
+///
+/// - Note: For XML attributes, the XML Namespaces 1.0 specification requires a prefix; a
+///   default namespace (no prefix) on an attribute has no effect and is not recommended.
+///
+/// - Note: Without `@XMLCodable` on the enclosing type this annotation compiles
+///   successfully but has no runtime effect — it is a pure syntax marker.
+@attached(peer)
+public macro XMLFieldNamespace(prefix: String, uri: String) = #externalMacro(
+    module: "SwiftXMLCoderMacroImplementation",
+    type: "XMLFieldNamespaceMacro"
+)
+
+/// Overload of ``XMLFieldNamespace(prefix:uri:)`` for the default-namespace case (no prefix).
+@attached(peer)
+public macro XMLFieldNamespace(uri: String) = #externalMacro(
+    module: "SwiftXMLCoderMacroImplementation",
+    type: "XMLFieldNamespaceMacro"
+)
+
 /// Forces a stored property's XML element to always be serialised in expanded form
 /// (`<field></field>` instead of `<field/>`), even when the element has no content.
 ///
@@ -247,9 +287,9 @@ public macro XMLExpandEmpty() = #externalMacro(
 @attached(
     extension,
     conformances: XMLFieldCodingOverrideProvider, XMLDateCodingOverrideProvider,
-        XMLStringCodingOverrideProvider, XMLExpandEmptyProvider,
+        XMLStringCodingOverrideProvider, XMLExpandEmptyProvider, XMLFieldNamespaceProvider,
     names: named(xmlFieldNodeKinds), named(xmlPropertyDateHints),
-        named(xmlPropertyStringHints), named(xmlPropertyExpandEmptyKeys)
+        named(xmlPropertyStringHints), named(xmlPropertyExpandEmptyKeys), named(xmlFieldNamespaces)
 )
 public macro XMLCodable() = #externalMacro(
     module: "SwiftXMLCoderMacroImplementation",

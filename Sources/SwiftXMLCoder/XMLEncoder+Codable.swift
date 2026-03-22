@@ -50,6 +50,13 @@ func _xmlFieldNodeKinds<T>(for type: T.Type) -> [String: XMLFieldNodeKind] {
     return provider.xmlFieldNodeKinds
 }
 
+func _xmlFieldNamespaces<T>(for type: T.Type) -> [String: XMLNamespace] {
+    guard let provider = type as? XMLFieldNamespaceProvider.Type else {
+        return [:]
+    }
+    return provider.xmlFieldNamespaces
+}
+
 func _xmlPropertyExpandEmptyKeys<T>(for type: T.Type) -> Set<String> {
     guard let provider = type as? XMLExpandEmptyProvider.Type else {
         return []
@@ -187,6 +194,22 @@ final class _XMLTreeElementBox {
         return child
     }
 
+    @discardableResult
+    func makeChild(qualifiedName: XMLQualifiedName) -> _XMLTreeElementBox {
+        let child = _XMLTreeElementBox(name: qualifiedName)
+        appendElement(child)
+        return child
+    }
+
+    func addNamespaceDeclarationIfNeeded(prefix: String?, uri: String) {
+        let alreadyPresent = namespaceDeclarations.contains {
+            $0.prefix == prefix && $0.uri == uri
+        }
+        if !alreadyPresent {
+            namespaceDeclarations.append(XMLNamespaceDeclaration(prefix: prefix, uri: uri))
+        }
+    }
+
     func makeElement() -> XMLTreeElement {
         let children: [XMLTreeNode] = contents.map { content in
             switch content {
@@ -232,6 +255,7 @@ final class _XMLTreeEncoder: Encoder {
     let options: _XMLEncoderOptions
     let node: _XMLTreeElementBox
     let fieldNodeKinds: [String: XMLFieldNodeKind]
+    let fieldNamespaces: [String: XMLNamespace]
     var codingPath: [CodingKey]
     var userInfo: [CodingUserInfoKey: Any] { options.userInfo }
 
@@ -239,12 +263,14 @@ final class _XMLTreeEncoder: Encoder {
         options: _XMLEncoderOptions,
         codingPath: [CodingKey],
         node: _XMLTreeElementBox,
-        fieldNodeKinds: [String: XMLFieldNodeKind] = [:]
+        fieldNodeKinds: [String: XMLFieldNodeKind] = [:],
+        fieldNamespaces: [String: XMLNamespace] = [:]
     ) {
         self.options = options
         self.codingPath = codingPath
         self.node = node
         self.fieldNodeKinds = fieldNodeKinds
+        self.fieldNamespaces = fieldNamespaces
     }
 
     func container<Key>(keyedBy type: Key.Type) -> KeyedEncodingContainer<Key> where Key: CodingKey {
@@ -524,7 +550,7 @@ struct _XMLKeyedEncodingContainer<Key: CodingKey>: KeyedEncodingContainerProtoco
             return
         }
 
-        let child = encoder.node.makeChild(localName: name)
+        let child = makeChildBox(for: key)
         var nestedOptions = encoder.options
         nestedOptions.perPropertyDateHints = _xmlPropertyDateHints(for: T.self)
         nestedOptions.perPropertyStringHints = _xmlPropertyStringHints(for: T.self)
@@ -533,7 +559,8 @@ struct _XMLKeyedEncodingContainer<Key: CodingKey>: KeyedEncodingContainerProtoco
             options: nestedOptions,
             codingPath: codingPath + [key],
             node: child,
-            fieldNodeKinds: _xmlFieldNodeKinds(for: T.self)
+            fieldNodeKinds: _xmlFieldNodeKinds(for: T.self),
+            fieldNamespaces: _xmlFieldNamespaces(for: T.self)
         )
         try value.encode(to: nestedEncoder)
         // Per-field expand-empty: inject empty text into child-less elements so the writer
@@ -586,7 +613,7 @@ struct _XMLKeyedEncodingContainer<Key: CodingKey>: KeyedEncodingContainerProtoco
     }
 
     private func encodeScalarString(_ value: String, forKey key: Key) throws {
-        let child = encoder.node.makeChild(localName: xmlName(for: key))
+        let child = makeChildBox(for: key)
         let effectiveStringStrategy = resolvedStringStrategy(for: key)
         switch effectiveStringStrategy {
         case .text:
@@ -594,6 +621,17 @@ struct _XMLKeyedEncodingContainer<Key: CodingKey>: KeyedEncodingContainerProtoco
         case .cdata:
             child.appendCDATA(value)
         }
+    }
+
+    /// Creates a child element box for `key`, applying any per-field namespace from the encoder.
+    private func makeChildBox(for key: Key) -> _XMLTreeElementBox {
+        let name = xmlName(for: key)
+        if let ns = encoder.fieldNamespaces[key.stringValue] {
+            let qualifiedName = XMLQualifiedName(localName: name, namespaceURI: ns.uri, prefix: ns.prefix)
+            encoder.node.addNamespaceDeclarationIfNeeded(prefix: ns.prefix, uri: ns.uri)
+            return encoder.node.makeChild(qualifiedName: qualifiedName)
+        }
+        return encoder.node.makeChild(localName: name)
     }
 
     private func resolvedStringStrategy(for key: Key) -> XMLEncoder.StringEncodingStrategy {
@@ -656,12 +694,14 @@ struct _XMLKeyedEncodingContainer<Key: CodingKey>: KeyedEncodingContainerProtoco
             )
         }
 
-        encoder.node.attributes.append(
-            XMLTreeAttribute(
-                name: XMLQualifiedName(localName: xmlName(for: key)),
-                value: lexicalValue
-            )
-        )
+        let attrName: XMLQualifiedName
+        if let ns = encoder.fieldNamespaces[key.stringValue] {
+            attrName = XMLQualifiedName(localName: xmlName(for: key), namespaceURI: ns.uri, prefix: ns.prefix)
+            encoder.node.addNamespaceDeclarationIfNeeded(prefix: ns.prefix, uri: ns.uri)
+        } else {
+            attrName = XMLQualifiedName(localName: xmlName(for: key))
+        }
+        encoder.node.attributes.append(XMLTreeAttribute(name: attrName, value: lexicalValue))
     }
 
     // MARK: Field node kind resolution — priority chain (see file-level comment)
@@ -733,7 +773,8 @@ struct _XMLUnkeyedEncodingContainer: UnkeyedEncodingContainer {
             options: encoder.options,
             codingPath: codingPath + [currentIndexKey],
             node: itemNode,
-            fieldNodeKinds: _xmlFieldNodeKinds(for: T.self)
+            fieldNodeKinds: _xmlFieldNodeKinds(for: T.self),
+            fieldNamespaces: _xmlFieldNamespaces(for: T.self)
         )
         try value.encode(to: nestedEncoder)
     }
@@ -835,7 +876,8 @@ struct _XMLSingleValueEncodingContainer: SingleValueEncodingContainer {
             options: encoder.options,
             codingPath: codingPath,
             node: encoder.node,
-            fieldNodeKinds: _xmlFieldNodeKinds(for: T.self)
+            fieldNodeKinds: _xmlFieldNodeKinds(for: T.self),
+            fieldNamespaces: _xmlFieldNamespaces(for: T.self)
         )
         try value.encode(to: nestedEncoder)
     }

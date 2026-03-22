@@ -31,6 +31,7 @@ Uno stack XML maturo non si misura solo sull'encode/decode di oggetti Swift. Con
 | DSig/C14N | assente come modulo completo | aggiungere package dedicato | `satellite` | media | necessario per interoperabilita' e use case firmati |
 | framework adapters | assenti come prodotti ufficiali | fornire adapter first-party | `satellite` | alta | aiuta l'adozione con Vapor e Hummingbird |
 | codegen | assente come prodotto ufficiale | aggiungere pipeline `XSD -> Swift models` | `satellite` | alta | sblocca l'uso schema-first su larga scala |
+| pure Swift streaming backend | assente | aggiungere backend SAX Swift puro per WASM/embedded | `satellite` | media | sblocca l'uso su target dove libxml2 e Foundation non sono disponibili |
 
 ## Gap Più Importanti Da Colmare
 

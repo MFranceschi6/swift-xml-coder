@@ -6,6 +6,165 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.3.0] — 2026-03-22
+
+### Added (XML-R3 — Pull Cursor and Item-by-Item Decode)
+
+- **`XMLEventCursor`** — new `final class` providing a forward-only, pull-style cursor over a
+  pre-parsed sequence of ``XMLStreamEvent`` values. Created from `Data` using the existing SAX
+  parser; all events are buffered on init. Exposes `next()`, `peek()`, `isAtEnd`, `count`,
+  `position`, and `advance(toElement:)`. Conforms to `IteratorProtocol`. Documented as
+  not thread-safe (single-caller use). `@unchecked Sendable` to allow capture in async closures.
+- **`XMLItemDecoder`** — new `Sendable` struct that decodes `Decodable` items one at a time from
+  a named repeating element using an `XMLEventCursor`. Internally extracts events for each item
+  (handling nested same-name elements via depth tracking), serialises them as a self-contained XML
+  fragment via `XMLStreamWriter`, and decodes with `XMLDecoder`. Exposes:
+  - `decode(_:itemElement:from:) throws -> [T]` — synchronous; returns all items as an array.
+  - `items(_:itemElement:from:) -> AsyncThrowingStream<T, Error>` — async; decodes one item at
+    a time with natural backpressure (macOS 12+, iOS 15+). Task cancellation is checked before
+    each yield.
+  - Full decoder configuration forwarded (`dateDecodingStrategy`, `fieldCodingOverrides`,
+    `keyTransformStrategy`, etc.); `rootElementName` is overridden per-call with `itemElement`.
+  - Dual `#if swift(>=6.0) throws(XMLParsingError)` branch on `decode(_:itemElement:from:)`.
+- **14 new tests** in `XMLEventCursorTests` covering: init/count, `next()`/`peek()` navigation,
+  `isAtEnd`, `IteratorProtocol` while-loop, `advance(toElement:)` find/skip/not-found/repeated,
+  `XMLItemDecoder` sync decode (3-item catalog, empty container, single item, cursor exhaustion),
+  nested same-name element depth tracking, configuration forwarding (date strategy), async stream
+  (yield-all, empty container), invalid XML throws, and `nextItemEvents` internal extraction.
+
+### Changed (XML-R3 — Streaming Documentation)
+
+- **`Articles/Streaming.md`** updated:
+  - "Push Model vs Pull/Cursor" section rewritten — introduces `XMLEventCursor` and `XMLItemDecoder`
+    as the pull-style counterparts to `XMLStreamParser`; clarifies the memory model (events buffered,
+    smaller than full DOM tree). The old duplicate `> Note:` blocks merged into one.
+  - New "Pull Cursor" section — usage example for `XMLEventCursor.next()` and `advance(toElement:)`.
+  - New "Item-by-Item Codable Decode" section — sync and async `XMLItemDecoder` examples with
+    configuration forwarding note.
+  - "When to Use Streaming vs. Tree" table updated — replaces the "Forward-only cursor reads
+    (future/planned)" row with concrete entries for `XMLEventCursor` and `XMLItemDecoder`.
+  - "Roadmap" section removed (both planned items are now shipped).
+  - Topics section extended with `XMLEventCursor` and `XMLItemDecoder` entries.
+- **`SwiftXMLCoder.docc/SwiftXMLCoder.md`**: `XMLEventCursor` and `XMLItemDecoder` added to the
+  "Streaming" topics section.
+
+### Added (XSD-First Contract Coverage)
+
+- **`GeneratedModelContractTests`** — new runtime contract suite exercising the shape of code emitted by `swift-xml-codegen`: `XMLRootNode`, `XMLFieldNamespaceProvider`, `@XMLAttribute`, `@XMLTextContent`, arrays, `Decimal`, `Date`, `Data`, and namespaced child fields in encode/decode round-trips.
+
+### Changed (XML-R2 — Streaming Story)
+
+- **`Articles/Streaming.md`** updated with:
+  - "Push Model vs Pull/Cursor" section — explains the current push-only model, clarifies that
+    `AsyncSequence` wraps the synchronous parser internally (no byte-by-byte streaming from
+    sockets), and explicitly names pull/cursor as a planned future capability.
+  - "Selective Extraction" section — depth-tracked pattern for extracting a subset of fields
+    from a large document without materialising the full DOM, with a complete `PriceEntry`
+    example.
+  - Updated "When to Use Streaming vs. Tree" decision table — adds pull/cursor row (planned) and
+    a Tip on combining ``XMLStreamParser`` with ``XMLDecoder`` for large-document `Codable` use.
+  - "Roadmap" section — lists pull/cursor and item-by-item `Codable` decode as planned future
+    capabilities so users know what to expect.
+
+### Added (XML-R2 — Diagnostics)
+
+- **`XMLSourceLocation`** — new `Sendable, Equatable` struct carrying optional `line`, `column`,
+  and `byteOffset` fields. `line` is populated from libxml2 source tracking when a parse failure
+  occurs on a real XML element; `column` and `byteOffset` are reserved for future SAX-level
+  instrumentation and are currently always `nil`.
+- **`XMLParsingError.decodeFailed(codingPath:location:message:)`** — new error case produced by
+  the XML Codable layer for all field-level decode failures. Carries a `[String]` coding path
+  (from root to the failing field, with array indices rendered as `[n]`), an optional
+  `XMLSourceLocation`, and a stable `[CODE]`-prefixed message. Replaces `parseFailed` at all
+  35 throw sites inside `XMLDecoder+Codable.swift`, making Codable decode errors structurally
+  distinct from XML-level parse failures.
+- **`_XMLTreeDecoder.decodeFailed(codingPath:element:message:)`** — internal helper that builds
+  a `decodeFailed` error from a `[CodingKey]` path and an optional element (falls back to the
+  decoder's current node for location). Convenience overload `decodeFailed(message:)` uses the
+  decoder's own `codingPath` and `node`.
+- **15 new tests** in `XMLDiagnosticsTests` covering `XMLSourceLocation` init/equatable,
+  `decodeFailed` equatable variants, missing-key coding path content, bad-scalar error code,
+  source location propagation, nested coding path, bad-date error code, XML-level failures still
+  using `parseFailed`, and a regression test for successful decode producing no error.
+
+### Changed (XML-R2 — Diagnostics)
+
+- All `parseFailed` throws inside `_XMLKeyedDecodingContainer`, `_XMLUnkeyedDecodingContainer`,
+  and `_XMLSingleValueDecodingContainer` replaced with `decodeFailed`. Key-not-found cases
+  now include the missing key as the last element of the coding path for better debuggability.
+- `SwiftXMLCoder.docc/SwiftXMLCoder.md`: `XMLSourceLocation` added to the "Errors" topics section.
+
+### Added (XML-R2 — Namespace Ergonomics Per Field)
+
+- **`XMLFieldNamespaceProvider`** — new protocol allowing a `Codable` type to declare per-field
+  XML namespace overrides via a static `xmlFieldNamespaces: [String: XMLNamespace]` dictionary.
+  The XML encoder and decoder consult this dictionary to qualify child elements and attributes
+  with the specified namespace URI and optional prefix, mirroring the existing
+  `XMLFieldCodingOverrideProvider` pattern.
+- **`@XMLFieldNamespace(prefix:uri:)` / `@XMLFieldNamespace(uri:)`** — two new peer macros
+  (Swift 5.9+) that can be applied to stored properties alongside `@XMLCodable`. `@XMLCodable`
+  now scans for these annotations and synthesises an `XMLFieldNamespaceProvider` extension that
+  maps the annotated field names to their `XMLNamespace` values.
+- **Encoder namespace injection** — when a field has a namespace, the encoder creates the child
+  element or attribute with a `XMLQualifiedName(localName:namespaceURI:prefix:)` and
+  automatically adds a `XMLNamespaceDeclaration` to the parent element so the resulting XML is
+  valid without manual namespace management.
+- **Decoder namespace-aware lookup** — `_XMLTreeDecoder.firstChild(named:namespaceURI:in:)` added;
+  when a field has a registered namespace, element lookup is qualified by URI, eliminating
+  ambiguity between sibling elements that share a local name but differ in namespace.
+- **16 new tests** in `XMLFieldNamespaceTests` covering prefixed and default-namespace element
+  encoding, attribute namespace encoding, mixed-field encoding, tree-level namespace URI/prefix
+  verification, namespace declaration injection on the parent element, round-trip decode
+  correctness, and macro-path synthesis (prefixed and default namespace, round-trip).
+
+### Changed (XML-R2 — Namespace Ergonomics Per Field)
+
+- `XMLEncoder.encodeTreeImpl`: initial `_XMLTreeEncoder` now populated with
+  `fieldNamespaces: _xmlFieldNamespaces(for: T.self)`, enabling namespace ergonomics for the
+  top-level encoded type without requiring an intermediate nested container.
+- `XMLDecoder.decodeTreeImpl`: initial `_XMLTreeDecoder` now populated with
+  `fieldNamespaces: _xmlFieldNamespaces(for: T.self)` symmetrically.
+- `@XMLCodable` macro declaration updated to include `XMLFieldNamespaceProvider` in its
+  conformance list and `xmlFieldNamespaces` in the names list.
+- `SwiftXMLCoder.docc/SwiftXMLCoder.md`: `XMLFieldNamespaceProvider` added to the
+  "Field Mapping" topics section.
+
+### Added (XML-R2 — PI/Doctype/Comment Fidelity)
+
+- **`XMLDocumentNode`** — new `Sendable, Equatable, Codable` enum representing nodes that can
+  appear at the document level (outside the root element): `.comment(String)` and
+  `.processingInstruction(target:data:)`.
+- **`XMLTreeNode.processingInstruction(target:data:)`** — new case enabling processing
+  instructions inside element children to survive parse → write round-trips. Previously silently
+  dropped by `XMLTreeParser`.
+- **`XMLTreeDocument.prologueNodes`** / **`XMLTreeDocument.epilogueNodes`** — `[XMLDocumentNode]`
+  arrays capturing PIs and comments that appear before/after the root element in the parsed
+  document. Default `[]`; backward-compatible.
+- **`XMLDoctype`** — new `Sendable, Equatable, Codable` struct holding the `name`, `systemID`,
+  and `publicID` of a `<!DOCTYPE ...>` declaration.
+- **`XMLDocumentStructuralMetadata.doctype`** — `XMLDoctype?` field populated from libxml2's
+  internal DTD subset when parsing XML with a DOCTYPE declaration. Decoded as `nil` from older
+  encoded data (backward-compatible optional field).
+- **`XMLNormalizationOptions.includeProcessingInstructions`** — new `Bool` flag (default
+  `false`) controlling whether PI nodes are preserved during canonicalization, analogous to the
+  existing `includeComments` flag.
+- **15 new tests** in `XMLStructuralFidelityTests` covering PI round-trips inside elements,
+  document-level prologue/epilogue parsing and writing, SYSTEM/PUBLIC DOCTYPE extraction, and
+  `XMLTreeDocument` equality with the new fields.
+
+### Changed (XML-R2 — PI/Doctype/Comment Fidelity)
+
+- `XMLTreeParser` now captures `XML_PI_NODE` children inside elements, walks the document-level
+  node list to populate `prologueNodes`/`epilogueNodes`, and extracts DOCTYPE from
+  `xmlDocPtr->intSubset`.
+- `XMLTreeWriter` now writes `.processingInstruction` children via `xmlNewPI`, inserts prologue
+  nodes as prev-siblings of the root element (`xmlAddPrevSibling`), appends epilogue nodes as
+  next-siblings (`xmlAddNextSibling`), and writes DOCTYPE via `xmlCreateIntSubset`.
+- `XMLCanonicalizer` propagates `prologueNodes`/`epilogueNodes` through normalization, filtering
+  them by `includeProcessingInstructions` and `includeComments` options.
+- `SwiftXMLCoder.docc/SwiftXMLCoder.md`: `XMLDocumentNode` and `XMLDoctype` added to the
+  "Document & Tree" topics section.
+
 ## [1.2.0] — 2026-03-21
 
 ### Changed

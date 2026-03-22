@@ -1,6 +1,36 @@
 import Foundation
 import XMLCoderCompatibility
 
+// MARK: - XMLSourceLocation
+
+/// The source location within an XML document where a parse or decode failure occurred.
+///
+/// Fields are optional because not all information is available in every context.
+/// The `line` field is populated for Codable-decode failures whenever the target element
+/// carries a source line number recorded during parsing. `column` and `byteOffset` are
+/// reserved for future use with SAX-level instrumentation and are currently always `nil`.
+public struct XMLSourceLocation: Sendable, Equatable {
+    /// 1-based line number in the source document, if available.
+    public let line: Int?
+    /// 1-based column number in the source document.
+    ///
+    /// Currently always `nil` — libxml2 DOM mode does not expose column numbers.
+    public let column: Int?
+    /// Byte offset from the start of the document, if available.
+    ///
+    /// Currently always `nil` — requires SAX-level instrumentation.
+    public let byteOffset: Int?
+
+    /// Creates a source location.
+    public init(line: Int? = nil, column: Int? = nil, byteOffset: Int? = nil) {
+        self.line = line
+        self.column = column
+        self.byteOffset = byteOffset
+    }
+}
+
+// MARK: - XMLParsingError
+
 /// Errors produced by the XML parsing, encoding, and decoding layer.
 ///
 /// `XMLParsingError` is thrown by ``XMLEncoder``, ``XMLDecoder``, ``XMLTreeParser``,
@@ -46,6 +76,19 @@ public enum XMLParsingError: Error {
     /// - Parameter message: A human-readable description of the failure, if available.
     case nodeOperationFailed(message: String?)
 
+    /// A `Codable` decoding failure with the Swift coding path and optional source location.
+    ///
+    /// Thrown by the XML Codable layer when a field cannot be decoded. The `codingPath`
+    /// contains the string representation of each `CodingKey` leading to the failure
+    /// (e.g. `["root", "items", "[0]", "name"]`). Use this case to surface precise
+    /// decode diagnostics without inspecting raw `parseFailed` message strings.
+    ///
+    /// - Parameters:
+    ///   - codingPath: String descriptions of each `CodingKey` from the root to the failure site.
+    ///   - location: Source location of the XML element being decoded when the error occurred, if available.
+    ///   - message: A human-readable description of the failure with a stable `[CODE]` prefix where applicable.
+    case decodeFailed(codingPath: [String], location: XMLSourceLocation?, message: String?)
+
     /// A catch-all case for unexpected errors not covered by more specific cases.
     ///
     /// - Parameters:
@@ -74,6 +117,9 @@ extension XMLParsingError: Equatable {
             return lhsPrefix == rhsPrefix && lhsURI == rhsURI
         case (.nodeOperationFailed(let lhsMsg), .nodeOperationFailed(let rhsMsg)):
             return lhsMsg == rhsMsg
+        case (.decodeFailed(let lhsPath, let lhsLoc, let lhsMsg),
+              .decodeFailed(let rhsPath, let rhsLoc, let rhsMsg)):
+            return lhsPath == rhsPath && lhsLoc == rhsLoc && lhsMsg == rhsMsg
         case (.other, .other):
             return false
         default:

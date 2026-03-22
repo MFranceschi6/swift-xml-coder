@@ -41,11 +41,13 @@ let decoded = try decoder.decode(Book.self, from: data)
 - ``XMLTreeDocument``
 - ``XMLTreeElement``
 - ``XMLTreeNode``
+- ``XMLDocumentNode``
 - ``XMLTreeAttribute``
 - ``XMLTreeParser``
 - ``XMLTreeWriter``
 - ``XMLNodeStructuralMetadata``
 - ``XMLDocumentStructuralMetadata``
+- ``XMLDoctype``
 
 ### Streaming
 
@@ -53,6 +55,8 @@ let decoded = try decoder.decode(Book.self, from: data)
 - ``XMLStreamEvent``
 - ``XMLStreamParser``
 - ``XMLStreamWriter``
+- ``XMLEventCursor``
+- ``XMLItemDecoder``
 
 ### Field Mapping
 
@@ -68,6 +72,7 @@ let decoded = try decoder.decode(Book.self, from: data)
 - ``XMLStringCodingOverrideProvider``
 - ``XMLExpandEmptyProvider``
 - ``XMLDateCodingOverrideProvider``
+- ``XMLFieldNamespaceProvider``
 
 ### Key Transformation
 
@@ -123,5 +128,6 @@ let decoded = try decoder.decode(Book.self, from: data)
 ### Errors
 
 - ``XMLParsingError``
+- ``XMLSourceLocation``
 - ``XMLCanonicalizationError``
 - ``XMLNamespaceResolutionError``

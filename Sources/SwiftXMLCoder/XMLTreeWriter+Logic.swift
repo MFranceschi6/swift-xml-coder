@@ -1,3 +1,4 @@
+// swiftlint:disable file_length
 import Foundation
 import XMLCoderCompatibility
 import SwiftXMLCoderCShim
@@ -29,17 +30,16 @@ extension XMLTreeWriter {
             throw XMLParsingError.documentCreationFailed(message: "Unable to create root element in XML document.")
         }
 
+        try writePrologue(of: treeDocument, rootNode: rootNode)
+
         var writeState = WriteState()
-        try writeElementContent(
-            root,
-            into: rootNode,
-            in: xmlDocument,
-            depth: 1,
-            writeState: &writeState
-        )
+        try writeElementContent(root, into: rootNode, in: xmlDocument, depth: 1, writeState: &writeState)
+        try writeEpilogue(of: treeDocument, rootNode: rootNode)
+
         return xmlDocument
     }
 
+    // swiftlint:disable:next function_body_length
     private func writeElementContent(
         _ element: XMLTreeElement,
         into node: XMLNode,
@@ -111,6 +111,9 @@ extension XMLTreeWriter {
                 )
                 try incrementNodeCount(writeState: &writeState, context: "comment node")
                 try appendComment(value, to: node)
+            case .processingInstruction(let target, let data):
+                try incrementNodeCount(writeState: &writeState, context: "processing instruction node")
+                try appendProcessingInstruction(target: target, data: data, to: node)
             }
         }
     }
@@ -415,6 +418,147 @@ extension XMLTreeWriter {
         guard xmlAddChild(node.nodePointer, commentNodePointer) != nil else {
             xmlFreeNode(commentNodePointer)
             throw XMLParsingError.nodeOperationFailed(message: "Unable to append XML comment.")
+        }
+    }
+
+    private func appendProcessingInstruction(target: String, data: String?, to node: XMLNode) throws {
+        let piPointer: xmlNodePtr?
+        if let data = data {
+            piPointer = LibXML2.withXMLCharPointer(target) { targetPointer in
+                LibXML2.withXMLCharPointer(data) { dataPointer in
+                    xmlNewPI(targetPointer, dataPointer)
+                }
+            }
+        } else {
+            piPointer = LibXML2.withXMLCharPointer(target) { targetPointer in
+                xmlNewPI(targetPointer, nil)
+            }
+        }
+        guard let piPointer = piPointer else {
+            throw XMLParsingError.nodeCreationFailed(
+                name: target,
+                message: "Unable to create processing instruction '<?\\(target)?>'."
+            )
+        }
+        guard xmlAddChild(node.nodePointer, piPointer) != nil else {
+            xmlFreeNode(piPointer)
+            throw XMLParsingError.nodeOperationFailed(
+                message: "Unable to append processing instruction '<?\\(target)?>'."
+            )
+        }
+    }
+
+    @discardableResult
+    private func writeDocumentLevelNode(
+        _ node: XMLDocumentNode,
+        asPrevSiblingOf referenceNode: XMLNode
+    ) throws -> xmlNodePtr {
+        let newPointer = try makeDocumentLevelNodePointer(node)
+        guard xmlAddPrevSibling(referenceNode.nodePointer, newPointer) != nil else {
+            xmlFreeNode(newPointer)
+            throw XMLParsingError.nodeOperationFailed(
+                message: "Unable to insert document-level node before root element."
+            )
+        }
+        return newPointer
+    }
+
+    @discardableResult
+    private func writeDocumentLevelNode(
+        _ node: XMLDocumentNode,
+        asNextSiblingOf referencePointer: xmlNodePtr
+    ) throws -> xmlNodePtr {
+        let newPointer = try makeDocumentLevelNodePointer(node)
+        guard xmlAddNextSibling(referencePointer, newPointer) != nil else {
+            xmlFreeNode(newPointer)
+            throw XMLParsingError.nodeOperationFailed(
+                message: "Unable to insert document-level node after root element."
+            )
+        }
+        return newPointer
+    }
+
+    private func writePrologue(of document: XMLTreeDocument, rootNode: XMLNode) throws {
+        if let doctype = document.metadata.doctype {
+            try writeDoctype(doctype, toDocumentOf: rootNode)
+        }
+        for node in document.prologueNodes {
+            try writeDocumentLevelNode(node, asPrevSiblingOf: rootNode)
+        }
+    }
+
+    private func writeEpilogue(of document: XMLTreeDocument, rootNode: XMLNode) throws {
+        var lastPointer = rootNode.nodePointer
+        for node in document.epilogueNodes {
+            lastPointer = try writeDocumentLevelNode(node, asNextSiblingOf: lastPointer)
+        }
+    }
+
+    private func makeDocumentLevelNodePointer(_ node: XMLDocumentNode) throws -> xmlNodePtr {
+        switch node {
+        case .comment(let value):
+            guard let pointer = LibXML2.withXMLCharPointer(value, { xmlNewComment($0) }) else {
+                throw XMLParsingError.nodeCreationFailed(
+                    name: "#comment",
+                    message: "Unable to create document-level XML comment."
+                )
+            }
+            return pointer
+        case .processingInstruction(let target, let data):
+            let pointer: xmlNodePtr?
+            if let data = data {
+                pointer = LibXML2.withXMLCharPointer(target) { targetPointer in
+                    LibXML2.withXMLCharPointer(data) { dataPointer in
+                        xmlNewPI(targetPointer, dataPointer)
+                    }
+                }
+            } else {
+                pointer = LibXML2.withXMLCharPointer(target) { xmlNewPI($0, nil) }
+            }
+            guard let pointer = pointer else {
+                throw XMLParsingError.nodeCreationFailed(
+                    name: target,
+                    message: "Unable to create document-level processing instruction '<?\\(target)?>'."
+                )
+            }
+            return pointer
+        }
+    }
+
+    private func writeDoctype(_ doctype: XMLDoctype, toDocumentOf node: XMLNode) throws {
+        guard let docPointer = node.nodePointer.pointee.doc else {
+            throw XMLParsingError.nodeOperationFailed(
+                message: "Unable to resolve XML document pointer for DOCTYPE creation."
+            )
+        }
+        let result: xmlDtdPtr?
+        if let publicID = doctype.publicID {
+            result = LibXML2.withXMLCharPointer(doctype.name) { namePointer in
+                LibXML2.withXMLCharPointer(publicID) { publicPointer in
+                    if let systemID = doctype.systemID {
+                        return LibXML2.withXMLCharPointer(systemID) { systemPointer in
+                            xmlCreateIntSubset(docPointer, namePointer, publicPointer, systemPointer)
+                        }
+                    }
+                    return xmlCreateIntSubset(docPointer, namePointer, publicPointer, nil)
+                }
+            }
+        } else if let systemID = doctype.systemID {
+            result = LibXML2.withXMLCharPointer(doctype.name) { namePointer in
+                LibXML2.withXMLCharPointer(systemID) { systemPointer in
+                    xmlCreateIntSubset(docPointer, namePointer, nil, systemPointer)
+                }
+            }
+        } else {
+            result = LibXML2.withXMLCharPointer(doctype.name) { namePointer in
+                xmlCreateIntSubset(docPointer, namePointer, nil, nil)
+            }
+        }
+        guard result != nil else {
+            throw XMLParsingError.nodeCreationFailed(
+                name: doctype.name,
+                message: "Unable to create DOCTYPE declaration for '\\(doctype.name)'."
+            )
         }
     }
 

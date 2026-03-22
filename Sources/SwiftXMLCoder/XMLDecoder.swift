@@ -251,7 +251,8 @@ public struct XMLDecoder: Sendable {
             options: options,
             codingPath: [],
             node: tree.root,
-            fieldNodeKinds: _xmlFieldNodeKinds(for: T.self)
+            fieldNodeKinds: _xmlFieldNodeKinds(for: T.self),
+            fieldNamespaces: _xmlFieldNamespaces(for: T.self)
         )
         // Intercept Foundation scalar types (Decimal, URL, UUID, Date, Data, …) whose
         // Codable conformances call container(keyedBy:) or decode(String.self) internally,

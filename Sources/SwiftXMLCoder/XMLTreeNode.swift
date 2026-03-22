@@ -12,4 +12,10 @@ public enum XMLTreeNode: Sendable, Equatable, Codable {
     case cdata(String)
     /// An XML comment node.
     case comment(String)
+    /// A processing instruction node (`<?target data?>`).
+    ///
+    /// - Parameters:
+    ///   - target: The PI target name (e.g. `"xml-stylesheet"`).
+    ///   - data: The PI data string, or `nil` if absent.
+    case processingInstruction(target: String, data: String?)
 }

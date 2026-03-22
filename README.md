@@ -16,11 +16,13 @@ Encode and decode any `Codable` type to XML with control over element vs. attrib
 
 - **`XMLEncoder` / `XMLDecoder`** — Codable-compatible, zero-reflection encoding and decoding
 - **Three-tier field mapping** — `@XMLAttribute` / `@XMLChild` property wrappers, `@XMLCodable` macros (Swift 5.9+), or runtime `XMLFieldCodingOverrides`
+- **Streaming** — `XMLStreamParser` (push/SAX), `XMLStreamWriter`, `XMLEventCursor` (pull/cursor), `XMLItemDecoder` (item-by-item Codable decode)
 - **XPath 1.0** — query parsed documents with namespace-aware expressions
-- **Namespace support** — declare, resolve, and validate XML namespace prefixes
+- **Namespace support** — declare, resolve, and validate XML namespace prefixes; per-field namespace override via `XMLFieldNamespaceProvider` / `@XMLFieldNamespace`
 - **Canonicalization** — deterministic XML output via `XMLCanonicalizer` (XML-DSig ready)
 - **Parser security** — configurable depth, node-count, and text-size limits; network and DTD access disabled by default
-- **Immutable tree model** — value-semantic `XMLTreeDocument` for transform pipelines
+- **Structured diagnostics** — `XMLParsingError.decodeFailed` with coding path and `XMLSourceLocation` for precise error reporting
+- **Immutable tree model** — value-semantic `XMLTreeDocument` for transform pipelines; full fidelity for processing instructions, doctypes, and comments
 - **Swift 5.6 – 6.1** — multi-manifest compatibility; macros on 5.9+; `~Copyable` ownership on 6.0+
 - **macOS, iOS, tvOS, watchOS, Linux** — SPM-only, no Objective-C, no Foundation XML APIs
 
@@ -103,6 +105,32 @@ let parser = XMLTreeParser(configuration: .init(
 let tree = try parser.parse(data: untrustedInput)
 ```
 
+### Streaming — Pull Cursor
+
+```swift
+// Parse once, consume on demand
+let cursor = try XMLEventCursor(data: xmlData)
+while let event = cursor.next() {
+    if case .startElement(let name, _, _) = event {
+        print(name.localName)
+    }
+}
+```
+
+### Streaming — Item-by-Item Codable Decode
+
+```swift
+struct Product: Decodable { let sku: String; let price: Double }
+
+let cursor   = try XMLEventCursor(data: catalogData)
+let products = try XMLItemDecoder().decode(Product.self, itemElement: "Product", from: cursor)
+
+// Or async, one item at a time (macOS 12+):
+for try await product in XMLItemDecoder().items(Product.self, itemElement: "Product", from: cursor) {
+    await persist(product)
+}
+```
+
 ---
 
 ## Documentation
@@ -112,6 +140,7 @@ Full API documentation and guides:
 - [Getting Started](Sources/SwiftXMLCoder/SwiftXMLCoder.docc/Articles/GettingStarted.md)
 - [Field Mapping](Sources/SwiftXMLCoder/SwiftXMLCoder.docc/Articles/FieldMapping.md)
 - [Namespaces](Sources/SwiftXMLCoder/SwiftXMLCoder.docc/Articles/Namespaces.md)
+- [Streaming](Sources/SwiftXMLCoder/SwiftXMLCoder.docc/Articles/Streaming.md)
 - [Canonicalization](Sources/SwiftXMLCoder/SwiftXMLCoder.docc/Articles/Canonicalization.md)
 - [XPath](Sources/SwiftXMLCoder/SwiftXMLCoder.docc/Articles/XPath.md)
 - [Security](Sources/SwiftXMLCoder/SwiftXMLCoder.docc/Articles/Security.md)

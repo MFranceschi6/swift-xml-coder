@@ -44,9 +44,16 @@ extension XMLTreeParser {
             depth: 1,
             parseState: &parseState
         )
-        let metadata = parseDocumentMetadata(from: rootNode.nodePointer.pointee.doc)
+        let docPointer = rootNode.nodePointer.pointee.doc
+        let metadata = parseDocumentMetadata(from: docPointer)
+        let (prologueNodes, epilogueNodes) = parseDocumentLevelNodes(from: docPointer)
         logger.debug("XML parse completed", metadata: ["nodeCount": "\(parseState.nodeCount)"])
-        return XMLTreeDocument(root: rootElement, metadata: metadata)
+        return XMLTreeDocument(
+            root: rootElement,
+            metadata: metadata,
+            prologueNodes: prologueNodes,
+            epilogueNodes: epilogueNodes
+        )
     }
 
     func effectiveParsingConfiguration() -> XMLDocument.ParsingConfiguration {
@@ -230,6 +237,13 @@ extension XMLTreeParser {
                 let value = string(fromNodeContent: currentChildPointer)
                 try incrementNodeCount(parseState: &parseState, context: "comment node")
                 children.append(.comment(value))
+            case XML_PI_NODE:
+                let target = string(fromXMLCharPointer: currentChildPointer.pointee.name) ?? ""
+                let data = currentChildPointer.pointee.content.map {
+                    String(cString: UnsafePointer<CChar>(OpaquePointer($0)))
+                }
+                try incrementNodeCount(parseState: &parseState, context: "processing instruction node")
+                children.append(.processingInstruction(target: target, data: data))
             default:
                 break
             }
@@ -243,12 +257,53 @@ extension XMLTreeParser {
         let encoding = string(fromXMLCharPointer: documentPointer?.pointee.encoding)
         let standaloneValue = Int32(documentPointer?.pointee.standalone ?? -1)
 
+        var doctype: XMLDoctype?
+        if let dtd = documentPointer?.pointee.intSubset, let dtdName = string(fromXMLCharPointer: dtd.pointee.name) {
+            let systemID = string(fromXMLCharPointer: dtd.pointee.SystemID)
+            let publicID = string(fromXMLCharPointer: dtd.pointee.ExternalID)
+            doctype = XMLDoctype(name: dtdName, systemID: systemID, publicID: publicID)
+        }
+
         return XMLDocumentStructuralMetadata(
             xmlVersion: xmlVersion,
             encoding: encoding,
             standalone: standaloneValue < 0 ? nil : standaloneValue == 1,
-            canonicalization: XMLCanonicalizationMetadata()
+            canonicalization: XMLCanonicalizationMetadata(),
+            doctype: doctype
         )
+    }
+
+    private func parseDocumentLevelNodes(
+        from documentPointer: xmlDocPtr?
+    ) -> (prologue: [XMLDocumentNode], epilogue: [XMLDocumentNode]) {
+        var prologueNodes: [XMLDocumentNode] = []
+        var epilogueNodes: [XMLDocumentNode] = []
+        var passedRoot = false
+
+        var nodePointer = documentPointer?.pointee.children
+        while let currentPointer = nodePointer {
+            defer { nodePointer = currentPointer.pointee.next }
+
+            switch currentPointer.pointee.type {
+            case XML_ELEMENT_NODE:
+                passedRoot = true
+            case XML_PI_NODE:
+                let target = string(fromXMLCharPointer: currentPointer.pointee.name) ?? ""
+                let data = currentPointer.pointee.content.map {
+                    String(cString: UnsafePointer<CChar>(OpaquePointer($0)))
+                }
+                let node = XMLDocumentNode.processingInstruction(target: target, data: data)
+                if passedRoot { epilogueNodes.append(node) } else { prologueNodes.append(node) }
+            case XML_COMMENT_NODE:
+                let value = string(fromNodeContent: currentPointer)
+                let node = XMLDocumentNode.comment(value)
+                if passedRoot { epilogueNodes.append(node) } else { prologueNodes.append(node) }
+            default:
+                break
+            }
+        }
+
+        return (prologueNodes, epilogueNodes)
     }
 
     private func string(fromNodeContent nodePointer: xmlNodePtr) -> String {

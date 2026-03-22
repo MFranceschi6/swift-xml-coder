@@ -441,8 +441,8 @@ final class XMLFieldMappingTests: XCTestCase {
         let xml = Data("<Strict><host>localhost</host><computed>ignored</computed></Strict>".utf8)
         let decoder = XMLDecoder(configuration: .init(rootElementName: "Strict", fieldCodingOverrides: overrides))
         XCTAssertThrowsError(try decoder.decode(Strict.self, from: xml)) { error in
-            guard case XMLParsingError.parseFailed(let msg) = error else {
-                return XCTFail("Expected XMLParsingError.parseFailed, got \(error)")
+            guard case XMLParsingError.decodeFailed(_, _, let msg) = error else {
+                return XCTFail("Expected XMLParsingError.decodeFailed, got \(error)")
             }
             XCTAssertTrue(msg?.contains("XML6_6_IGNORED_FIELD_DECODE") == true)
         }
@@ -460,8 +460,8 @@ final class XMLFieldMappingTests: XCTestCase {
         let xml = Data("<Outer><name>test</name><nested><x>1</x></nested></Outer>".utf8)
         let decoder = XMLDecoder(configuration: .init(rootElementName: "Outer", fieldCodingOverrides: overrides))
         XCTAssertThrowsError(try decoder.decode(Outer.self, from: xml)) { error in
-            guard case XMLParsingError.parseFailed(let msg) = error else {
-                return XCTFail("Expected XMLParsingError.parseFailed, got \(error)")
+            guard case XMLParsingError.decodeFailed(_, _, let msg) = error else {
+                return XCTFail("Expected XMLParsingError.decodeFailed, got \(error)")
             }
             XCTAssertTrue(msg?.contains("XML6_6_IGNORED_FIELD_DECODE") == true)
         }

@@ -193,6 +193,77 @@ final class XMLStreamWriterTests: XCTestCase {
         XCTAssertTrue(texts.contains("async test"))
     }
 
+    // MARK: - Security limits — CDATA, comment, node count
+
+    func test_write_cdataBlockLimit_throws() {
+        let bigCDATA = String(repeating: "x", count: 200)
+        let events: [XMLStreamEvent] = [
+            .startDocument(version: nil, encoding: nil, standalone: nil),
+            .startElement(name: XMLQualifiedName(localName: "Root"), attributes: [], namespaceDeclarations: []),
+            .cdata(bigCDATA),
+            .endElement(name: XMLQualifiedName(localName: "Root")),
+            .endDocument
+        ]
+        let limits = XMLStreamWriter.WriterLimits(maxCDATABlockBytes: 50)
+        let config = XMLStreamWriter.Configuration(limits: limits)
+        XCTAssertThrowsError(try XMLStreamWriter(configuration: config).write(events)) { error in
+            guard case XMLParsingError.parseFailed = error else {
+                return XCTFail("Expected parseFailed, got \(error)")
+            }
+        }
+    }
+
+    func test_write_commentLimit_throws() {
+        let bigComment = String(repeating: "c", count: 200)
+        let events: [XMLStreamEvent] = [
+            .startDocument(version: nil, encoding: nil, standalone: nil),
+            .startElement(name: XMLQualifiedName(localName: "Root"), attributes: [], namespaceDeclarations: []),
+            .comment(bigComment),
+            .endElement(name: XMLQualifiedName(localName: "Root")),
+            .endDocument
+        ]
+        let limits = XMLStreamWriter.WriterLimits(maxCommentBytes: 50)
+        let config = XMLStreamWriter.Configuration(limits: limits)
+        XCTAssertThrowsError(try XMLStreamWriter(configuration: config).write(events)) { error in
+            guard case XMLParsingError.parseFailed = error else {
+                return XCTFail("Expected parseFailed, got \(error)")
+            }
+        }
+    }
+
+    func test_write_nodeCountLimit_throws() {
+        // 3 elements with maxNodeCount=2 should throw
+        let events: [XMLStreamEvent] = [
+            .startDocument(version: nil, encoding: nil, standalone: nil),
+            .startElement(name: XMLQualifiedName(localName: "A"), attributes: [], namespaceDeclarations: []),
+            .startElement(name: XMLQualifiedName(localName: "B"), attributes: [], namespaceDeclarations: []),
+            .startElement(name: XMLQualifiedName(localName: "C"), attributes: [], namespaceDeclarations: []),
+            .endElement(name: XMLQualifiedName(localName: "C")),
+            .endElement(name: XMLQualifiedName(localName: "B")),
+            .endElement(name: XMLQualifiedName(localName: "A")),
+            .endDocument
+        ]
+        let limits = XMLStreamWriter.WriterLimits(maxNodeCount: 2)
+        let config = XMLStreamWriter.Configuration(limits: limits)
+        XCTAssertThrowsError(try XMLStreamWriter(configuration: config).write(events)) { error in
+            guard case XMLParsingError.parseFailed = error else {
+                return XCTFail("Expected parseFailed, got \(error)")
+            }
+        }
+    }
+
+    func test_write_standaloneDeclaration_yes() throws {
+        let events: [XMLStreamEvent] = [
+            .startDocument(version: "1.0", encoding: "UTF-8", standalone: true),
+            .startElement(name: XMLQualifiedName(localName: "Root"), attributes: [], namespaceDeclarations: []),
+            .endElement(name: XMLQualifiedName(localName: "Root")),
+            .endDocument
+        ]
+        let data = try XMLStreamWriter().write(events)
+        let str = String(data: data, encoding: .utf8) ?? ""
+        XCTAssertTrue(str.contains("standalone=\"yes\""), "Expected standalone='yes' in: \(str)")
+    }
+
     // MARK: - prettyPrinted produces indented output
 
     func test_write_prettyPrinted_producesIndentation() throws {
