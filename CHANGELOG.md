@@ -6,6 +6,46 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added (XML-R3 — Pull Cursor and Item-by-Item Decode)
+
+- **`XMLEventCursor`** — new `final class` providing a forward-only, pull-style cursor over a
+  pre-parsed sequence of ``XMLStreamEvent`` values. Created from `Data` using the existing SAX
+  parser; all events are buffered on init. Exposes `next()`, `peek()`, `isAtEnd`, `count`,
+  `position`, and `advance(toElement:)`. Conforms to `IteratorProtocol`. Documented as
+  not thread-safe (single-caller use). `@unchecked Sendable` to allow capture in async closures.
+- **`XMLItemDecoder`** — new `Sendable` struct that decodes `Decodable` items one at a time from
+  a named repeating element using an `XMLEventCursor`. Internally extracts events for each item
+  (handling nested same-name elements via depth tracking), serialises them as a self-contained XML
+  fragment via `XMLStreamWriter`, and decodes with `XMLDecoder`. Exposes:
+  - `decode(_:itemElement:from:) throws -> [T]` — synchronous; returns all items as an array.
+  - `items(_:itemElement:from:) -> AsyncThrowingStream<T, Error>` — async; decodes one item at
+    a time with natural backpressure (macOS 12+, iOS 15+). Task cancellation is checked before
+    each yield.
+  - Full decoder configuration forwarded (`dateDecodingStrategy`, `fieldCodingOverrides`,
+    `keyTransformStrategy`, etc.); `rootElementName` is overridden per-call with `itemElement`.
+  - Dual `#if swift(>=6.0) throws(XMLParsingError)` branch on `decode(_:itemElement:from:)`.
+- **14 new tests** in `XMLEventCursorTests` covering: init/count, `next()`/`peek()` navigation,
+  `isAtEnd`, `IteratorProtocol` while-loop, `advance(toElement:)` find/skip/not-found/repeated,
+  `XMLItemDecoder` sync decode (3-item catalog, empty container, single item, cursor exhaustion),
+  nested same-name element depth tracking, configuration forwarding (date strategy), async stream
+  (yield-all, empty container), invalid XML throws, and `nextItemEvents` internal extraction.
+
+### Changed (XML-R3 — Streaming Documentation)
+
+- **`Articles/Streaming.md`** updated:
+  - "Push Model vs Pull/Cursor" section rewritten — introduces `XMLEventCursor` and `XMLItemDecoder`
+    as the pull-style counterparts to `XMLStreamParser`; clarifies the memory model (events buffered,
+    smaller than full DOM tree). The old duplicate `> Note:` blocks merged into one.
+  - New "Pull Cursor" section — usage example for `XMLEventCursor.next()` and `advance(toElement:)`.
+  - New "Item-by-Item Codable Decode" section — sync and async `XMLItemDecoder` examples with
+    configuration forwarding note.
+  - "When to Use Streaming vs. Tree" table updated — replaces the "Forward-only cursor reads
+    (future/planned)" row with concrete entries for `XMLEventCursor` and `XMLItemDecoder`.
+  - "Roadmap" section removed (both planned items are now shipped).
+  - Topics section extended with `XMLEventCursor` and `XMLItemDecoder` entries.
+- **`SwiftXMLCoder.docc/SwiftXMLCoder.md`**: `XMLEventCursor` and `XMLItemDecoder` added to the
+  "Streaming" topics section.
+
 ### Added (XSD-First Contract Coverage)
 
 - **`GeneratedModelContractTests`** — new runtime contract suite exercising the shape of code emitted by `swift-xml-codegen`: `XMLRootNode`, `XMLFieldNamespaceProvider`, `@XMLAttribute`, `@XMLTextContent`, arrays, `Decimal`, `Date`, `Data`, and namespaced child fields in encode/decode round-trips.

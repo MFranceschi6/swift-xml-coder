@@ -55,6 +55,8 @@ let decoded = try decoder.decode(Book.self, from: data)
 - ``XMLStreamEvent``
 - ``XMLStreamParser``
 - ``XMLStreamWriter``
+- ``XMLEventCursor``
+- ``XMLItemDecoder``
 
 ### Field Mapping
 

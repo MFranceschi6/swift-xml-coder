@@ -13,11 +13,11 @@ Both types are `Sendable` and work on all Swift versions. Async APIs are availab
 
 ### Push Model vs Pull/Cursor
 
-The current streaming API is **push-based**: the parser drives execution, calling your handler (or yielding to your `for await` loop) for each event in document order. The caller does not control the pace.
+``XMLStreamParser`` uses a **push-based** model: the parser drives execution, calling your handler (or yielding to your `for await` loop) for each event in document order. The caller does not control the pace.
 
-A **pull/cursor API** — where the caller advances a cursor to request the next token, enabling selective forward-only reads without buffering — is planned for a future release and is not yet part of the public API. Use the callback or `AsyncSequence` APIs in the meantime; they are designed so selective extraction (see below) is already efficient.
+``XMLEventCursor`` provides a **pull-based** interface: you advance the cursor explicitly by calling ``XMLEventCursor/next()`` or ``XMLEventCursor/advance(toElement:)``; events are returned on demand. ``XMLItemDecoder`` builds on top of the cursor to decode `Codable` items one at a time from a named repeating element.
 
-> Note: The `AsyncSequence` API wraps the synchronous callback internally. Both process the full byte sequence before returning control; neither streams incrementally from a socket or file handle. Large documents are still loaded fully into the libxml2 DOM before events are emitted. For very large documents (hundreds of MB), the push API remains the most memory-efficient option in the current release.
+> Note: All three APIs — callback, `AsyncSequence`, and cursor — parse the full byte sequence before returning control. ``XMLEventCursor`` pre-buffers all events on creation; the memory advantage over ``XMLTreeParser`` is that events are smaller than the full DOM tree, not that events are produced lazily from a socket or file handle. For very large documents (hundreds of MB), the push callback API remains the most memory-efficient option.
 
 ## XMLStreamEvent
 
@@ -176,6 +176,53 @@ func extractPrices(from xmlData: Data) throws -> [PriceEntry] {
 
 This approach keeps peak memory proportional to the number of matched items, not to the size of the document.
 
+## Pull Cursor
+
+``XMLEventCursor`` provides a pull-style interface for consuming events one at a time:
+
+```swift
+let cursor = try XMLEventCursor(data: xmlData)
+while let event = cursor.next() {
+    if case .startElement(let name, _, _) = event {
+        print(name.localName)
+    }
+}
+```
+
+Use ``XMLEventCursor/advance(toElement:)`` to skip ahead to a named element without writing a manual depth-tracking loop:
+
+```swift
+let cursor = try XMLEventCursor(data: xmlData)
+while cursor.advance(toElement: "Product") != nil {
+    // cursor is now positioned right after <Product> — read child events until </Product>
+}
+```
+
+## Item-by-Item Codable Decode
+
+``XMLItemDecoder`` connects the cursor API with `Codable`: it finds each occurrence of a named element, serialises its events as a self-contained XML fragment, and decodes it using ``XMLDecoder``. Only one item's events are in a temporary buffer at a time.
+
+```swift
+struct Product: Decodable {
+    let sku: String
+    let price: Double
+}
+
+let cursor = try XMLEventCursor(data: catalogData)
+let products = try XMLItemDecoder().decode(Product.self, itemElement: "Product", from: cursor)
+```
+
+For backpressure-aware processing on macOS 12+ / iOS 15+, use the async stream overload. The next item is not decoded until the consumer requests it:
+
+```swift
+let cursor = try XMLEventCursor(data: catalogData)
+for try await product in XMLItemDecoder().items(Product.self, itemElement: "Product", from: cursor) {
+    await persist(product)
+}
+```
+
+Pass a ``XMLDecoder/Configuration`` to ``XMLItemDecoder/init(configuration:)`` to forward date strategies, key transforms, field overrides, and other decoder settings to each item decode call.
+
 ## When to Use Streaming vs. Tree
 
 | Scenario | Recommended API |
@@ -184,18 +231,10 @@ This approach keeps peak memory proportional to the number of matched items, not
 | Transforming or filtering an XML document without full load | ``XMLStreamParser`` + ``XMLStreamWriter`` |
 | Building or querying a document structure in memory | ``XMLTreeParser`` / ``XMLDocument`` |
 | Encoding/decoding `Codable` types | ``XMLEncoder`` / ``XMLDecoder`` |
-| Forward-only cursor reads without a closure (future) | Pull/cursor API — planned, not yet available |
+| Forward-only cursor reads without a closure | ``XMLEventCursor`` |
+| Decoding a repeating element one item at a time | ``XMLItemDecoder`` |
 
-> Tip: If you need to decode a `Codable` type from a specific child element within a large document, extract that element's byte range first with ``XMLStreamParser``, then pass just those bytes to ``XMLDecoder``.
-
-## Roadmap
-
-The current push API covers event-driven parsing and serialisation. The following capabilities are planned but not yet available:
-
-- **Pull/cursor API** — a forward-only cursor you advance explicitly (analogous to Java `StAXReader` or .NET `XmlReader`), enabling selective reads without a closure or async overhead.
-- **Item-by-item `Codable` decode** — decode one item at a time from a collection in a large document, without buffering the entire sequence.
-
-These are targeted at a future release. If your use case requires them today, the selective extraction pattern above is the recommended approach.
+> Tip: If you need to decode a `Codable` type from a specific child element within a large document, use ``XMLItemDecoder`` to locate and decode just that element without constructing the full DOM.
 
 ## Topics
 
@@ -212,3 +251,11 @@ These are targeted at a future release. If your use case requires them today, th
 - ``XMLStreamWriter``
 - ``XMLStreamWriter/Configuration``
 - ``XMLStreamWriter/WriterLimits``
+
+### Cursor
+
+- ``XMLEventCursor``
+
+### Item-by-Item Decoder
+
+- ``XMLItemDecoder``
