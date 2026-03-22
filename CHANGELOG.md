@@ -6,6 +6,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.3.0] — 2026-03-22
+
 ### Added (XML-R3 — Pull Cursor and Item-by-Item Decode)
 
 - **`XMLEventCursor`** — new `final class` providing a forward-only, pull-style cursor over a
