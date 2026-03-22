@@ -6,6 +6,24 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added (XSD-First Contract Coverage)
+
+- **`GeneratedModelContractTests`** — new runtime contract suite exercising the shape of code emitted by `swift-xml-codegen`: `XMLRootNode`, `XMLFieldNamespaceProvider`, `@XMLAttribute`, `@XMLTextContent`, arrays, `Decimal`, `Date`, `Data`, and namespaced child fields in encode/decode round-trips.
+
+### Changed (XML-R2 — Streaming Story)
+
+- **`Articles/Streaming.md`** updated with:
+  - "Push Model vs Pull/Cursor" section — explains the current push-only model, clarifies that
+    `AsyncSequence` wraps the synchronous parser internally (no byte-by-byte streaming from
+    sockets), and explicitly names pull/cursor as a planned future capability.
+  - "Selective Extraction" section — depth-tracked pattern for extracting a subset of fields
+    from a large document without materialising the full DOM, with a complete `PriceEntry`
+    example.
+  - Updated "When to Use Streaming vs. Tree" decision table — adds pull/cursor row (planned) and
+    a Tip on combining ``XMLStreamParser`` with ``XMLDecoder`` for large-document `Codable` use.
+  - "Roadmap" section — lists pull/cursor and item-by-item `Codable` decode as planned future
+    capabilities so users know what to expect.
+
 ### Added (XML-R2 — Diagnostics)
 
 - **`XMLSourceLocation`** — new `Sendable, Equatable` struct carrying optional `line`, `column`,
