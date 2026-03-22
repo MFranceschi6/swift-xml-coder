@@ -101,18 +101,12 @@ final class GeneratedModelContractTests: XCTestCase {
 }
 
 private func firstChild(named name: String, in element: XMLTreeElement) -> XMLTreeElement? {
-    element.children.first { child in
-        guard case let .element(candidate) = child else {
-            return false
+    for child in element.children {
+        if case let .element(candidate) = child, candidate.name.localName == name {
+            return candidate
         }
-        return candidate.name.localName == name
     }
-    .flatMap { child in
-        guard case let .element(candidate) = child else {
-            return nil
-        }
-        return candidate
-    }
+    return nil
 }
 
 private func textContent(of element: XMLTreeElement) -> String? {

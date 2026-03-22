@@ -228,6 +228,46 @@ final class XMLEventCursorTests: XCTestCase {
         XCTAssertEqual(count, 0)
     }
 
+    // MARK: - XMLItemDecoder — error paths
+
+    func test_itemDecoder_decode_throwsOnMalformedItemContent() throws {
+        // XML is structurally valid but item content cannot be decoded as the expected type
+        struct Strict: Decodable { let required: Int }
+        let xml = Data("<Root><Strict><required>not-a-number</required></Strict></Root>".utf8)
+        let cursor = try XMLEventCursor(data: xml)
+        XCTAssertThrowsError(try XMLItemDecoder().decode(Strict.self, itemElement: "Strict", from: cursor))
+    }
+
+    @available(macOS 12, iOS 15, watchOS 8, tvOS 15, *)
+    func test_itemDecoder_items_asyncStream_throwsOnMalformedItemContent() async throws {
+        struct Strict: Decodable, Sendable { let required: Int }
+        let xml = Data("<Root><Strict><required>not-a-number</required></Strict></Root>".utf8)
+        let cursor = try XMLEventCursor(data: xml)
+        var didThrow = false
+        do {
+            for try await _ in XMLItemDecoder().items(Strict.self, itemElement: "Strict", from: cursor) { }
+        } catch {
+            didThrow = true
+        }
+        XCTAssertTrue(didThrow, "Async stream must propagate decode errors")
+    }
+
+    @available(macOS 12, iOS 15, watchOS 8, tvOS 15, *)
+    func test_itemDecoder_items_asyncStream_taskCancellation_terminatesCleanly() async throws {
+        struct Product: Decodable, Sendable { let sku: String }
+        let cursor = try XMLEventCursor(data: catalog)
+        let task = Task {
+            var count = 0
+            for try await _ in XMLItemDecoder().items(Product.self, itemElement: "Product", from: cursor) {
+                count += 1
+            }
+            return count
+        }
+        task.cancel()
+        // The task must not crash or hang; it may produce 0..3 items depending on timing
+        _ = try await task.value
+    }
+
     // MARK: - XMLEventCursor — invalid XML
 
     func test_cursor_init_throwsOnInvalidXML() throws {

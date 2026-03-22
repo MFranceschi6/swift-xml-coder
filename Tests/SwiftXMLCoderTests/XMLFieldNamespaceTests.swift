@@ -126,8 +126,8 @@ final class XMLFieldNamespaceTests: XCTestCase {
         let encoder = XMLEncoder(configuration: .init(rootElementName: "Envelope"))
         let tree = try encoder.encodeTree(SoapEnvelope(body: "test"))
 
-        let bodyEl = tree.root.children.compactMap {
-            if case .element(let el) = $0 { return el } else { return nil }
+        let bodyEl = tree.root.children.compactMap { (child: XMLTreeNode) -> XMLTreeElement? in
+            if case .element(let el) = child { return el } else { return nil }
         }.first(where: { $0.name.localName == "body" })
 
         XCTAssertNotNil(bodyEl, "Expected child element named 'body'")
