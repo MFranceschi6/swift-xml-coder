@@ -179,8 +179,8 @@ final class XMLDecoderTests: XCTestCase {
         )
 
         XCTAssertThrowsError(try decoder.decode(Payload.self, from: Data(xml.utf8))) { error in
-            guard case let XMLParsingError.parseFailed(message) = error else {
-                return XCTFail("Expected XMLParsingError.parseFailed.")
+            guard case let XMLParsingError.decodeFailed(_, _, message) = error else {
+                return XCTFail("Expected XMLParsingError.decodeFailed, got \(error).")
             }
             XCTAssertTrue((message ?? "").contains("XML6_5C_DATE_PARSE_FAILED"))
         }
@@ -267,12 +267,16 @@ final class XMLDecoderTests: XCTestCase {
         let xml = "<Root>\n<name>Alice</name>\n</Root>"
         let decoder = XMLDecoder(configuration: .init(rootElementName: "Root"))
         XCTAssertThrowsError(try decoder.decode(Payload.self, from: Data(xml.utf8))) { error in
-            guard case XMLParsingError.parseFailed(let message) = error else {
-                return XCTFail("Expected XMLParsingError.parseFailed, got \(error)")
+            guard case XMLParsingError.decodeFailed(_, let location, let message) = error else {
+                return XCTFail("Expected XMLParsingError.decodeFailed, got \(error)")
             }
+            // Location is now a structured XMLSourceLocation, not just embedded in the message.
+            // The message still contains "line" for backward compatibility.
+            let hasLineInMessage = (message ?? "").contains("line")
+            let hasLineInLocation = location?.line != nil
             XCTAssertTrue(
-                (message ?? "").contains("line"),
-                "Error message should contain 'line' position info but was: \(message ?? "<nil>")"
+                hasLineInMessage || hasLineInLocation,
+                "Error should surface 'line' in message or location; message='\(message ?? "<nil>")' location=\(String(describing: location))"
             )
         }
     }
@@ -289,12 +293,14 @@ final class XMLDecoderTests: XCTestCase {
             fieldCodingOverrides: overrides
         ))
         XCTAssertThrowsError(try decoder.decode(Payload.self, from: Data(xml.utf8))) { error in
-            guard case XMLParsingError.parseFailed(let message) = error else {
-                return XCTFail("Expected XMLParsingError.parseFailed, got \(error)")
+            guard case XMLParsingError.decodeFailed(_, let location, let message) = error else {
+                return XCTFail("Expected XMLParsingError.decodeFailed, got \(error)")
             }
+            let hasLineInMessage = (message ?? "").contains("line")
+            let hasLineInLocation = location?.line != nil
             XCTAssertTrue(
-                (message ?? "").contains("line"),
-                "Attribute error message should contain 'line' position info but was: \(message ?? "<nil>")"
+                hasLineInMessage || hasLineInLocation,
+                "Attribute error should surface 'line' in message or location; message='\(message ?? "<nil>")' location=\(String(describing: location))"
             )
         }
     }

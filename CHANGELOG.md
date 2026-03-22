@@ -6,6 +6,34 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added (XML-R2 — Diagnostics)
+
+- **`XMLSourceLocation`** — new `Sendable, Equatable` struct carrying optional `line`, `column`,
+  and `byteOffset` fields. `line` is populated from libxml2 source tracking when a parse failure
+  occurs on a real XML element; `column` and `byteOffset` are reserved for future SAX-level
+  instrumentation and are currently always `nil`.
+- **`XMLParsingError.decodeFailed(codingPath:location:message:)`** — new error case produced by
+  the XML Codable layer for all field-level decode failures. Carries a `[String]` coding path
+  (from root to the failing field, with array indices rendered as `[n]`), an optional
+  `XMLSourceLocation`, and a stable `[CODE]`-prefixed message. Replaces `parseFailed` at all
+  35 throw sites inside `XMLDecoder+Codable.swift`, making Codable decode errors structurally
+  distinct from XML-level parse failures.
+- **`_XMLTreeDecoder.decodeFailed(codingPath:element:message:)`** — internal helper that builds
+  a `decodeFailed` error from a `[CodingKey]` path and an optional element (falls back to the
+  decoder's current node for location). Convenience overload `decodeFailed(message:)` uses the
+  decoder's own `codingPath` and `node`.
+- **15 new tests** in `XMLDiagnosticsTests` covering `XMLSourceLocation` init/equatable,
+  `decodeFailed` equatable variants, missing-key coding path content, bad-scalar error code,
+  source location propagation, nested coding path, bad-date error code, XML-level failures still
+  using `parseFailed`, and a regression test for successful decode producing no error.
+
+### Changed (XML-R2 — Diagnostics)
+
+- All `parseFailed` throws inside `_XMLKeyedDecodingContainer`, `_XMLUnkeyedDecodingContainer`,
+  and `_XMLSingleValueDecodingContainer` replaced with `decodeFailed`. Key-not-found cases
+  now include the missing key as the last element of the coding path for better debuggability.
+- `SwiftXMLCoder.docc/SwiftXMLCoder.md`: `XMLSourceLocation` added to the "Errors" topics section.
+
 ### Added (XML-R2 — Namespace Ergonomics Per Field)
 
 - **`XMLFieldNamespaceProvider`** — new protocol allowing a `Codable` type to declare per-field

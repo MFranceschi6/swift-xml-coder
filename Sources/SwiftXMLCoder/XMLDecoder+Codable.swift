@@ -125,6 +125,25 @@ final class _XMLTreeDecoder: Decoder {
         _XMLSingleValueDecodingContainer(decoder: self, codingPath: codingPath, node: node)
     }
 
+    // MARK: - Diagnostics helper
+
+    /// Builds an `XMLParsingError.decodeFailed` from the supplied coding path and element.
+    ///
+    /// When `element` is `nil`, the decoder's current `node` is used for location information.
+    func decodeFailed(codingPath explicitPath: [CodingKey], element: XMLTreeElement? = nil, message: String) -> XMLParsingError {
+        let path = explicitPath.map { key -> String in
+            if let index = key.intValue { return "[\(index)]" }
+            return key.stringValue
+        }
+        let location = (element ?? node).metadata.sourceLine.map { XMLSourceLocation(line: $0) }
+        return XMLParsingError.decodeFailed(codingPath: path, location: location, message: message)
+    }
+
+    /// Builds an `XMLParsingError.decodeFailed` using the decoder's own coding path and current node.
+    func decodeFailed(message: String) -> XMLParsingError {
+        decodeFailed(codingPath: codingPath, message: message)
+    }
+
     func firstChild(named localName: String, in element: XMLTreeElement) -> XMLTreeElement? {
         firstChild(named: localName, namespaceURI: nil, in: element)
     }
@@ -250,9 +269,8 @@ final class _XMLTreeDecoder: Decoder {
 
         if type == Bool.self {
             guard let parsed = parseBool(lexical) else {
-                throw XMLParsingError.parseFailed(
-                    message: "[XML6_5C_BOOL_PARSE_FAILED] Unable to parse Bool from '\(lexical)' at path '\(renderCodingPath(codingPath))'."
-                )
+                throw decodeFailed(codingPath: codingPath,
+                    message: "[XML6_5C_BOOL_PARSE_FAILED] Unable to parse Bool from '\(lexical)' at path '\(renderCodingPath(codingPath))'.")
             }
             return parsed as? T
         }
@@ -269,27 +287,24 @@ final class _XMLTreeDecoder: Decoder {
 
         if type == Double.self {
             guard let parsed = Double(lexical) else {
-                throw XMLParsingError.parseFailed(
-                    message: "[XML6_5C_DOUBLE_PARSE_FAILED] Unable to parse Double from '\(lexical)' at path '\(renderCodingPath(codingPath))'."
-                )
+                throw decodeFailed(codingPath: codingPath,
+                    message: "[XML6_5C_DOUBLE_PARSE_FAILED] Unable to parse Double from '\(lexical)' at path '\(renderCodingPath(codingPath))'.")
             }
             return parsed as? T
         }
 
         if type == Float.self {
             guard let parsed = Float(lexical) else {
-                throw XMLParsingError.parseFailed(
-                    message: "[XML6_5C_FLOAT_PARSE_FAILED] Unable to parse Float from '\(lexical)' at path '\(renderCodingPath(codingPath))'."
-                )
+                throw decodeFailed(codingPath: codingPath,
+                    message: "[XML6_5C_FLOAT_PARSE_FAILED] Unable to parse Float from '\(lexical)' at path '\(renderCodingPath(codingPath))'.")
             }
             return parsed as? T
         }
 
         if type == Decimal.self {
             guard let parsed = Decimal(string: lexical, locale: Locale(identifier: "en_US_POSIX")) else {
-                throw XMLParsingError.parseFailed(
-                    message: "[XML6_5C_DECIMAL_PARSE_FAILED] Unable to parse Decimal from '\(lexical)' at path '\(renderCodingPath(codingPath))'."
-                )
+                throw decodeFailed(codingPath: codingPath,
+                    message: "[XML6_5C_DECIMAL_PARSE_FAILED] Unable to parse Decimal from '\(lexical)' at path '\(renderCodingPath(codingPath))'.")
             }
             return parsed as? T
         }
@@ -297,16 +312,14 @@ final class _XMLTreeDecoder: Decoder {
         if type == URL.self {
             #if !canImport(Darwin) && swift(<6.0)
             guard let parsed = _xmlParityDecodeURL(lexical) else {
-                throw XMLParsingError.parseFailed(
-                    message: "[XML6_5C_URL_PARSE_FAILED] Unable to parse URL from '\(lexical)' at path '\(renderCodingPath(codingPath))'."
-                )
+                throw decodeFailed(codingPath: codingPath,
+                    message: "[XML6_5C_URL_PARSE_FAILED] Unable to parse URL from '\(lexical)' at path '\(renderCodingPath(codingPath))'.")
             }
             return parsed as? T
             #else
             guard let parsed = URL(string: lexical) else {
-                throw XMLParsingError.parseFailed(
-                    message: "[XML6_5C_URL_PARSE_FAILED] Unable to parse URL from '\(lexical)' at path '\(renderCodingPath(codingPath))'."
-                )
+                throw decodeFailed(codingPath: codingPath,
+                    message: "[XML6_5C_URL_PARSE_FAILED] Unable to parse URL from '\(lexical)' at path '\(renderCodingPath(codingPath))'.")
             }
             return parsed as? T
             #endif
@@ -314,9 +327,8 @@ final class _XMLTreeDecoder: Decoder {
 
         if type == UUID.self {
             guard let parsed = UUID(uuidString: lexical) else {
-                throw XMLParsingError.parseFailed(
-                    message: "[XML6_5C_UUID_PARSE_FAILED] Unable to parse UUID from '\(lexical)' at path '\(renderCodingPath(codingPath))'."
-                )
+                throw decodeFailed(codingPath: codingPath,
+                    message: "[XML6_5C_UUID_PARSE_FAILED] Unable to parse UUID from '\(lexical)' at path '\(renderCodingPath(codingPath))'.")
             }
             return parsed as? T
         }
@@ -351,9 +363,8 @@ final class _XMLTreeDecoder: Decoder {
         codingPath: [CodingKey]
     ) throws -> T {
         guard let parsed = T(value) else {
-            throw XMLParsingError.parseFailed(
-                message: "[XML6_5C_INTEGER_PARSE_FAILED] Unable to parse integer from '\(value)' at path '\(renderCodingPath(codingPath))'."
-            )
+            throw decodeFailed(codingPath: codingPath,
+                message: "[XML6_5C_INTEGER_PARSE_FAILED] Unable to parse integer from '\(value)' at path '\(renderCodingPath(codingPath))'.")
         }
         return parsed
     }
@@ -361,9 +372,8 @@ final class _XMLTreeDecoder: Decoder {
     private func requiredLexicalValue(from element: XMLTreeElement, codingPath: [CodingKey]) throws -> String {
         let lexical = lexicalText(of: element)?.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let lexical = lexical, lexical.isEmpty == false else {
-            throw XMLParsingError.parseFailed(
-                message: "[XML6_5C_EMPTY_LEXICAL_VALUE] Empty lexical value at path '\(renderCodingPath(codingPath))'."
-            )
+            throw decodeFailed(codingPath: codingPath, element: element,
+                message: "[XML6_5C_EMPTY_LEXICAL_VALUE] Empty lexical value at path '\(renderCodingPath(codingPath))'.")
         }
         return lexical
     }
@@ -405,9 +415,8 @@ final class _XMLTreeDecoder: Decoder {
         if let parsed = try attemptParseDate(lexicalValue, strategy: effectiveStrategy, context: context) {
             return parsed
         }
-        throw XMLParsingError.parseFailed(
-            message: "[XML6_5C_DATE_PARSE_FAILED] Unable to parse Date from '\(lexicalValue)' at path '\(renderCodingPath(codingPath))'."
-        )
+        throw decodeFailed(codingPath: codingPath,
+            message: "[XML6_5C_DATE_PARSE_FAILED] Unable to parse Date from '\(lexicalValue)' at path '\(renderCodingPath(codingPath))'.")
     }
 
     private func attemptParseDate(
@@ -473,9 +482,8 @@ final class _XMLTreeDecoder: Decoder {
             } catch let error as XMLParsingError {
                 throw error
             } catch {
-                throw XMLParsingError.parseFailed(
-                    message: "[XML6_5C_DATE_PARSE_FAILED] Custom date decoder failed at path '\(context.codingPath.joined(separator: "."))': \(error)."
-                )
+                throw decodeFailed(
+                    message: "[XML6_5C_DATE_PARSE_FAILED] Custom date decoder failed at path '\(context.codingPath.joined(separator: "."))': \(error).")
             }
         }
     }
@@ -484,22 +492,19 @@ final class _XMLTreeDecoder: Decoder {
         switch options.dataDecodingStrategy {
         case .deferredToData:
             let path = renderCodingPath(codingPath)
-            throw XMLParsingError.parseFailed(
-                message: "[XML6_5B_DATA_UNSUPPORTED_STRATEGY] Data strategy deferredToData requires deferred decoding at path '\(path)'."
-            )
+            throw decodeFailed(codingPath: codingPath,
+                message: "[XML6_5B_DATA_UNSUPPORTED_STRATEGY] Data strategy deferredToData requires deferred decoding at path '\(path)'.")
         case .base64:
             let normalized = lexicalValue.filter { $0.isWhitespace == false }
             guard let data = Data(base64Encoded: normalized, options: [.ignoreUnknownCharacters]) else {
-                throw XMLParsingError.parseFailed(
-                    message: "[XML6_5B_DATA_PARSE_FAILED] Unable to parse base64 Data at path '\(renderCodingPath(codingPath))'."
-                )
+                throw decodeFailed(codingPath: codingPath,
+                    message: "[XML6_5B_DATA_PARSE_FAILED] Unable to parse base64 Data at path '\(renderCodingPath(codingPath))'.")
             }
             return data
         case .hex:
             guard let data = decodeHex(lexicalValue.filter { $0.isWhitespace == false }) else {
-                throw XMLParsingError.parseFailed(
-                    message: "[XML6_5B_DATA_PARSE_FAILED] Unable to parse hex Data at path '\(renderCodingPath(codingPath))'."
-                )
+                throw decodeFailed(codingPath: codingPath,
+                    message: "[XML6_5B_DATA_PARSE_FAILED] Unable to parse hex Data at path '\(renderCodingPath(codingPath))'.")
             }
             return data
         }
@@ -617,36 +622,33 @@ struct _XMLKeyedDecodingContainer<Key: CodingKey>: KeyedDecodingContainerProtoco
         }
 
         if nodeKind == .ignored {
-            throw XMLParsingError.parseFailed(
+            throw decoder.decodeFailed(codingPath: codingPath,
                 message: "[XML6_6_IGNORED_FIELD_DECODE] Field '\(key.stringValue)' is marked @XMLIgnore — " +
-                    "use an Optional type or provide a default value via init(from:) to suppress this error."
-            )
+                    "use an Optional type or provide a default value via init(from:) to suppress this error.")
         }
 
         if nodeKind == .textContent {
             return try decodeTextContent(type, forKey: key)
         }
 
+        let childPath = codingPath + [key]
         guard let element = decoder.firstChild(
             named: xmlName(for: key),
             namespaceURI: fieldNamespaceURI(for: key),
             in: decoder.node
         ) else {
-            throw XMLParsingError.parseFailed(
+            throw decoder.decodeFailed(codingPath: childPath,
                 message: "[XML6_5_KEY_NOT_FOUND] Missing key '\(key.stringValue)' " +
-                    "at path '\(renderPath(codingPath))'\(decoder.sourceLocation(of: decoder.node))."
-            )
+                    "at path '\(renderPath(codingPath))'\(decoder.sourceLocation(of: decoder.node)).")
         }
 
-        let childPath = codingPath + [key]
         if let scalar: T = try decoder.decodeScalar(type, from: element, codingPath: childPath) {
             return scalar
         }
         if decoder.isKnownScalarType(type) {
-            throw XMLParsingError.parseFailed(
+            throw decoder.decodeFailed(codingPath: childPath, element: element,
                 message: "[XML6_5_SCALAR_PARSE_FAILED] Unable to decode scalar key '\(key.stringValue)' " +
-                    "at path '\(renderPath(childPath))'\(decoder.sourceLocation(of: element))."
-            )
+                    "at path '\(renderPath(childPath))'\(decoder.sourceLocation(of: element)).")
         }
 
         var nestedOptions = decoder.options
@@ -667,9 +669,8 @@ struct _XMLKeyedDecodingContainer<Key: CodingKey>: KeyedDecodingContainerProtoco
     ) throws -> KeyedDecodingContainer<NestedKey> where NestedKey: CodingKey {
         if let nodeKind = decoder.options.fieldCodingOverrides.nodeKind(for: codingPath, key: key.stringValue),
            nodeKind == .attribute {
-            throw XMLParsingError.parseFailed(
-                message: "[XML6_6_ATTRIBUTE_NESTED_UNSUPPORTED] Cannot decode nested keyed container from attribute '\(key.stringValue)'."
-            )
+            throw decoder.decodeFailed(codingPath: codingPath,
+                message: "[XML6_6_ATTRIBUTE_NESTED_UNSUPPORTED] Cannot decode nested keyed container from attribute '\(key.stringValue)'.")
         }
 
         guard let element = decoder.firstChild(
@@ -677,10 +678,9 @@ struct _XMLKeyedDecodingContainer<Key: CodingKey>: KeyedDecodingContainerProtoco
             namespaceURI: fieldNamespaceURI(for: key),
             in: decoder.node
         ) else {
-            throw XMLParsingError.parseFailed(
+            throw decoder.decodeFailed(codingPath: codingPath + [key],
                 message: "[XML6_5_KEY_NOT_FOUND] Missing nested key '\(key.stringValue)' " +
-                    "at path '\(renderPath(codingPath))'\(decoder.sourceLocation(of: decoder.node))."
-            )
+                    "at path '\(renderPath(codingPath))'\(decoder.sourceLocation(of: decoder.node)).")
         }
 
         let nestedDecoder = _XMLTreeDecoder(
@@ -694,9 +694,8 @@ struct _XMLKeyedDecodingContainer<Key: CodingKey>: KeyedDecodingContainerProtoco
     func nestedUnkeyedContainer(forKey key: Key) throws -> UnkeyedDecodingContainer {
         if let nodeKind = decoder.options.fieldCodingOverrides.nodeKind(for: codingPath, key: key.stringValue),
            nodeKind == .attribute {
-            throw XMLParsingError.parseFailed(
-                message: "[XML6_6_ATTRIBUTE_NESTED_UNSUPPORTED] Cannot decode nested unkeyed container from attribute '\(key.stringValue)'."
-            )
+            throw decoder.decodeFailed(codingPath: codingPath,
+                message: "[XML6_6_ATTRIBUTE_NESTED_UNSUPPORTED] Cannot decode nested unkeyed container from attribute '\(key.stringValue)'.")
         }
 
         guard let element = decoder.firstChild(
@@ -704,10 +703,9 @@ struct _XMLKeyedDecodingContainer<Key: CodingKey>: KeyedDecodingContainerProtoco
             namespaceURI: fieldNamespaceURI(for: key),
             in: decoder.node
         ) else {
-            throw XMLParsingError.parseFailed(
+            throw decoder.decodeFailed(codingPath: codingPath + [key],
                 message: "[XML6_5_KEY_NOT_FOUND] Missing nested unkeyed key '\(key.stringValue)' " +
-                    "at path '\(renderPath(codingPath))'\(decoder.sourceLocation(of: decoder.node))."
-            )
+                    "at path '\(renderPath(codingPath))'\(decoder.sourceLocation(of: decoder.node)).")
         }
 
         let nestedDecoder = _XMLTreeDecoder(
@@ -729,10 +727,9 @@ struct _XMLKeyedDecodingContainer<Key: CodingKey>: KeyedDecodingContainerProtoco
 
     func superDecoder(forKey key: Key) throws -> Decoder {
         guard let element = decoder.firstChild(named: xmlName(for: key), in: decoder.node) else {
-            throw XMLParsingError.parseFailed(
+            throw decoder.decodeFailed(codingPath: codingPath + [key],
                 message: "[XML6_5_KEY_NOT_FOUND] Missing super key '\(key.stringValue)' " +
-                    "at path '\(renderPath(codingPath))'\(decoder.sourceLocation(of: decoder.node))."
-            )
+                    "at path '\(renderPath(codingPath))'\(decoder.sourceLocation(of: decoder.node)).")
         }
 
         return _XMLTreeDecoder(
@@ -749,10 +746,9 @@ struct _XMLKeyedDecodingContainer<Key: CodingKey>: KeyedDecodingContainerProtoco
         }
 
         if nodeKind == .ignored {
-            throw XMLParsingError.parseFailed(
+            throw decoder.decodeFailed(codingPath: codingPath,
                 message: "[XML6_6_IGNORED_FIELD_DECODE] Field '\(key.stringValue)' is marked @XMLIgnore — " +
-                    "use an Optional type or provide a default value via init(from:) to suppress this error."
-            )
+                    "use an Optional type or provide a default value via init(from:) to suppress this error.")
         }
 
         if nodeKind == .textContent {
@@ -764,16 +760,14 @@ struct _XMLKeyedDecodingContainer<Key: CodingKey>: KeyedDecodingContainerProtoco
             namespaceURI: fieldNamespaceURI(for: key),
             in: decoder.node
         ) else {
-            throw XMLParsingError.parseFailed(
+            throw decoder.decodeFailed(codingPath: codingPath + [key],
                 message: "[XML6_5_KEY_NOT_FOUND] Missing scalar key '\(key.stringValue)' " +
-                    "at path '\(renderPath(codingPath))'\(decoder.sourceLocation(of: decoder.node))."
-            )
+                    "at path '\(renderPath(codingPath))'\(decoder.sourceLocation(of: decoder.node)).")
         }
         guard let scalar: T = try decoder.decodeScalar(type, from: element, codingPath: codingPath + [key]) else {
-            throw XMLParsingError.parseFailed(
+            throw decoder.decodeFailed(codingPath: codingPath + [key], element: element,
                 message: "[XML6_5_SCALAR_PARSE_FAILED] Unable to decode scalar key '\(key.stringValue)' " +
-                    "at path '\(renderPath(codingPath))'\(decoder.sourceLocation(of: element))."
-            )
+                    "at path '\(renderPath(codingPath))'\(decoder.sourceLocation(of: element)).")
         }
         return scalar
     }
@@ -790,9 +784,8 @@ struct _XMLKeyedDecodingContainer<Key: CodingKey>: KeyedDecodingContainerProtoco
                 key: key.stringValue
             )
             guard let typed = wrapped as? T else {
-                throw XMLParsingError.parseFailed(
-                    message: "[XML6_6_TEXT_CONTENT_DECODE_CAST_FAILED] Unable to cast decoded text content '\(key.stringValue)' to expected type."
-                )
+                throw decoder.decodeFailed(codingPath: textPath,
+                    message: "[XML6_6_TEXT_CONTENT_DECODE_CAST_FAILED] Unable to cast decoded text content '\(key.stringValue)' to expected type.")
             }
             return typed
         }
@@ -804,10 +797,9 @@ struct _XMLKeyedDecodingContainer<Key: CodingKey>: KeyedDecodingContainerProtoco
             localName: key.stringValue,
             isAttribute: false
         ) else {
-            throw XMLParsingError.parseFailed(
+            throw decoder.decodeFailed(codingPath: textPath,
                 message: "[XML6_6_TEXT_CONTENT_DECODE_UNSUPPORTED] Key '\(key.stringValue)' is marked as text content " +
-                    "but the value could not be decoded as a scalar at path '\(renderPath(codingPath))'."
-            )
+                    "but the value could not be decoded as a scalar at path '\(renderPath(codingPath))'.")
         }
         return scalar
     }
@@ -832,10 +824,9 @@ struct _XMLKeyedDecodingContainer<Key: CodingKey>: KeyedDecodingContainerProtoco
 
     private func decodeAttribute<T: Decodable>(_ type: T.Type, forKey key: Key) throws -> T {
         guard let attribute = decoder.attribute(named: xmlName(for: key), in: decoder.node) else {
-            throw XMLParsingError.parseFailed(
+            throw decoder.decodeFailed(codingPath: codingPath + [key],
                 message: "[XML6_6_ATTRIBUTE_NOT_FOUND] Missing attribute '\(key.stringValue)' " +
-                    "at path '\(renderPath(codingPath))'\(decoder.sourceLocation(of: decoder.node))."
-            )
+                    "at path '\(renderPath(codingPath))'\(decoder.sourceLocation(of: decoder.node)).")
         }
 
         let attributePath = codingPath + [key]
@@ -847,9 +838,8 @@ struct _XMLKeyedDecodingContainer<Key: CodingKey>: KeyedDecodingContainerProtoco
                 key: key.stringValue
             )
             guard let typed = wrapped as? T else {
-                throw XMLParsingError.parseFailed(
-                    message: "[XML6_6_ATTRIBUTE_DECODE_CAST_FAILED] Unable to cast decoded attribute '\(key.stringValue)' to expected type."
-                )
+                throw decoder.decodeFailed(codingPath: attributePath,
+                    message: "[XML6_6_ATTRIBUTE_DECODE_CAST_FAILED] Unable to cast decoded attribute '\(key.stringValue)' to expected type.")
             }
             return typed
         }
@@ -861,9 +851,8 @@ struct _XMLKeyedDecodingContainer<Key: CodingKey>: KeyedDecodingContainerProtoco
             localName: key.stringValue,
             isAttribute: true
         ) else {
-            throw XMLParsingError.parseFailed(
-                message: "[XML6_6_ATTRIBUTE_DECODE_UNSUPPORTED] Unable to decode attribute '\(key.stringValue)' into non-scalar type."
-            )
+            throw decoder.decodeFailed(codingPath: attributePath,
+                message: "[XML6_6_ATTRIBUTE_DECODE_UNSUPPORTED] Unable to decode attribute '\(key.stringValue)' into non-scalar type.")
         }
         return scalar
     }
@@ -923,9 +912,8 @@ struct _XMLUnkeyedDecodingContainer: UnkeyedDecodingContainer {
             return scalar
         }
         if decoder.isKnownScalarType(type) {
-            throw XMLParsingError.parseFailed(
-                message: "[XML6_5_SCALAR_PARSE_FAILED] Unable to decode unkeyed scalar at path '\(renderPath(itemPath))'."
-            )
+            throw decoder.decodeFailed(codingPath: itemPath, element: element,
+                message: "[XML6_5_SCALAR_PARSE_FAILED] Unable to decode unkeyed scalar at path '\(renderPath(itemPath))'.")
         }
 
         var nestedOptions = decoder.options
@@ -970,18 +958,16 @@ struct _XMLUnkeyedDecodingContainer: UnkeyedDecodingContainer {
         let indexKey = _XMLDecodingKey(index: currentIndex)
         let itemPath = codingPath + [indexKey]
         guard let scalar: T = try decoder.decodeScalar(type, from: element, codingPath: itemPath) else {
-            throw XMLParsingError.parseFailed(
-                message: "[XML6_5_SCALAR_PARSE_FAILED] Unable to decode unkeyed scalar at path '\(renderPath(itemPath))'."
-            )
+            throw decoder.decodeFailed(codingPath: itemPath, element: element,
+                message: "[XML6_5_SCALAR_PARSE_FAILED] Unable to decode unkeyed scalar at path '\(renderPath(itemPath))'.")
         }
         return scalar
     }
 
     private func currentElement() throws -> XMLTreeElement {
         guard isAtEnd == false else {
-            throw XMLParsingError.parseFailed(
-                message: "[XML6_5_UNKEYED_OUT_OF_RANGE] Unkeyed container is at end at path '\(renderPath(codingPath))'."
-            )
+            throw decoder.decodeFailed(codingPath: codingPath,
+                message: "[XML6_5_UNKEYED_OUT_OF_RANGE] Unkeyed container is at end at path '\(renderPath(codingPath))'.")
         }
         return elements[currentIndex]
     }
@@ -1027,9 +1013,8 @@ struct _XMLSingleValueDecodingContainer: SingleValueDecodingContainer {
             return scalar
         }
         if decoder.isKnownScalarType(type) {
-            throw XMLParsingError.parseFailed(
-                message: "[XML6_5_SCALAR_PARSE_FAILED] Unable to decode single-value scalar at path '\(renderPath(codingPath))'."
-            )
+            throw decoder.decodeFailed(codingPath: codingPath, element: node,
+                message: "[XML6_5_SCALAR_PARSE_FAILED] Unable to decode single-value scalar at path '\(renderPath(codingPath))'.")
         }
         var nestedOptions = decoder.options
         nestedOptions.perPropertyDateHints = _xmlPropertyDateHints(for: T.self)
@@ -1045,9 +1030,8 @@ struct _XMLSingleValueDecodingContainer: SingleValueDecodingContainer {
 
     private func decodeScalar<T: Decodable>(_ type: T.Type) throws -> T {
         guard let scalar: T = try decoder.decodeScalar(type, from: node, codingPath: codingPath) else {
-            throw XMLParsingError.parseFailed(
-                message: "[XML6_5_SCALAR_PARSE_FAILED] Unable to decode single-value scalar at path '\(renderPath(codingPath))'."
-            )
+            throw decoder.decodeFailed(codingPath: codingPath, element: node,
+                message: "[XML6_5_SCALAR_PARSE_FAILED] Unable to decode single-value scalar at path '\(renderPath(codingPath))'.")
         }
         return scalar
     }

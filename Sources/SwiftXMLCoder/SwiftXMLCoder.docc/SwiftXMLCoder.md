@@ -126,5 +126,6 @@ let decoded = try decoder.decode(Book.self, from: data)
 ### Errors
 
 - ``XMLParsingError``
+- ``XMLSourceLocation``
 - ``XMLCanonicalizationError``
 - ``XMLNamespaceResolutionError``
