@@ -45,6 +45,7 @@ private enum XMLCodableDiagnostic {
 ///    each `@XMLExpandEmpty`-annotated field name.
 ///    This extension is only emitted when at least one `@XMLExpandEmpty` annotation is present.
 public struct XMLCodableMacro: ExtensionMacro {
+    // swiftlint:disable:next cyclomatic_complexity function_body_length
     public static func expansion(
         of node: AttributeSyntax,
         attachedTo declaration: some DeclGroupSyntax,
@@ -69,6 +70,7 @@ public struct XMLCodableMacro: ExtensionMacro {
         var dateHintEntries: [(name: String, hint: String)] = []
         var stringHintEntries: [String] = []    // property names annotated with @XMLCDATA
         var expandEmptyEntries: [String] = []   // property names annotated with @XMLExpandEmpty
+        var fieldNamespaceEntries: [(name: String, expr: String)] = []  // @XMLFieldNamespace
 
         for member in declaration.memberBlock.members {
             guard let varDecl = member.decl.as(VariableDeclSyntax.self) else { continue }
@@ -79,6 +81,7 @@ public struct XMLCodableMacro: ExtensionMacro {
             let dateHint = varDecl.attributes.xmlDateFormatHint
             let hasCDATAAnnotation = varDecl.attributes.hasXMLCDATAAnnotation
             let hasExpandEmptyAnnotation = varDecl.attributes.hasXMLExpandEmptyAnnotation
+            let fieldNamespace = varDecl.attributes.xmlFieldNamespaceAnnotation
 
             for binding in varDecl.bindings {
                 guard let identifier = binding.pattern.as(IdentifierPatternSyntax.self) else {
@@ -96,6 +99,9 @@ public struct XMLCodableMacro: ExtensionMacro {
                 }
                 if hasExpandEmptyAnnotation {
                     expandEmptyEntries.append(name)
+                }
+                if let fieldNS = fieldNamespace {
+                    fieldNamespaceEntries.append((name: name, expr: fieldNS))
                 }
             }
         }
@@ -168,6 +174,22 @@ public struct XMLCodableMacro: ExtensionMacro {
             extensions.append(expandEmptyExtension)
         }
 
+        // Only emit the field namespace extension when at least one @XMLFieldNamespace is present.
+        if fieldNamespaceEntries.isEmpty == false {
+            let nsLines = fieldNamespaceEntries.map { "        \"\($0.name)\": \($0.expr)" }
+            let nsDictBody = "[\n\(nsLines.joined(separator: ",\n"))\n    ]"
+            let fieldNamespaceExtension: ExtensionDeclSyntax = try ExtensionDeclSyntax(
+                """
+                extension \(type): XMLFieldNamespaceProvider {
+                    static var xmlFieldNamespaces: [String: XMLNamespace] {
+                        \(raw: nsDictBody)
+                    }
+                }
+                """
+            )
+            extensions.append(fieldNamespaceExtension)
+        }
+
         return extensions
     }
 }
@@ -204,6 +226,41 @@ private extension AttributeListSyntax {
             if attrSyntax.attributeName.trimmedDescription == "XMLCDATA" { return true }
         }
         return false
+    }
+
+    /// Returns a `XMLNamespace(...)` constructor expression string for `@XMLFieldNamespace(...)` if present, else `nil`.
+    ///
+    /// Recognises the forms:
+    ///   - `@XMLFieldNamespace(uri: "http://...")` → `XMLNamespace(uri: "http://...")`
+    ///   - `@XMLFieldNamespace(prefix: "foo", uri: "http://...")` → `XMLNamespace(prefix: "foo", uri: "http://...")`
+    var xmlFieldNamespaceAnnotation: String? {
+        for attr in self {
+            guard let attrSyntax = attr.as(AttributeSyntax.self),
+                  attrSyntax.attributeName.trimmedDescription == "XMLFieldNamespace",
+                  let args = attrSyntax.arguments,
+                  case .argumentList(let list) = args else { continue }
+
+            var prefix: String?
+            var uri: String?
+            for arg in list {
+                let label = arg.label?.text
+                guard let stringLit = arg.expression.as(StringLiteralExprSyntax.self),
+                      let segment = stringLit.segments.first?.as(StringSegmentSyntax.self) else { continue }
+                let value = segment.content.text
+                if label == "prefix" {
+                    prefix = value
+                } else if label == "uri" {
+                    uri = value
+                }
+            }
+            guard let resolvedURI = uri else { continue }
+            if let resolvedPrefix = prefix {
+                return "XMLNamespace(prefix: \"\(resolvedPrefix)\", uri: \"\(resolvedURI)\")"
+            } else {
+                return "XMLNamespace(uri: \"\(resolvedURI)\")"
+            }
+        }
+        return nil
     }
 
     /// Returns the verbatim argument expression of `@XMLDateFormat(...)` if present, else `nil`.

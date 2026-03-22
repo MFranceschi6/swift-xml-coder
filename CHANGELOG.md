@@ -6,6 +6,41 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added (XML-R2 — Namespace Ergonomics Per Field)
+
+- **`XMLFieldNamespaceProvider`** — new protocol allowing a `Codable` type to declare per-field
+  XML namespace overrides via a static `xmlFieldNamespaces: [String: XMLNamespace]` dictionary.
+  The XML encoder and decoder consult this dictionary to qualify child elements and attributes
+  with the specified namespace URI and optional prefix, mirroring the existing
+  `XMLFieldCodingOverrideProvider` pattern.
+- **`@XMLFieldNamespace(prefix:uri:)` / `@XMLFieldNamespace(uri:)`** — two new peer macros
+  (Swift 5.9+) that can be applied to stored properties alongside `@XMLCodable`. `@XMLCodable`
+  now scans for these annotations and synthesises an `XMLFieldNamespaceProvider` extension that
+  maps the annotated field names to their `XMLNamespace` values.
+- **Encoder namespace injection** — when a field has a namespace, the encoder creates the child
+  element or attribute with a `XMLQualifiedName(localName:namespaceURI:prefix:)` and
+  automatically adds a `XMLNamespaceDeclaration` to the parent element so the resulting XML is
+  valid without manual namespace management.
+- **Decoder namespace-aware lookup** — `_XMLTreeDecoder.firstChild(named:namespaceURI:in:)` added;
+  when a field has a registered namespace, element lookup is qualified by URI, eliminating
+  ambiguity between sibling elements that share a local name but differ in namespace.
+- **16 new tests** in `XMLFieldNamespaceTests` covering prefixed and default-namespace element
+  encoding, attribute namespace encoding, mixed-field encoding, tree-level namespace URI/prefix
+  verification, namespace declaration injection on the parent element, round-trip decode
+  correctness, and macro-path synthesis (prefixed and default namespace, round-trip).
+
+### Changed (XML-R2 — Namespace Ergonomics Per Field)
+
+- `XMLEncoder.encodeTreeImpl`: initial `_XMLTreeEncoder` now populated with
+  `fieldNamespaces: _xmlFieldNamespaces(for: T.self)`, enabling namespace ergonomics for the
+  top-level encoded type without requiring an intermediate nested container.
+- `XMLDecoder.decodeTreeImpl`: initial `_XMLTreeDecoder` now populated with
+  `fieldNamespaces: _xmlFieldNamespaces(for: T.self)` symmetrically.
+- `@XMLCodable` macro declaration updated to include `XMLFieldNamespaceProvider` in its
+  conformance list and `xmlFieldNamespaces` in the names list.
+- `SwiftXMLCoder.docc/SwiftXMLCoder.md`: `XMLFieldNamespaceProvider` added to the
+  "Field Mapping" topics section.
+
 ### Added (XML-R2 — PI/Doctype/Comment Fidelity)
 
 - **`XMLDocumentNode`** — new `Sendable, Equatable, Codable` enum representing nodes that can

@@ -147,6 +147,32 @@ public extension XMLFieldCodingOverrideProvider {
     static var xmlFieldNodeKinds: [String: XMLFieldNodeKind] { [:] }
 }
 
+/// A type-level source of per-field XML namespace overrides synthesised by the `@XMLCodable` macro.
+///
+/// Conform your type to this protocol (or use `@XMLCodable` with `@XMLFieldNamespace` annotations)
+/// to tell the XML encoder and decoder which namespace URI — and optional prefix — each field's
+/// XML element or attribute should carry.
+///
+/// ```swift
+/// @XMLCodable
+/// struct Envelope: Codable {
+///     @XMLFieldNamespace(prefix: "soap", uri: "http://schemas.xmlsoap.org/soap/envelope/")
+///     @XMLChild var body: Body
+/// }
+/// ```
+///
+/// `@XMLCodable` synthesises an `XMLFieldNamespaceProvider` extension that maps field names to
+/// their ``XMLNamespace``.  You typically do not implement this protocol manually.
+public protocol XMLFieldNamespaceProvider {
+    /// A static mapping from field name to ``XMLNamespace``, synthesised by `@XMLCodable`.
+    static var xmlFieldNamespaces: [String: XMLNamespace] { get }
+}
+
+public extension XMLFieldNamespaceProvider {
+    /// Default implementation: no namespace overrides.
+    static var xmlFieldNamespaces: [String: XMLNamespace] { [:] }
+}
+
 protocol _XMLFieldKindOverrideType {
     static var _xmlFieldNodeKindOverride: XMLFieldNodeKind { get }
 }

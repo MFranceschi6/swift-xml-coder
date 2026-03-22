@@ -94,6 +94,7 @@ final class _XMLTreeDecoder: Decoder {
     let options: _XMLDecoderOptions
     let node: XMLTreeElement
     let fieldNodeKinds: [String: XMLFieldNodeKind]
+    let fieldNamespaces: [String: XMLNamespace]
     var codingPath: [CodingKey]
     var userInfo: [CodingUserInfoKey: Any] { options.userInfo }
 
@@ -101,12 +102,14 @@ final class _XMLTreeDecoder: Decoder {
         options: _XMLDecoderOptions,
         codingPath: [CodingKey],
         node: XMLTreeElement,
-        fieldNodeKinds: [String: XMLFieldNodeKind] = [:]
+        fieldNodeKinds: [String: XMLFieldNodeKind] = [:],
+        fieldNamespaces: [String: XMLNamespace] = [:]
     ) {
         self.options = options
         self.codingPath = codingPath
         self.node = node
         self.fieldNodeKinds = fieldNodeKinds
+        self.fieldNamespaces = fieldNamespaces
     }
 
     func container<Key>(keyedBy type: Key.Type) throws -> KeyedDecodingContainer<Key> where Key: CodingKey {
@@ -123,8 +126,20 @@ final class _XMLTreeDecoder: Decoder {
     }
 
     func firstChild(named localName: String, in element: XMLTreeElement) -> XMLTreeElement? {
+        firstChild(named: localName, namespaceURI: nil, in: element)
+    }
+
+    func firstChild(named localName: String, namespaceURI: String?, in element: XMLTreeElement) -> XMLTreeElement? {
         for child in element.children {
-            if case .element(let childElement) = child, childElement.name.localName == localName {
+            guard case .element(let childElement) = child,
+                  childElement.name.localName == localName else {
+                continue
+            }
+            if let requiredURI = namespaceURI {
+                if childElement.name.namespaceURI == requiredURI {
+                    return childElement
+                }
+            } else {
                 return childElement
             }
         }
@@ -551,13 +566,17 @@ struct _XMLKeyedDecodingContainer<Key: CodingKey>: KeyedDecodingContainerProtoco
         return transformed
     }
 
+    private func fieldNamespaceURI(for key: Key) -> String? {
+        decoder.fieldNamespaces[key.stringValue]?.uri
+    }
+
     func contains(_ key: Key) -> Bool {
         // Ignored fields are treated as absent.
         if resolvedNodeKind(for: key, valueType: Never.self) == .ignored {
             return false
         }
         let name = xmlName(for: key)
-        return decoder.firstChild(named: name, in: decoder.node) != nil ||
+        return decoder.firstChild(named: name, namespaceURI: fieldNamespaceURI(for: key), in: decoder.node) != nil ||
             decoder.attribute(named: name, in: decoder.node) != nil
     }
 
@@ -570,7 +589,7 @@ struct _XMLKeyedDecodingContainer<Key: CodingKey>: KeyedDecodingContainerProtoco
         if decoder.attribute(named: name, in: decoder.node) != nil {
             return false
         }
-        guard let element = decoder.firstChild(named: name, in: decoder.node) else {
+        guard let element = decoder.firstChild(named: name, namespaceURI: fieldNamespaceURI(for: key), in: decoder.node) else {
             return true
         }
         return decoder.isNilElement(element)
@@ -608,7 +627,11 @@ struct _XMLKeyedDecodingContainer<Key: CodingKey>: KeyedDecodingContainerProtoco
             return try decodeTextContent(type, forKey: key)
         }
 
-        guard let element = decoder.firstChild(named: xmlName(for: key), in: decoder.node) else {
+        guard let element = decoder.firstChild(
+            named: xmlName(for: key),
+            namespaceURI: fieldNamespaceURI(for: key),
+            in: decoder.node
+        ) else {
             throw XMLParsingError.parseFailed(
                 message: "[XML6_5_KEY_NOT_FOUND] Missing key '\(key.stringValue)' " +
                     "at path '\(renderPath(codingPath))'\(decoder.sourceLocation(of: decoder.node))."
@@ -632,7 +655,8 @@ struct _XMLKeyedDecodingContainer<Key: CodingKey>: KeyedDecodingContainerProtoco
             options: nestedOptions,
             codingPath: childPath,
             node: element,
-            fieldNodeKinds: _xmlFieldNodeKinds(for: T.self)
+            fieldNodeKinds: _xmlFieldNodeKinds(for: T.self),
+            fieldNamespaces: _xmlFieldNamespaces(for: T.self)
         )
         return try T(from: nestedDecoder)
     }
@@ -648,7 +672,11 @@ struct _XMLKeyedDecodingContainer<Key: CodingKey>: KeyedDecodingContainerProtoco
             )
         }
 
-        guard let element = decoder.firstChild(named: xmlName(for: key), in: decoder.node) else {
+        guard let element = decoder.firstChild(
+            named: xmlName(for: key),
+            namespaceURI: fieldNamespaceURI(for: key),
+            in: decoder.node
+        ) else {
             throw XMLParsingError.parseFailed(
                 message: "[XML6_5_KEY_NOT_FOUND] Missing nested key '\(key.stringValue)' " +
                     "at path '\(renderPath(codingPath))'\(decoder.sourceLocation(of: decoder.node))."
@@ -671,7 +699,11 @@ struct _XMLKeyedDecodingContainer<Key: CodingKey>: KeyedDecodingContainerProtoco
             )
         }
 
-        guard let element = decoder.firstChild(named: xmlName(for: key), in: decoder.node) else {
+        guard let element = decoder.firstChild(
+            named: xmlName(for: key),
+            namespaceURI: fieldNamespaceURI(for: key),
+            in: decoder.node
+        ) else {
             throw XMLParsingError.parseFailed(
                 message: "[XML6_5_KEY_NOT_FOUND] Missing nested unkeyed key '\(key.stringValue)' " +
                     "at path '\(renderPath(codingPath))'\(decoder.sourceLocation(of: decoder.node))."
@@ -727,7 +759,11 @@ struct _XMLKeyedDecodingContainer<Key: CodingKey>: KeyedDecodingContainerProtoco
             return try decodeTextContent(type, forKey: key)
         }
 
-        guard let element = decoder.firstChild(named: xmlName(for: key), in: decoder.node) else {
+        guard let element = decoder.firstChild(
+            named: xmlName(for: key),
+            namespaceURI: fieldNamespaceURI(for: key),
+            in: decoder.node
+        ) else {
             throw XMLParsingError.parseFailed(
                 message: "[XML6_5_KEY_NOT_FOUND] Missing scalar key '\(key.stringValue)' " +
                     "at path '\(renderPath(codingPath))'\(decoder.sourceLocation(of: decoder.node))."
@@ -898,7 +934,8 @@ struct _XMLUnkeyedDecodingContainer: UnkeyedDecodingContainer {
             options: nestedOptions,
             codingPath: itemPath,
             node: element,
-            fieldNodeKinds: _xmlFieldNodeKinds(for: T.self)
+            fieldNodeKinds: _xmlFieldNodeKinds(for: T.self),
+            fieldNamespaces: _xmlFieldNamespaces(for: T.self)
         )
         return try T(from: nestedDecoder)
     }
@@ -1000,7 +1037,8 @@ struct _XMLSingleValueDecodingContainer: SingleValueDecodingContainer {
             options: nestedOptions,
             codingPath: codingPath,
             node: node,
-            fieldNodeKinds: _xmlFieldNodeKinds(for: T.self)
+            fieldNodeKinds: _xmlFieldNodeKinds(for: T.self),
+            fieldNamespaces: _xmlFieldNamespaces(for: T.self)
         )
         return try T(from: nestedDecoder)
     }

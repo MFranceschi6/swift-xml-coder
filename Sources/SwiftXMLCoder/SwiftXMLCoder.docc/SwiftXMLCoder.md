@@ -70,6 +70,7 @@ let decoded = try decoder.decode(Book.self, from: data)
 - ``XMLStringCodingOverrideProvider``
 - ``XMLExpandEmptyProvider``
 - ``XMLDateCodingOverrideProvider``
+- ``XMLFieldNamespaceProvider``
 
 ### Key Transformation
 

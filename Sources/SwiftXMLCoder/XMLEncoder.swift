@@ -295,7 +295,8 @@ public struct XMLEncoder: Sendable {
             options: options,
             codingPath: [],
             node: rootNode,
-            fieldNodeKinds: _xmlFieldNodeKinds(for: T.self)
+            fieldNodeKinds: _xmlFieldNodeKinds(for: T.self),
+            fieldNamespaces: _xmlFieldNamespaces(for: T.self)
         )
         // Intercept Foundation scalar types (URL, UUID, Decimal, Date, Data, …) whose
         // Codable conformances use keyed containers internally, bypassing our scalar path.
