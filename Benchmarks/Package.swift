@@ -15,7 +15,8 @@ let package = Package(
     ],
     dependencies: [
         .package(path: "../"),
-        .package(url: "https://github.com/ordo-one/package-benchmark", from: "1.4.0")
+        .package(url: "https://github.com/ordo-one/package-benchmark", from: "1.4.0"),
+        .package(url: "https://github.com/CoreOffice/XMLCoder", from: "0.17.0")
     ],
     targets: [
         .executableTarget(
@@ -25,6 +26,18 @@ let package = Package(
                 .product(name: "Benchmark", package: "package-benchmark")
             ],
             path: "SwiftXMLCoderBenchmarks",
+            plugins: [
+                .plugin(name: "BenchmarkPlugin", package: "package-benchmark")
+            ]
+        ),
+        .executableTarget(
+            name: "ComparisonBenchmarks",
+            dependencies: [
+                .product(name: "SwiftXMLCoder", package: "swift-xml-coder"),
+                .product(name: "XMLCoder", package: "XMLCoder"),
+                .product(name: "Benchmark", package: "package-benchmark")
+            ],
+            path: "ComparisonBenchmarks",
             plugins: [
                 .plugin(name: "BenchmarkPlugin", package: "package-benchmark")
             ]

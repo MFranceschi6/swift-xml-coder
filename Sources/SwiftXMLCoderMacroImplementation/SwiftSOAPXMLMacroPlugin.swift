@@ -13,6 +13,6 @@ struct SwiftXMLCoderMacroPlugin: CompilerPlugin {
         XMLFieldNamespaceMacro.self,
         XMLIgnoreMacro.self,
         XMLNamespaceMacro.self,
-        XMLTextMacro.self,
+        XMLTextMacro.self
     ]
 }

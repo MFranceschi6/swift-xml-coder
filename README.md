@@ -149,6 +149,47 @@ Full API documentation and guides:
 
 ---
 
+## Performance
+
+SwiftXMLCoder ships with a comprehensive benchmark suite covering tree parsing, streaming (SAX push, pull cursor, item-by-item decode), Codable encode/decode, and comparisons against Foundation `XMLParser` and [CoreOffice/XMLCoder](https://github.com/CoreOffice/XMLCoder).
+
+### When to Use What
+
+| Document Size | Recommended Approach | Why |
+|---------------|---------------------|-----|
+| < 1 MB | `XMLDecoder` (tree) | Simplest API, minimal overhead |
+| 1 - 10 MB | Tree or `XMLItemDecoder` | Tree works but uses more memory |
+| > 10 MB | `XMLItemDecoder` / `XMLStreamParser` | Constant memory vs linear; tree does not scale |
+
+### Benchmark Coverage
+
+| Area | Scales | What It Measures |
+|------|--------|-----------------|
+| Tree parse / decode / encode | 10KB - 10MB | Full DOM materialization + Codable round-trip |
+| SAX push (`XMLStreamParser`) | 10KB - 100MB | Event-driven parsing, no tree allocation |
+| Pull cursor (`XMLEventCursor`) | 10KB - 100MB | Lazy pull-based iteration |
+| Item-by-item (`XMLItemDecoder`) | 10KB - 100MB | Streaming Codable decode, constant memory |
+| Stream writer (`XMLStreamWriter`) | 10KB - 10MB | Event sequence to XML serialization |
+| Rich model (nested + attributes) | 10KB - 100MB | Real-world payload with 3-level nesting, namespaces |
+| Foundation `XMLParser` comparison | 10KB - 100MB | SAX + tree parse vs Apple's built-in parser |
+| CoreOffice/XMLCoder comparison | 10KB - 10MB | Codable decode/encode head-to-head |
+
+### Running Benchmarks
+
+```bash
+cd Benchmarks
+
+# Internal benchmarks (parse, stream, encode, decode, Foundation comparison)
+swift package --disable-sandbox benchmark
+
+# Comparative benchmarks (SwiftXMLCoder vs CoreOffice/XMLCoder)
+swift package --disable-sandbox benchmark --target ComparisonBenchmarks
+```
+
+Benchmarks use [ordo-one/package-benchmark](https://github.com/ordo-one/package-benchmark) and require macOS 13+ with jemalloc (`brew install jemalloc`).
+
+---
+
 ## Requirements
 
 | Component | Requirement |

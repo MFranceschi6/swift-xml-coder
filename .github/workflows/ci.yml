@@ -245,6 +245,8 @@ jobs:
 
   # ──────────────────────────────────────────────────────────────────────────
   # latest — Swift 6.1 (linux + macOS)
+  # Coverage collected on Linux to exercise #if swift(>=6.0) branches
+  # (typed throws, SwiftXMLCoderOwnership6, any-Protocol existentials).
   # ──────────────────────────────────────────────────────────────────────────
   latest:
     name: latest-6.1 (${{ matrix.os }})
@@ -299,8 +301,57 @@ jobs:
       - name: Build
         run: swift build -c debug
 
-      - name: Test
+      - name: Test (with Code Coverage on Linux)
+        if: runner.os == 'Linux'
+        run: swift test --enable-code-coverage --jobs 1 --parallel --num-workers 1
+
+      - name: Test (macOS)
+        if: runner.os == 'macOS'
         run: swift test --jobs 1 --parallel --num-workers 1
+
+      - name: Enforce Code Coverage (>= 90%)
+        if: runner.os == 'Linux'
+        run: |
+          BIN_PATH=$(swift build --show-bin-path)
+          PROFDATA=$(find "$BIN_PATH/codecov" -name "default.profdata" -type f | head -n 1)
+          TEST_BUNDLE=$(find "$BIN_PATH" -name "*.xctest" | head -n 1)
+
+          if [ -z "$TEST_BUNDLE" ]; then
+            echo "::error::Could not find test bundle in $BIN_PATH."
+            exit 1
+          fi
+
+          if [ -d "$TEST_BUNDLE" ]; then
+            TEST_BIN="$TEST_BUNDLE/Contents/MacOS/$(basename "$TEST_BUNDLE" .xctest)"
+          else
+            TEST_BIN="$TEST_BUNDLE"
+          fi
+
+          LLVM_COV="$(dirname "$(which swift)")/llvm-cov"
+          if [ ! -x "$LLVM_COV" ]; then
+            LLVM_COV="llvm-cov"
+          fi
+
+          if [ ! -f "$TEST_BIN" ] || [ -z "$PROFDATA" ] || [ ! -f "$PROFDATA" ]; then
+            echo "::error::Could not find test binary ($TEST_BIN) or profdata ($PROFDATA)."
+            exit 1
+          fi
+
+          COVERAGE_REPORT=$($LLVM_COV report -instr-profile="$PROFDATA" "$TEST_BIN" --ignore-filename-regex=".build|Tests|Package.swift")
+          TOTAL_LINE_COV=$(printf '%s\n' "$COVERAGE_REPORT" | awk '/^TOTAL/ {print $10}')
+          TOTAL_LINE_COV="${TOTAL_LINE_COV%\%}"
+          echo "Total line coverage: $TOTAL_LINE_COV%"
+
+          if [[ -z "$TOTAL_LINE_COV" ]]; then
+            echo "::error::Unable to extract total line coverage."
+            printf '%s\n' "$COVERAGE_REPORT"
+            exit 1
+          fi
+
+          awk "BEGIN { exit !($TOTAL_LINE_COV >= 90.0) }" || {
+            echo "::error::Code coverage $TOTAL_LINE_COV% is below the 90% threshold."
+            exit 1
+          }
 
   # ──────────────────────────────────────────────────────────────────────────
   # concurrency — runs XMLConcurrencyStressTests under ThreadSanitizer.

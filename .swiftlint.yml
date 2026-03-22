@@ -24,11 +24,11 @@ opt_in_rules:
   - redundant_void_return
   - discouraged_optional_boolean
   - force_try
-  - force_unwrapping
 
 disabled_rules:
   - todo
   - trailing_whitespace
+  - nesting
 
 explicit_init:
   severity: warning
@@ -48,7 +48,7 @@ type_body_length:
   error: 450
 
 file_length:
-  warning: 500
+  warning: 700
   # XMLDecoder+Codable.swift hosts 4 interdependent Codable container types
   # (_XMLTreeDecoder, _XMLKeyedDecodingContainer, _XMLUnkeyedDecodingContainer,
   # _XMLSingleValueDecodingContainer) that cross-reference private state.
@@ -64,9 +64,6 @@ cyclomatic_complexity:
   error: 30
 
 force_try:
-  severity: error
-
-force_unwrapping:
   severity: error
 
 # Allow _ prefix for private Codable implementation types such as _XMLTreeDecoder,

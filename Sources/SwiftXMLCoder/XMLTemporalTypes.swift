@@ -847,6 +847,5 @@ enum _XMLSolarReferenceDate {
 
 extension TimeZone {
     /// UTC timezone (`Identifier: "UTC"`).
-    // swiftlint:disable:next force_unwrapping
     public static let utc = TimeZone(identifier: "UTC")!
 }

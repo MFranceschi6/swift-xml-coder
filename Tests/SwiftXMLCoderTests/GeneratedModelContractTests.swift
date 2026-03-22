@@ -45,7 +45,7 @@ final class GeneratedModelContractTests: XCTestCase {
         let payload = GeneratedInvoiceContract(
             id: "INV-42",
             line: ["alpha", "beta"],
-            amount: GeneratedAmountContract(currency: "eur", value: Decimal(string: "12.50")!),
+            amount: GeneratedAmountContract(currency: "eur", value: try XCTUnwrap(Decimal(string: "12.50"))),
             issuedAt: Date(timeIntervalSince1970: 0),
             attachment: Data([0x41, 0x42])
         )
@@ -86,7 +86,7 @@ final class GeneratedModelContractTests: XCTestCase {
         let payload = GeneratedInvoiceContract(
             id: "INV-99",
             line: ["single"],
-            amount: GeneratedAmountContract(currency: "usd", value: Decimal(string: "8.00")!),
+            amount: GeneratedAmountContract(currency: "usd", value: try XCTUnwrap(Decimal(string: "8.00"))),
             issuedAt: Date(timeIntervalSince1970: 86_400),
             attachment: nil
         )

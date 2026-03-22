@@ -7,4 +7,7 @@ let benchmarks: @Sendable () -> Void = {
     encodeBenchmarks()
     decodeBenchmarks()
     canonicalizationBenchmarks()
+    streamingBenchmarks()
+    richBenchmarks()
+    foundationComparison()
 }

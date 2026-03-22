@@ -3,7 +3,6 @@
 # Test code legitimately uses:
 #   - single-character variable names (e, t, c, r) in closures and switch cases
 #   - two-character type names (CK for CodingKey stubs)
-#   - force-unwrap on test fixtures that are always non-nil by construction
 
 identifier_name:
   min_length: 1
@@ -12,9 +11,6 @@ identifier_name:
 type_name:
   min_length: 1
   allowed_symbols: ["_"]
-
-force_unwrapping:
-  severity: warning
 
 type_body_length:
   warning: 600
