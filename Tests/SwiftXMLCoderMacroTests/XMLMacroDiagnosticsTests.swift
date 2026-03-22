@@ -11,10 +11,12 @@ private let testMacros: [String: any Macro.Type] = [
     "XMLCDATA": XMLCDATAMacro.self,
     "XMLChild": XMLChildMacro.self,
     "XMLDateFormat": XMLDateFormatMacro.self,
+    "XMLExpandEmpty": XMLExpandEmptyMacro.self,
+    "XMLFieldNamespace": XMLFieldNamespaceMacro.self,
     "XMLIgnore": XMLIgnoreMacro.self,
     "XMLNamespace": XMLNamespaceMacro.self,
     "XMLRootNamespace": XMLNamespaceMacro.self,
-    "XMLText": XMLTextMacro.self,
+    "XMLText": XMLTextMacro.self
 ]
 
 final class XMLMacroDiagnosticsTests: XCTestCase {
@@ -470,6 +472,231 @@ final class XMLMacroDiagnosticsTests: XCTestCase {
                     severity: .error
                 )
             ],
+            macros: testMacros
+        )
+    }
+
+    // MARK: - Peer macro coverage: @XMLCDATA, @XMLExpandEmpty, @XMLFieldNamespace
+
+    func test_xmlCDATA_expandsToNoPeers() {
+        assertMacroExpansion(
+            """
+            struct S {
+                @XMLCDATA var content: String
+            }
+            """,
+            expandedSource:
+            """
+            struct S {
+                var content: String
+            }
+            """,
+            macros: testMacros
+        )
+    }
+
+    func test_xmlExpandEmpty_expandsToNoPeers() {
+        assertMacroExpansion(
+            """
+            struct S {
+                @XMLExpandEmpty var flag: Bool
+            }
+            """,
+            expandedSource:
+            """
+            struct S {
+                var flag: Bool
+            }
+            """,
+            macros: testMacros
+        )
+    }
+
+    func test_xmlFieldNamespace_expandsToNoPeers() {
+        assertMacroExpansion(
+            """
+            struct S {
+                @XMLFieldNamespace(uri: "http://example.com") var name: String
+            }
+            """,
+            expandedSource:
+            """
+            struct S {
+                var name: String
+            }
+            """,
+            macros: testMacros
+        )
+    }
+
+    // MARK: - @XMLCodable with @XMLCDATA — synthesises XMLStringCodingOverrideProvider
+
+    func test_xmlCodable_withCDATA_synthesisesStringHints() {
+        assertMacroExpansion(
+            """
+            @XMLCodable
+            struct Message: Codable {
+                @XMLCDATA var body: String
+                var subject: String
+            }
+            """,
+            expandedSource:
+            """
+            struct Message: Codable {
+                var body: String
+                var subject: String
+            }
+
+            extension Message: XMLFieldCodingOverrideProvider {
+                static var xmlFieldNodeKinds: [String: XMLFieldNodeKind] {
+                    [:]
+                }
+            }
+
+            extension Message: XMLStringCodingOverrideProvider {
+                static var xmlPropertyStringHints: [String: XMLStringEncodingHint] {
+                    [
+                    "body": .cdata
+                ]
+                }
+            }
+            """,
+            macros: testMacros
+        )
+    }
+
+    // MARK: - @XMLCodable with @XMLExpandEmpty — synthesises XMLExpandEmptyProvider
+
+    func test_xmlCodable_withExpandEmpty_synthesisesExpandEmptyKeys() {
+        assertMacroExpansion(
+            """
+            @XMLCodable
+            struct Wrapper: Codable {
+                @XMLExpandEmpty var enabled: Bool
+                var name: String
+            }
+            """,
+            expandedSource:
+            """
+            struct Wrapper: Codable {
+                var enabled: Bool
+                var name: String
+            }
+
+            extension Wrapper: XMLFieldCodingOverrideProvider {
+                static var xmlFieldNodeKinds: [String: XMLFieldNodeKind] {
+                    [:]
+                }
+            }
+
+            extension Wrapper: XMLExpandEmptyProvider {
+                static var xmlPropertyExpandEmptyKeys: Set<String> {
+                    ["enabled"]
+                }
+            }
+            """,
+            macros: testMacros
+        )
+    }
+
+    // MARK: - @XMLCodable with @XMLFieldNamespace — synthesises XMLFieldNamespaceProvider
+
+    func test_xmlCodable_withFieldNamespace_synthesisesFieldNamespaces() {
+        assertMacroExpansion(
+            """
+            @XMLCodable
+            struct Invoice: Codable {
+                @XMLFieldNamespace(uri: "http://example.com/billing") var total: Double
+                var id: String
+            }
+            """,
+            expandedSource:
+            """
+            struct Invoice: Codable {
+                var total: Double
+                var id: String
+            }
+
+            extension Invoice: XMLFieldCodingOverrideProvider {
+                static var xmlFieldNodeKinds: [String: XMLFieldNodeKind] {
+                    [:]
+                }
+            }
+
+            extension Invoice: XMLFieldNamespaceProvider {
+                static var xmlFieldNamespaces: [String: XMLNamespace] {
+                    [
+                    "total": XMLNamespace(uri: "http://example.com/billing")
+                ]
+                }
+            }
+            """,
+            macros: testMacros
+        )
+    }
+
+    func test_xmlCodable_withFieldNamespace_prefixAndUri() {
+        assertMacroExpansion(
+            """
+            @XMLCodable
+            struct Invoice: Codable {
+                @XMLFieldNamespace(prefix: "bill", uri: "http://example.com/billing") var total: Double
+            }
+            """,
+            expandedSource:
+            """
+            struct Invoice: Codable {
+                var total: Double
+            }
+
+            extension Invoice: XMLFieldCodingOverrideProvider {
+                static var xmlFieldNodeKinds: [String: XMLFieldNodeKind] {
+                    [:]
+                }
+            }
+
+            extension Invoice: XMLFieldNamespaceProvider {
+                static var xmlFieldNamespaces: [String: XMLNamespace] {
+                    [
+                    "total": XMLNamespace(prefix: "bill", uri: "http://example.com/billing")
+                ]
+                }
+            }
+            """,
+            macros: testMacros
+        )
+    }
+
+    // MARK: - @XMLCodable skips computed properties
+
+    func test_xmlCodable_skipsComputedProperties() {
+        assertMacroExpansion(
+            """
+            @XMLCodable
+            struct Model: Codable {
+                @XMLAttribute var id: String
+                var computed: String {
+                    "hello"
+                }
+            }
+            """,
+            expandedSource:
+            """
+            struct Model: Codable {
+                var id: String
+                var computed: String {
+                    "hello"
+                }
+            }
+
+            extension Model: XMLFieldCodingOverrideProvider {
+                static var xmlFieldNodeKinds: [String: XMLFieldNodeKind] {
+                    [
+                    "id": .attribute
+                ]
+                }
+            }
+            """,
             macros: testMacros
         )
     }

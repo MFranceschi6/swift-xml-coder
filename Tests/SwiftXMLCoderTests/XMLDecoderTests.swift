@@ -228,13 +228,13 @@ final class XMLDecoderTests: XCTestCase {
     }
 
     func test_decode_userInfo_isForwardedToDecodableImplementation() throws {
-        let infoKey = CodingUserInfoKey(rawValue: "test.multiplier")!
+        let infoKey = try XCTUnwrap(CodingUserInfoKey(rawValue: "test.multiplier"))
         struct MultiplierPayload: Decodable {
             let value: Int
             init(from decoder: Decoder) throws {
                 let container = try decoder.container(keyedBy: CodingKeys.self)
                 let raw = try container.decode(Int.self, forKey: .value)
-                let multiplier = decoder.userInfo[CodingUserInfoKey(rawValue: "test.multiplier")!] as? Int ?? 1
+                let multiplier = decoder.userInfo[try XCTUnwrap(CodingUserInfoKey(rawValue: "test.multiplier"))] as? Int ?? 1
                 self.value = raw * multiplier
             }
             enum CodingKeys: String, CodingKey { case value }

@@ -6,6 +6,35 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **CI coverage on Swift 6.1 lane** — `latest-linux` now collects code coverage and enforces
+  the 90% threshold, covering `#if swift(>=6.0)` branches (typed throws, `~Copyable` ownership,
+  `any Protocol` existentials) that the 5.10 lane cannot reach.
+- **8 new macro tests** — peer macro expansion tests for `@XMLCDATA`, `@XMLExpandEmpty`,
+  `@XMLFieldNamespace`; `XMLCodableMacro` tests for CDATA synthesis, expand-empty keys,
+  field namespace (uri-only and prefix+uri variants), and computed property skip.
+- **Streaming benchmarks** — SAX push, pull cursor, item-by-item decode, and stream writer
+  benchmarks at scales from 10KB to 100MB.
+- **Rich model benchmarks** — tree parse, decode, encode, SAX, and item-by-item decode
+  with a 3-level nested model (attributes, namespaces, long text nodes).
+- **Foundation comparison benchmarks** — `XMLParser` SAX and `XMLDocument` tree parse
+  head-to-head with SwiftXMLCoder equivalents (10KB–100MB).
+- **CoreOffice/XMLCoder comparison benchmarks** — separate `ComparisonBenchmarks` target
+  comparing Codable decode/encode at 10KB–10MB. Weekly CI schedule + manual dispatch.
+- **Enterprise-scale fixtures** — 10MB and 100MB pre-encoded XML data for stress testing
+  streaming paths.
+- **Performance section in README** — decision table (tree vs streaming), benchmark coverage
+  overview, and instructions for running benchmarks.
+
+### Changed
+
+- Disabled `nesting` SwiftLint rule globally (legitimate nested types in both sources and tests).
+- Removed `force_unwrapping` from opt-in rules; replaced 25 force unwraps in tests with
+  `XCTUnwrap`.
+- Raised `file_length` warning threshold to 700 (tests are naturally longer).
+- Fixed ~20 comma spacing violations in sources and tests.
+
 ## [1.3.0] — 2026-03-22
 
 ### Added (XML-R3 — Pull Cursor and Item-by-Item Decode)

@@ -609,11 +609,11 @@ final class XMLEncoderTests: XCTestCase {
     }
 
     func test_encodeTree_userInfo_isForwardedToEncodableImplementation() throws {
-        let infoKey = CodingUserInfoKey(rawValue: "test.greeting")!
+        let infoKey = try XCTUnwrap(CodingUserInfoKey(rawValue: "test.greeting"))
         struct GreetingPayload: Encodable {
             func encode(to encoder: Encoder) throws {
                 var container = encoder.container(keyedBy: CodingKeys.self)
-                let greeting = encoder.userInfo[CodingUserInfoKey(rawValue: "test.greeting")!] as? String ?? "hello"
+                let greeting = encoder.userInfo[try XCTUnwrap(CodingUserInfoKey(rawValue: "test.greeting"))] as? String ?? "hello"
                 try container.encode(greeting, forKey: .message)
             }
             enum CodingKeys: String, CodingKey { case message }

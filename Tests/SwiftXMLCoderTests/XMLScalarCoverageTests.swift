@@ -75,8 +75,8 @@ final class XMLScalarCoverageTests: XCTestCase {
         }
 
         let input = URIPayload(
-            url: URL(string: "https://example.com/soap")!,
-            id: UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!
+            url: try XCTUnwrap(URL(string: "https://example.com/soap")),
+            id: try XCTUnwrap(UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F"))
         )
 
         let encoder = XMLEncoder(configuration: .init(rootElementName: "URIPayload"))
@@ -93,7 +93,7 @@ final class XMLScalarCoverageTests: XCTestCase {
             let amount: Decimal
         }
 
-        let input = DecimalPayload(amount: Decimal(string: "12345.67")!)
+        let input = DecimalPayload(amount: try XCTUnwrap(Decimal(string: "12345.67")))
 
         let encoder = XMLEncoder(configuration: .init(rootElementName: "DecimalPayload"))
         let data = try encoder.encode(input)
@@ -261,7 +261,7 @@ final class XMLScalarCoverageTests: XCTestCase {
 
     func test_encodeDecode_singleURL_roundtrip() throws {
         let encoder = XMLEncoder(configuration: .init(rootElementName: "Endpoint"))
-        let url = URL(string: "https://api.example.com/v1")!
+        let url = try XCTUnwrap(URL(string: "https://api.example.com/v1"))
         let data = try encoder.encode(url)
         let decoder = XMLDecoder(configuration: .init(rootElementName: "Endpoint"))
         let decoded = try decoder.decode(URL.self, from: data)
@@ -270,7 +270,7 @@ final class XMLScalarCoverageTests: XCTestCase {
 
     func test_encodeDecode_singleUUID_roundtrip() throws {
         let encoder = XMLEncoder(configuration: .init(rootElementName: "ID"))
-        let uuid = UUID(uuidString: "550E8400-E29B-41D4-A716-446655440000")!
+        let uuid = try XCTUnwrap(UUID(uuidString: "550E8400-E29B-41D4-A716-446655440000"))
         let data = try encoder.encode(uuid)
         let decoder = XMLDecoder(configuration: .init(rootElementName: "ID"))
         let decoded = try decoder.decode(UUID.self, from: data)

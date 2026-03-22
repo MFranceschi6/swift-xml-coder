@@ -51,6 +51,10 @@ let xmlData10KB: Data = encodeFixture(itemCount: 60)
 let xmlData100KB: Data = encodeFixture(itemCount: 600)
 /// ~1 MB of XML (≈6000 items)
 let xmlData1MB: Data = encodeFixture(itemCount: 6000)
+/// ~10 MB of XML (≈60 000 items) — enterprise scale, streaming-only
+let xmlData10MB: Data = encodeFixture(itemCount: 60_000)
+/// ~100 MB of XML (≈600 000 items) — stress scale, streaming-only
+let xmlData100MB: Data = encodeFixture(itemCount: 600_000)
 
 // MARK: - Pre-built Swift structs (for encode benchmarks)
 

@@ -105,21 +105,21 @@ final class XMLTemporalTypesTests: XCTestCase {
         XCTAssertEqual(cal.component(.day, from: date), 1)
     }
 
-    func test_gYear_initFromDate() {
+    func test_gYear_initFromDate() throws {
         var cal = Calendar(identifier: .gregorian)
         cal.timeZone = .utc
-        let date = cal.date(from: DateComponents(year: 2024, month: 6, day: 15))!
+        let date = try XCTUnwrap(cal.date(from: DateComponents(year: 2024, month: 6, day: 15)))
         let year = XMLGYear(date: date, timeZone: .utc)
         XCTAssertEqual(year.year, 2024)
     }
 
-    func test_gYear_initFromDate_namedTimezone_usesStandardTimeOffset() {
+    func test_gYear_initFromDate_namedTimezone_usesStandardTimeOffset() throws {
         // Europe/Rome is UTC+1 in winter (standard), UTC+2 in summer (DST).
         // A date in summer (June) should still yield +01:00 offset (standard time).
         guard let rome = TimeZone(identifier: "Europe/Rome") else { return }
         var cal = Calendar(identifier: .gregorian)
         cal.timeZone = rome
-        let summerDate = cal.date(from: DateComponents(year: 2024, month: 6, day: 15))!
+        let summerDate = try XCTUnwrap(cal.date(from: DateComponents(year: 2024, month: 6, day: 15)))
         let year = XMLGYear(date: summerDate, timeZone: rome)
         // Standard time offset for Rome is +3600 (+01:00)
         XCTAssertEqual(year.timezoneOffset?.secondsFromUTC, 3600)
@@ -287,13 +287,13 @@ final class XMLTemporalTypesTests: XCTestCase {
         XCTAssertEqual(cal.component(.hour, from: date), 12)
     }
 
-    func test_time_initFromDate_namedTimezone_usesDSTAwareOffset() {
+    func test_time_initFromDate_namedTimezone_usesDSTAwareOffset() throws {
         // Europe/Rome in summer (June) is UTC+2 (DST active).
         // XMLTime.init(date:timeZone:) should capture the DST-aware offset.
         guard let rome = TimeZone(identifier: "Europe/Rome") else { return }
         var cal = Calendar(identifier: .gregorian)
         cal.timeZone = rome
-        let summerDate = cal.date(from: DateComponents(year: 2024, month: 6, day: 15, hour: 14, minute: 0, second: 0))!
+        let summerDate = try XCTUnwrap(cal.date(from: DateComponents(year: 2024, month: 6, day: 15, hour: 14, minute: 0, second: 0)))
         let time = XMLTime(date: summerDate, timeZone: rome)
         // In summer, Rome is UTC+2 = 7200 seconds
         XCTAssertEqual(time.timezoneOffset?.secondsFromUTC, 7200)
@@ -375,7 +375,7 @@ final class XMLTemporalTypesTests: XCTestCase {
         struct Wrapper: Codable { var date: Date }
         var cal = Calendar(identifier: .gregorian)
         cal.timeZone = .utc
-        let date = cal.date(from: DateComponents(year: 2024, month: 3, day: 15))!
+        let date = try XCTUnwrap(cal.date(from: DateComponents(year: 2024, month: 3, day: 15)))
         let encoder = XMLEncoder(configuration: .init(
             rootElementName: "Wrapper",
             dateEncodingStrategy: .xsdDate()

@@ -117,14 +117,14 @@ final class XMLDateFormatMacroIntegrationTests: XCTestCase {
         let encoder = XMLEncoder(configuration: .init(dateEncodingStrategy: .xsdDateTimeISO8601))
 
         var cal = Calendar(identifier: .gregorian)
-        cal.timeZone = TimeZone(identifier: "UTC")!
+        cal.timeZone = try XCTUnwrap(TimeZone(identifier: "UTC"))
         var comps = DateComponents()
         comps.year = 2024; comps.month = 3; comps.day = 15
         comps.hour = 10; comps.minute = 30; comps.second = 0
-        let date = cal.date(from: comps)!
+        let date = try XCTUnwrap(cal.date(from: comps))
 
         let schedule = Schedule(startDate: date, startTime: date, createdAt: date)
-        let xml = try String(data: encoder.encode(schedule), encoding: .utf8)!
+        let xml = try XCTUnwrap(String(data: encoder.encode(schedule), encoding: .utf8))
 
         // startDate must be xs:date format
         XCTAssertTrue(xml.contains("<startDate>2024-03-15"), "Expected xs:date in startDate, got: \(xml)")
@@ -138,14 +138,14 @@ final class XMLDateFormatMacroIntegrationTests: XCTestCase {
         let encoder = XMLEncoder(configuration: .init(dateEncodingStrategy: .xsdDateTimeISO8601))
 
         var cal = Calendar(identifier: .gregorian)
-        cal.timeZone = .init(secondsFromGMT: 0)!
+        cal.timeZone = try XCTUnwrap(TimeZone(secondsFromGMT: 0))
         var comps = DateComponents()
         comps.year = 2024; comps.month = 6; comps.day = 1
         comps.hour = 0; comps.minute = 0; comps.second = 0
-        let date = cal.date(from: comps)!
+        let date = try XCTUnwrap(cal.date(from: comps))
 
         let event = YearEvent(year: date)
-        let xml = try String(data: encoder.encode(event), encoding: .utf8)!
+        let xml = try XCTUnwrap(String(data: encoder.encode(event), encoding: .utf8))
 
         XCTAssertTrue(xml.contains("<year>2024"), "Expected xs:gYear in year, got: \(xml)")
     }
@@ -172,7 +172,7 @@ final class XMLDateFormatMacroIntegrationTests: XCTestCase {
 
         // startDate: parsed as xs:date → midnight UTC on 2024-03-15
         var cal = Calendar(identifier: .gregorian)
-        cal.timeZone = TimeZone(secondsFromGMT: 0)!
+        cal.timeZone = try XCTUnwrap(TimeZone(secondsFromGMT: 0))
         let startDateComponents = cal.dateComponents([.year, .month, .day], from: schedule.startDate)
         XCTAssertEqual(startDateComponents.year, 2024)
         XCTAssertEqual(startDateComponents.month, 3)
@@ -195,11 +195,11 @@ final class XMLDateFormatMacroIntegrationTests: XCTestCase {
 
     func test_roundtrip_schedule() throws {
         var cal = Calendar(identifier: .gregorian)
-        cal.timeZone = TimeZone(secondsFromGMT: 0)!
+        cal.timeZone = try XCTUnwrap(TimeZone(secondsFromGMT: 0))
         var comps = DateComponents()
         comps.year = 2024; comps.month = 3; comps.day = 15
         comps.hour = 10; comps.minute = 30; comps.second = 0
-        let date = cal.date(from: comps)!
+        let date = try XCTUnwrap(cal.date(from: comps))
 
         let original = Schedule(startDate: date, startTime: date, createdAt: date)
 
@@ -228,7 +228,7 @@ final class XMLDateFormatMacroIntegrationTests: XCTestCase {
         let encoder = XMLEncoder(configuration: .init(dateEncodingStrategy: .secondsSince1970))
         let date = Date(timeIntervalSince1970: 1_000_000)
         let value = NoOverride(timestamp: date)
-        let xml = try String(data: encoder.encode(value), encoding: .utf8)!
+        let xml = try XCTUnwrap(String(data: encoder.encode(value), encoding: .utf8))
         XCTAssertTrue(xml.contains("<timestamp>1000000"), "Expected secondsSince1970 in timestamp, got: \(xml)")
     }
 
