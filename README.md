@@ -161,6 +161,28 @@ SwiftXMLCoder ships with a comprehensive benchmark suite covering tree parsing, 
 | 1 - 10 MB | Tree or `XMLItemDecoder` | Tree works but uses more memory |
 | > 10 MB | `XMLItemDecoder` / `XMLStreamParser` | Constant memory vs linear; tree does not scale |
 
+### Measured Results
+
+All figures are p50 wall-clock times. Measured on Apple M1 (arm64, 8 GB), macOS 15.3, release build with jemalloc.
+
+| Operation | 10 KB | 100 KB | 1 MB | 10 MB |
+|-----------|-------|--------|------|-------|
+| Tree parse (`XMLTreeParser`) | 237 µs | 2.3 ms | 24 ms | 232 ms |
+| SAX push (`XMLStreamParser`) | 225 µs | 2.2 ms | 20 ms | 208 ms |
+| Pull cursor (`XMLEventCursor`) | 272 µs | 2.7 ms | 27 ms | 280 ms |
+| Codable decode (`XMLDecoder`) | 554 µs | 5.6 ms | 55 ms | 545 ms |
+| Codable encode (`XMLEncoder`) | 872 µs | 8.2 ms | 81 ms | 829 ms |
+| Stream write (`XMLStreamWriter`) | 221 µs | 2.3 ms | 21 ms | 215 ms |
+| Item decode (`XMLItemDecoder`, rich model) | — | — | 53 ms | — |
+
+**vs Foundation `XMLParser` (SAX):** 2.2–2.4x slower — known per-element allocation overhead; target of the next performance milestone (XML-PERF-1).
+
+**vs Foundation `XMLDocument` (tree):** ~15% faster at 1 MB (24 ms vs 28 ms).
+
+**vs CoreOffice/XMLCoder decode:** 1.3x faster at 100 KB, 1.8x faster at 10 MB.
+
+**vs CoreOffice/XMLCoder encode:** 1.5–1.6x faster across all scales.
+
 ### Benchmark Coverage
 
 | Area | Scales | What It Measures |
@@ -187,6 +209,8 @@ swift package --disable-sandbox benchmark --target ComparisonBenchmarks
 ```
 
 Benchmarks use [ordo-one/package-benchmark](https://github.com/ordo-one/package-benchmark) and require macOS 13+ with jemalloc (`brew install jemalloc`).
+
+The repository also runs benchmark regression checks in GitHub Actions via [`.github/workflows/benchmarks.yml`](./.github/workflows/benchmarks.yml). Every PR to `main` is compared against a `main` baseline on a macOS runner, so we can track regressions with a shared CI reference instead of relying only on local machine measurements.
 
 ---
 
