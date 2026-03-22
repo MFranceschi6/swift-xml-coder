@@ -32,11 +32,16 @@ iOS, tvOS, and watchOS are supported via Track 1: libxml2 is a system library em
 - `XMLEncoder` / `XMLDecoder`
 - `XMLDocument` with XPath
 - `XMLTreeParser` / `XMLTreeWriter`
-- `XMLStreamParser` / `XMLStreamWriter` / `XMLStreamEvent` — SAX-style streaming (async APIs on macOS 12+ / iOS 15+)
+- `XMLStreamParser` / `XMLStreamWriter` / `XMLStreamEvent` — SAX-style push streaming (async APIs on macOS 12+ / iOS 15+)
+- `XMLEventCursor` — pull/cursor interface over a pre-parsed event sequence
+- `XMLItemDecoder` — item-by-item `Codable` decode from a named repeating element (async on macOS 12+ / iOS 15+)
 - `XMLNamespaceResolver`, `XMLNamespaceValidator`
+- `XMLFieldNamespaceProvider` — per-field namespace override for encoder/decoder
 - `XMLCanonicalizer`, `XMLDefaultCanonicalizer`, `XMLTransform`
 - `XMLAttribute<Value>` / `XMLChild<Value>` property wrappers
 - `XMLFieldCodingOverrides`, `XMLFieldCodingOverrideProvider`
+- `XMLParsingError` with `decodeFailed(codingPath:location:message:)` case
+- `XMLSourceLocation` — structured source position (line) attached to decode errors
 - `SwiftXMLCoderTestSupport`
 
 ### Macros (Swift 5.9+)
@@ -44,6 +49,7 @@ iOS, tvOS, and watchOS are supported via Track 1: libxml2 is a system library em
 - `@XMLCodable` extension macro
 - `@XMLAttribute` peer macro
 - `@XMLChild` peer macro
+- `@XMLFieldNamespace` peer macro — per-field namespace override
 
 Available via the `SwiftXMLCoderMacros` product:
 

@@ -24,6 +24,7 @@ Questa roadmap copre un arco lungo di evoluzione. Alcune scelte di perimetro e p
 | `2026-03-21` | canonicalization del core e DSig standard-grade non sono la stessa cosa | la normalizzazione interna del modello non basta a sostituire XML Digital Signature interoperabile | DSig e C14N avanzata vanno in un package dedicato | `locked` |
 | `2026-03-21` | la documentazione condivisa vive sotto `.claude/plans/` ma resta agent-neutral | si evita una doppia fonte di verita' pur mantenendo compatibilita' con gli strumenti esistenti | Codex e Claude leggono gli stessi file | `locked` |
 | `2026-03-21` | il baseline pubblico da usare nei piani e' `1.1.0` | alcuni piani locali possono menzionare release future non ancora pubblicate | impedisce di trattare `1.2.0+` come gia' online | `locked` |
+| `2026-03-22` | il backend Swift puro copre solo lo strato streaming (SAX/`XMLStreamEvent`), non DOM né XPath | Foundation.XMLParser su Linux è già backed da libxml2 e non è puro Swift; un parser SAX Swift risolve solo WASM/embedded; rimpiazzare DOM+XPath sarebbe un progetto dell'ordine di grandezza di libxml2 | `swift-xml-pure` è un satellite streaming-only, il core resta su libxml2 per DOM/XPath | `locked` |
 
 ## Questioni Da Riaprire Solo Se Servono
 

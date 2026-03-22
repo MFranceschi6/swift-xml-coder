@@ -70,5 +70,6 @@ let data = try encoder.encode(person)
 ## Next Steps
 
 - <doc:FieldMapping> — control which fields become attributes vs. elements
-- <doc:Namespaces> — add XML namespace declarations
+- <doc:Namespaces> — add XML namespace declarations and per-field namespace overrides
+- <doc:Streaming> — parse large documents without loading the full DOM; pull-cursor and item-by-item decode
 - <doc:Security> — configure parser limits for untrusted input

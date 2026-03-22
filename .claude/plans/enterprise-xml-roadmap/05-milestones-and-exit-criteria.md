@@ -1,5 +1,5 @@
 Status: Active
-Last Updated: 2026-03-21
+Last Updated: 2026-03-22
 Owner: Maintainers
 Related: [README.md](./README.md), [02-target-roadmap.md](./02-target-roadmap.md), [03-ecosystem-topology.md](./03-ecosystem-topology.md), [04-capability-matrix.md](./04-capability-matrix.md), [06-decision-log.md](./06-decision-log.md)
 
@@ -232,6 +232,50 @@ Completare l'ecosistema ufficiale con XSLT e DSig/C14N standard-grade.
 ### Exit Criteria
 
 - lo stack XML ufficiale copre transform e signature tramite package dedicati
+
+## XML-R8 - Pure Swift Streaming Backend
+
+### Scope
+
+Aggiungere un backend di parsing SAX/streaming interamente in Swift, senza dipendenze da libxml2 né da Foundation, per abilitare lo stack di streaming su target dove queste librerie non sono disponibili (WebAssembly, embedded, ambienti sandbox).
+
+### Razionale
+
+`Foundation.XMLParser` su Linux è internamente backed da libxml2 e non è "puro Swift". Su WASM e ambienti embedded ne libxml2 ne Foundation sono disponibili. Un backend puro Swift a livello SAX consente di usare `XMLStreamParser`/`XMLEventCursor`/`XMLItemDecoder` su questi target senza modificare l'API pubblica del core.
+
+Il backend puro Swift copre **solo lo strato streaming** (`XMLStreamEvent`). DOM, XPath e i Codable encoder/decoder restano legati a libxml2 nel core principale — non è obiettivo di questa milestone rimpiazzare l'intero stack.
+
+### Deliverable Attesi
+
+- package satellite `swift-xml-pure` con un parser SAX Swift nativo
+- produce la stessa sequenza di `XMLStreamEvent` del backend libxml2
+- stessa suite di test di conformità (round-trip, limiti di sicurezza, whitespace policy)
+- documentato come "streaming-only, no DOM/XPath" — chi ha bisogno di XPath usa il core con libxml2
+
+### Prerequisiti
+
+- `XML-R3` (story streaming matura — garantisce che l'API `XMLStreamEvent` sia stabile prima di costruirci sopra un secondo backend)
+
+### Rischi
+
+- parità di comportamento difficile da garantire (edge case XML, encoding, namespace handling)
+- un parser XML conforme alle spec è molto lavoro — rischio di under-spec
+- potenziale confusione su quale package usare e quando
+
+### Segnali Non Pronta
+
+- API `XMLStreamEvent` non ancora stabile
+- assenza di test di conformità cross-backend
+
+### Parallelismo
+
+Indipendente da XML-R4, R5, R6, R7. Può partire in qualsiasi momento dopo XML-R3.
+
+### Exit Criteria
+
+- `swift-xml-pure` produce output `XMLStreamEvent` identico al backend libxml2 su tutti i fixture di test esistenti
+- funziona su WebAssembly (verificato con toolchain Swift WASM)
+- documentato esplicitamente il perimetro: streaming/SAX sì, DOM/XPath no
 
 ## Maintenance-Only Stop Condition
 
