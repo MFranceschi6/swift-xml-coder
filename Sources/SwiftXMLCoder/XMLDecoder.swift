@@ -194,9 +194,7 @@ public struct XMLDecoder: Sendable {
     /// - Throws: `XMLParsingError` on parse or decode failure.
     public func decode<T: Decodable>(_ type: T.Type, from data: Data) throws(XMLParsingError) -> T {
         do {
-            let parser = XMLTreeParser(configuration: configuration.parserConfiguration)
-            let tree = try parser.parse(data: data)
-            return try decodeTreeImpl(type, from: tree)
+            return try decodeSAXImpl(type, from: data)
         } catch let error as XMLParsingError {
             throw error
         } catch {
@@ -223,9 +221,7 @@ public struct XMLDecoder: Sendable {
     /// - Returns: A decoded instance of `type`.
     /// - Throws: `XMLParsingError` on parse or decode failure.
     public func decode<T: Decodable>(_ type: T.Type, from data: Data) throws -> T {
-        let parser = XMLTreeParser(configuration: configuration.parserConfiguration)
-        let tree = try parser.parse(data: data)
-        return try decodeTreeImpl(type, from: tree)
+        try decodeSAXImpl(type, from: data)
     }
     #endif
 
@@ -271,6 +267,80 @@ public struct XMLDecoder: Sendable {
         logger.debug(
             "XML decode completed",
             metadata: ["rootElement": "\(tree.root.name.localName)", "childCount": "\(tree.root.children.count)"]
+        )
+        return result
+    }
+
+    // swiftlint:disable:next function_body_length
+    private func decodeSAXImpl<T: Decodable>(_ type: T.Type, from data: Data) throws -> T {
+        let parser = XMLStreamParser(configuration: configuration.parserConfiguration)
+        var events: ContiguousArray<XMLStreamEvent> = []
+        var lineNumbers: ContiguousArray<Int?> = []
+        events.reserveCapacity(max(16, data.count / 32))
+        lineNumbers.reserveCapacity(max(16, data.count / 32))
+
+        try parser.parseSAX(
+            data: data,
+            onEvent: { event in
+                events.append(event)
+            },
+            onEventWithLine: { _, line in
+                lineNumbers.append(line)
+            }
+        )
+
+        let buffer = _XMLEventBuffer(events: events, lineNumbers: lineNumbers)
+        let (rootStart, rootEnd) = try buffer.findRootElement()
+
+        guard case .startElement(let rootName, _, _) = buffer.events[rootStart] else {
+            throw XMLParsingError.parseFailed(message: "[XML6_5_MISSING_ROOT] Cannot identify root element.")
+        }
+
+        var logger = configuration.logger
+        logger[metadataKey: "component"] = "XMLDecoder"
+
+        if let expectedRootName = try resolveExpectedRootElementName(for: type),
+           rootName.localName != expectedRootName {
+            logger.error(
+                "XML root element mismatch",
+                metadata: ["expected": "\(expectedRootName)", "found": "\(rootName.localName)", "type": "\(T.self)"]
+            )
+            throw XMLParsingError.parseFailed(
+                message: "[XML6_5_ROOT_MISMATCH] Expected root '\(expectedRootName)' but found '\(rootName.localName)'."
+            )
+        }
+
+        logger.debug("XML decode started", metadata: ["type": "\(T.self)", "rootElement": "\(rootName.localName)"])
+
+        var options = _XMLDecoderOptions(configuration: configuration)
+        options.perPropertyDateHints = _xmlPropertyDateHints(for: T.self)
+        let saxDecoder = _XMLSAXDecoder(
+            options: options,
+            buffer: buffer,
+            start: rootStart,
+            end: rootEnd,
+            fieldNodeKinds: _xmlFieldNodeKinds(for: T.self),
+            fieldNamespaces: _xmlFieldNamespaces(for: T.self),
+            codingPath: []
+        )
+
+        if let scalar: T = try saxDecoder.decodeScalarFromSpan(
+            type, spanStart: rootStart, spanEnd: rootEnd,
+            localName: rootName.localName, codingPath: []
+        ) {
+            logger.debug("XML decode completed", metadata: ["mode": "scalar"])
+            return scalar
+        }
+        if saxDecoder.isKnownScalarType(type) {
+            throw XMLParsingError.parseFailed(
+                message: "[XML6_5_SCALAR_PARSE_FAILED] Unable to decode scalar at root element '\(rootName.localName)'."
+            )
+        }
+
+        let result = try T(from: saxDecoder)
+        logger.debug(
+            "XML decode completed",
+            metadata: ["rootElement": "\(rootName.localName)", "childCount": "\(saxDecoder.childSpans.count)"]
         )
         return result
     }

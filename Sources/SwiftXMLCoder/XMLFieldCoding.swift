@@ -188,7 +188,7 @@ protocol _XMLAttributeEncodableValue {
 protocol _XMLAttributeDecodableValue {
     static func _xmlDecodeAttributeLexicalValue(
         _ lexicalValue: String,
-        using decoder: _XMLTreeDecoder,
+        using decoder: _XMLScalarDecoder,
         codingPath: [CodingKey],
         key: String
     ) throws -> Self
@@ -205,7 +205,7 @@ protocol _XMLTextContentEncodableValue {
 protocol _XMLTextContentDecodableValue {
     static func _xmlDecodeTextContentLexicalValue(
         _ lexicalValue: String,
-        using decoder: _XMLTreeDecoder,
+        using decoder: _XMLScalarDecoder,
         codingPath: [CodingKey],
         key: String
     ) throws -> Self
@@ -286,7 +286,7 @@ extension XMLAttribute: _XMLAttributeEncodableValue {
 extension XMLAttribute: _XMLAttributeDecodableValue {
     static func _xmlDecodeAttributeLexicalValue(
         _ lexicalValue: String,
-        using decoder: _XMLTreeDecoder,
+        using decoder: _XMLScalarDecoder,
         codingPath: [CodingKey],
         key: String
     ) throws -> XMLAttribute<Value> {
@@ -419,7 +419,7 @@ extension XMLTextContent: _XMLTextContentEncodableValue {
 extension XMLTextContent: _XMLTextContentDecodableValue {
     static func _xmlDecodeTextContentLexicalValue(
         _ lexicalValue: String,
-        using decoder: _XMLTreeDecoder,
+        using decoder: _XMLScalarDecoder,
         codingPath: [CodingKey],
         key: String
     ) throws -> XMLTextContent<Value> {

@@ -121,6 +121,40 @@ public final class XMLEventCursor: @unchecked Sendable {
         }
         return nil
     }
+
+    // MARK: - Span-based access (internal)
+
+    /// Creates a `ContiguousArray` from a range of the internal event buffer.
+    func eventsInRange(_ range: Range<Int>) -> ContiguousArray<XMLStreamEvent> {
+        ContiguousArray(_events[range])
+    }
+
+    /// Advances the cursor by recording the start/end indices of the next item element
+    /// span, instead of copying events out. Returns `nil` if no more items are found.
+    func nextItemSpan(itemElement: String) -> Range<Int>? {
+        while _index < _events.count {
+            let event = _events[_index]
+            _index += 1
+            if case .startElement(let name, _, _) = event, name.localName == itemElement {
+                let spanStart = _index - 1
+                var depth = 1
+                while depth > 0 && _index < _events.count {
+                    let current = _events[_index]
+                    _index += 1
+                    switch current {
+                    case .startElement:
+                        depth += 1
+                    case .endElement:
+                        depth -= 1
+                    default:
+                        break
+                    }
+                }
+                return spanStart..<_index
+            }
+        }
+        return nil
+    }
 }
 
 // MARK: - IteratorProtocol

@@ -1,32 +1,27 @@
 import Foundation
 
-/// Options that control how an XML tree is normalised and serialised during canonicalization.
-///
-/// Pass an instance to ``XMLCanonicalizer/canonicalView(for:options:transforms:)`` to customise
-/// attribute ordering, whitespace handling, comment inclusion, CDATA conversion, and encoding.
-public struct XMLNormalizationOptions: Sendable, Hashable {
+/// Options that control canonicalization normalization and serialization.
+public struct XMLCanonicalizationOptions: Sendable, Hashable {
     /// Determines the order in which element attributes are written.
     public let attributeOrderingPolicy: XMLTreeWriter.AttributeOrderingPolicy
     /// Determines the order in which namespace declarations are written.
     public let namespaceDeclarationOrderingPolicy: XMLTreeWriter.NamespaceDeclarationOrderingPolicy
-    /// Controls how whitespace-only text nodes are handled during normalisation.
+    /// Controls how whitespace-only text nodes are handled during normalization.
     public let whitespaceTextNodePolicy: XMLTreeWriter.WhitespaceTextNodePolicy
-    /// Controls determinism guarantees for the serialised output.
+    /// Controls determinism guarantees for the serialized output.
     public let deterministicSerializationMode: XMLTreeWriter.DeterministicSerializationMode
-    /// When `true`, XML comment nodes are preserved in the output. Defaults to `false`.
+    /// When `true`, XML comment nodes are preserved in the output.
     public let includeComments: Bool
-    /// When `true`, processing instruction nodes are preserved in the output. Defaults to `false`.
+    /// When `true`, processing instruction nodes are preserved in the output.
     public let includeProcessingInstructions: Bool
-    /// When `true`, CDATA sections are converted to plain text nodes. Defaults to `true`.
+    /// When `true`, CDATA sections are converted to plain text nodes.
     public let convertCDATAIntoText: Bool
-    /// The output encoding declaration written in the XML prolog (e.g. `"UTF-8"`).
+    /// The output encoding declaration written in the XML prolog (for example, `"UTF-8"`).
     public let outputEncoding: String
-    /// When `true`, the output is indented for human readability. Defaults to `false`.
+    /// When `true`, output is indented for readability.
     public let prettyPrintedOutput: Bool
 
-    /// Creates a normalisation options value.
-    ///
-    /// All parameters have canonical defaults suitable for deterministic output.
+    /// Creates canonicalization options with deterministic defaults.
     public init(
         attributeOrderingPolicy: XMLTreeWriter.AttributeOrderingPolicy = .lexicographical,
         namespaceDeclarationOrderingPolicy: XMLTreeWriter.NamespaceDeclarationOrderingPolicy = .lexicographical,

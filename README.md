@@ -175,13 +175,33 @@ All figures are p50 wall-clock times. Measured on Apple M1 (arm64, 8 GB), macOS 
 | Stream write (`XMLStreamWriter`) | 221 µs | 2.3 ms | 21 ms | 215 ms |
 | Item decode (`XMLItemDecoder`, rich model) | — | — | 53 ms | — |
 
-**vs Foundation `XMLParser` (SAX):** 2.2–2.4x slower — known per-element allocation overhead; target of the next performance milestone (XML-PERF-1).
+### GitHub Actions Results
 
-**vs Foundation `XMLDocument` (tree):** ~15% faster at 1 MB (24 ms vs 28 ms).
+All figures are p50 wall-clock times from the manual GitHub Actions benchmark run on March 22, 2026, using the `macos-15` hosted runner, Swift 6.1, and jemalloc. Run: [actions/runs/23411043764](https://github.com/MFranceschi6/swift-xml-coder/actions/runs/23411043764).
 
-**vs CoreOffice/XMLCoder decode:** 1.3x faster at 100 KB, 1.8x faster at 10 MB.
+| Operation | 10 KB | 100 KB | 1 MB | 10 MB |
+|-----------|-------|--------|------|-------|
+| Tree parse (`XMLTreeParser`) | 268 µs | 2.7 ms | 29 ms | 241 ms |
+| SAX push (`XMLStreamParser`) | 230 µs | 2.2 ms | 28 ms | 267 ms |
+| Pull cursor (`XMLEventCursor`) | 281 µs | 2.8 ms | 43 ms | 439 ms |
+| Codable decode (`XMLDecoder`) | 591 µs | 5.7 ms | 59 ms | 588 ms |
+| Codable encode (`XMLEncoder`) | 837 µs | 8.1 ms | 108 ms | 962 ms |
+| Stream write (`XMLStreamWriter`) | 243 µs | 2.5 ms | 24 ms | 230 ms |
+| Item decode (`XMLItemDecoder`, rich model) | — | — | 74 ms | — |
 
-**vs CoreOffice/XMLCoder encode:** 1.5–1.6x faster across all scales.
+### Cross-Machine Observations
+
+The GitHub-hosted runner preserves the same overall ranking as the local M1 run, but most internal benchmarks are modestly slower in CI. Small-payload encode stays effectively flat, while larger streaming workloads drift more: `XMLEventCursor` moves from 27 ms to 43 ms at 1 MB, and rich `XMLItemDecoder` from 53 ms to 74 ms at 1 MB. No benchmark job failed, and there were no correctness warnings or crashes in the run.
+
+One important documentation fix came out of the CI comparison: the previous `Foundation XMLParser` note was inverted. In both local and GitHub Actions measurements, Foundation SAX parsing is faster than SwiftXMLCoder's SAX parser at 1 MB, while SwiftXMLCoder's tree parser remains faster than Foundation `XMLDocument`.
+
+**vs Foundation `XMLParser` (SAX):** SwiftXMLCoder is about 2.0-2.3x slower at 1 MB in both local and GitHub Actions runs (`~21-22 ms` vs `~9-11 ms`). This is consistent across 10 KB and 100 KB as well.
+
+**vs Foundation `XMLDocument` (tree):** SwiftXMLCoder is about 18-25% faster at 1 MB (`23-24 ms` vs `28-32 ms`) across local and GitHub Actions runs.
+
+**vs CoreOffice/XMLCoder decode:** SwiftXMLCoder remains faster on both machines, from about 1.3-1.5x at 100 KB to about 1.5-2.6x at 10 MB depending on the runner.
+
+**vs CoreOffice/XMLCoder encode:** SwiftXMLCoder remains about 1.5-1.7x faster across all scales on both local and GitHub Actions runs.
 
 ### Benchmark Coverage
 

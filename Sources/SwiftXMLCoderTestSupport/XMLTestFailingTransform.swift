@@ -14,7 +14,7 @@ public struct XMLTestFailingTransform: XMLTransform {
 
     public func apply(
         to _: XMLTreeDocument,
-        options _: XMLNormalizationOptions
+        options _: XMLCanonicalizationOptions
     ) throws -> XMLTreeDocument {
         recorder?.record(token)
         throw error

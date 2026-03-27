@@ -1,5 +1,5 @@
 import Foundation
-import SwiftXMLCoder
+@testable import SwiftXMLCoder
 import XCTest
 
 final class XMLStreamWriterTests: XCTestCase {
@@ -275,5 +275,70 @@ final class XMLStreamWriterTests: XCTestCase {
         let str = String(data: data, encoding: .utf8) ?? ""
         // Pretty-printed output should contain newlines and indentation
         XCTAssertTrue(str.contains("\n"), "Expected newlines in pretty-printed output: \(str)")
+    }
+
+    // MARK: - XMLStreamWriterSink
+
+    func test_sink_producesIdenticalOutputToWriter() throws {
+        let xml = "<Root><child attr=\"v\">hello</child><child>world</child></Root>"
+        var events: [XMLStreamEvent] = []
+        try XMLStreamParser().parse(data: Data(xml.utf8)) { events.append($0) }
+
+        let writerOutput = try XMLStreamWriter().write(events)
+
+        var sinkChunks: [Data] = []
+        let sink = try XMLStreamWriterSink(configuration: .init(), flushThreshold: Int.max) { chunk in
+            sinkChunks.append(chunk)
+        }
+        for event in events { try sink.write(event) }
+        try sink.finish()
+        let sinkOutput = sinkChunks.reduce(into: Data()) { $0.append($1) }
+
+        XCTAssertEqual(writerOutput, sinkOutput)
+    }
+
+    func test_sink_flushesIncrementally() throws {
+        // Use a very low threshold so we get multiple chunks.
+        var chunkCount = 0
+        let sink = try XMLStreamWriterSink(configuration: .init(), flushThreshold: 1) { _ in
+            chunkCount += 1
+        }
+
+        let events: [XMLStreamEvent] = [
+            .startDocument(version: "1.0", encoding: "UTF-8", standalone: nil),
+            .startElement(
+                name: XMLQualifiedName(localName: "Root"),
+                attributes: [],
+                namespaceDeclarations: []
+            ),
+            .text("hello world"),
+            .endElement(name: XMLQualifiedName(localName: "Root")),
+            .endDocument
+        ]
+
+        for event in events { try sink.write(event) }
+        try sink.finish()
+
+        // With threshold=1, we should get multiple flush callbacks.
+        XCTAssertGreaterThan(chunkCount, 1, "Expected incremental flushes but got \(chunkCount) chunk(s)")
+    }
+
+    func test_sink_finishIsIdempotent() throws {
+        var callCount = 0
+        let sink = try XMLStreamWriterSink(configuration: .init(), flushThreshold: Int.max) { _ in
+            callCount += 1
+        }
+        try sink.write(.startDocument(version: "1.0", encoding: "UTF-8", standalone: nil))
+        try sink.write(.startElement(
+            name: XMLQualifiedName(localName: "R"),
+            attributes: [],
+            namespaceDeclarations: []
+        ))
+        try sink.write(.endElement(name: XMLQualifiedName(localName: "R")))
+        try sink.write(.endDocument)
+        try sink.finish()
+        let countAfterFirst = callCount
+        try sink.finish() // second call should be no-op
+        XCTAssertEqual(callCount, countAfterFirst, "Second finish() should not produce more output")
     }
 }

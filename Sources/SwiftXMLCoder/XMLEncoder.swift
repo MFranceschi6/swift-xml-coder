@@ -244,8 +244,7 @@ public struct XMLEncoder: Sendable {
     public func encode<T: Encodable>(_ value: T) throws(XMLParsingError) -> Data {
         do {
             let tree = try encodeTreeImpl(value)
-            let writer = XMLTreeWriter(configuration: configuration.writerConfiguration)
-            return try writer.writeData(tree)
+            return try encodeTreeToData(tree)
         } catch let error as XMLParsingError {
             throw error
         } catch {
@@ -269,10 +268,37 @@ public struct XMLEncoder: Sendable {
     /// - Throws: `XMLParsingError` on encoding or serialisation failure.
     public func encode<T: Encodable>(_ value: T) throws -> Data {
         let tree = try encodeTreeImpl(value)
-        let writer = XMLTreeWriter(configuration: configuration.writerConfiguration)
-        return try writer.writeData(tree)
+        return try encodeTreeToData(tree)
     }
     #endif
+
+    /// Serialises a tree document to Data via the event-based stream writer pipeline,
+    /// bypassing libxml2 DOM construction.
+    private func encodeTreeToData(_ tree: XMLTreeDocument) throws -> Data {
+        let writerConfig = XMLStreamWriter.Configuration(
+            encoding: configuration.writerConfiguration.encoding,
+            prettyPrinted: configuration.writerConfiguration.prettyPrinted,
+            expandEmptyElements: configuration.writerConfiguration.expandEmptyElements,
+            limits: streamWriterLimits(from: configuration.writerConfiguration.limits)
+        )
+        let writer = XMLStreamWriter(configuration: writerConfig)
+        var events: [XMLStreamEvent] = []
+        try tree.walkEvents { events.append($0) }
+        return try writer.write(events)
+    }
+
+    private func streamWriterLimits(
+        from treeLimits: XMLTreeWriter.Limits
+    ) -> XMLStreamWriter.WriterLimits {
+        XMLStreamWriter.WriterLimits(
+            maxDepth: treeLimits.maxDepth,
+            maxNodeCount: treeLimits.maxNodeCount,
+            maxOutputBytes: treeLimits.maxOutputBytes,
+            maxTextNodeBytes: treeLimits.maxTextNodeBytes,
+            maxCDATABlockBytes: treeLimits.maxCDATABlockBytes,
+            maxCommentBytes: treeLimits.maxCommentBytes
+        )
+    }
 
     private func encodeTreeImpl<T: Encodable>(_ value: T) throws -> XMLTreeDocument {
         var logger = configuration.logger

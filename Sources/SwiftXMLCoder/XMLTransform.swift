@@ -1,13 +1,10 @@
 import Foundation
 
-/// Transformation hook applied before canonical normalization.
-///
-/// Transforms are executed in-order by `XMLCanonicalizationContract.applyTransforms(...)`.
-/// A transform must be deterministic for identical input/options pairs.
+/// Transformation hook applied before canonical normalization in the tree-based canonicalization path.
 public protocol XMLTransform: Sendable {
     func apply(
         to document: XMLTreeDocument,
-        options: XMLNormalizationOptions
+        options: XMLCanonicalizationOptions
     ) throws -> XMLTreeDocument
 }
 

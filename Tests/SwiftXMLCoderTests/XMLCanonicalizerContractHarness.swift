@@ -27,15 +27,13 @@ enum XMLCanonicalizerContractHarness {
 
     static func assertTransformFailureEnvelope(
         canonicalizer: XMLTestCanonicalizer = XMLDefaultCanonicalizer(),
-        expectedCode: XMLCanonicalizationErrorCode = .transformFailed,
         file: StaticString = #filePath,
         line: UInt = #line
     ) throws {
         let result = try XMLCanonicalizerContractProbe.probeTransformFailure(
             canonicalize: canonicalizeClosure(for: canonicalizer)
         )
-        XCTAssertEqual(result.stage, .transform, file: file, line: line)
-        XCTAssertEqual(result.code, expectedCode, file: file, line: line)
+        XCTAssertTrue(result.message?.contains("XML6_9_CANONICAL_TRANSFORM_FAILED") == true, file: file, line: line)
         XCTAssertEqual(result.recordedTokens, ["failing-step"], file: file, line: line)
     }
 
@@ -43,7 +41,7 @@ enum XMLCanonicalizerContractHarness {
         for canonicalizer: XMLTestCanonicalizer
     ) -> XMLCanonicalizerContractProbe.CanonicalizeClosure {
         { document, options, transforms in
-            try canonicalizer.canonicalView(for: document, options: options, transforms: transforms)
+            try canonicalizer.canonicalize(document, options: options, transforms: transforms)
         }
     }
 }

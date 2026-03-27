@@ -234,26 +234,20 @@ final class _XMLTreeDecoder: Decoder {
         )
     }
 
+    var scalarDecoder: _XMLScalarDecoder {
+        _XMLScalarDecoder(
+            options: options,
+            fail: { [weak self] codingPath, message in
+                guard let self else {
+                    return XMLParsingError.parseFailed(message: message)
+                }
+                return self.decodeFailed(codingPath: codingPath, message: message)
+            }
+        )
+    }
+
     func isKnownScalarType(_ type: Any.Type) -> Bool {
-        type == Bool.self ||
-            type == String.self ||
-            type == Double.self ||
-            type == Float.self ||
-            type == Int.self ||
-            type == Int8.self ||
-            type == Int16.self ||
-            type == Int32.self ||
-            type == Int64.self ||
-            type == UInt.self ||
-            type == UInt8.self ||
-            type == UInt16.self ||
-            type == UInt32.self ||
-            type == UInt64.self ||
-            type == Decimal.self ||
-            type == URL.self ||
-            type == UUID.self ||
-            type == Date.self ||
-            type == Data.self
+        scalarDecoder.isKnownScalarType(type)
     }
 
     func decodeScalarFromLexical<T: Decodable>(
@@ -263,98 +257,13 @@ final class _XMLTreeDecoder: Decoder {
         localName: String?,
         isAttribute: Bool
     ) throws -> T? {
-        if type == String.self {
-            return lexical as? T
-        }
-
-        if type == Bool.self {
-            guard let parsed = parseBool(lexical) else {
-                throw decodeFailed(codingPath: codingPath,
-                    message: "[XML6_5C_BOOL_PARSE_FAILED] Unable to parse Bool from '\(lexical)' at path '\(renderCodingPath(codingPath))'.")
-            }
-            return parsed as? T
-        }
-        if type == Int.self { return try parseInteger(lexical, as: Int.self, codingPath: codingPath) as? T }
-        if type == Int8.self { return try parseInteger(lexical, as: Int8.self, codingPath: codingPath) as? T }
-        if type == Int16.self { return try parseInteger(lexical, as: Int16.self, codingPath: codingPath) as? T }
-        if type == Int32.self { return try parseInteger(lexical, as: Int32.self, codingPath: codingPath) as? T }
-        if type == Int64.self { return try parseInteger(lexical, as: Int64.self, codingPath: codingPath) as? T }
-        if type == UInt.self { return try parseInteger(lexical, as: UInt.self, codingPath: codingPath) as? T }
-        if type == UInt8.self { return try parseInteger(lexical, as: UInt8.self, codingPath: codingPath) as? T }
-        if type == UInt16.self { return try parseInteger(lexical, as: UInt16.self, codingPath: codingPath) as? T }
-        if type == UInt32.self { return try parseInteger(lexical, as: UInt32.self, codingPath: codingPath) as? T }
-        if type == UInt64.self { return try parseInteger(lexical, as: UInt64.self, codingPath: codingPath) as? T }
-
-        if type == Double.self {
-            guard let parsed = Double(lexical) else {
-                throw decodeFailed(codingPath: codingPath,
-                    message: "[XML6_5C_DOUBLE_PARSE_FAILED] Unable to parse Double from '\(lexical)' at path '\(renderCodingPath(codingPath))'.")
-            }
-            return parsed as? T
-        }
-
-        if type == Float.self {
-            guard let parsed = Float(lexical) else {
-                throw decodeFailed(codingPath: codingPath,
-                    message: "[XML6_5C_FLOAT_PARSE_FAILED] Unable to parse Float from '\(lexical)' at path '\(renderCodingPath(codingPath))'.")
-            }
-            return parsed as? T
-        }
-
-        if type == Decimal.self {
-            guard let parsed = Decimal(string: lexical, locale: Locale(identifier: "en_US_POSIX")) else {
-                throw decodeFailed(codingPath: codingPath,
-                    message: "[XML6_5C_DECIMAL_PARSE_FAILED] Unable to parse Decimal from '\(lexical)' at path '\(renderCodingPath(codingPath))'.")
-            }
-            return parsed as? T
-        }
-
-        if type == URL.self {
-            #if !canImport(Darwin) && swift(<6.0)
-            guard let parsed = _xmlParityDecodeURL(lexical) else {
-                throw decodeFailed(codingPath: codingPath,
-                    message: "[XML6_5C_URL_PARSE_FAILED] Unable to parse URL from '\(lexical)' at path '\(renderCodingPath(codingPath))'.")
-            }
-            return parsed as? T
-            #else
-            guard let parsed = URL(string: lexical) else {
-                throw decodeFailed(codingPath: codingPath,
-                    message: "[XML6_5C_URL_PARSE_FAILED] Unable to parse URL from '\(lexical)' at path '\(renderCodingPath(codingPath))'.")
-            }
-            return parsed as? T
-            #endif
-        }
-
-        if type == UUID.self {
-            guard let parsed = UUID(uuidString: lexical) else {
-                throw decodeFailed(codingPath: codingPath,
-                    message: "[XML6_5C_UUID_PARSE_FAILED] Unable to parse UUID from '\(lexical)' at path '\(renderCodingPath(codingPath))'.")
-            }
-            return parsed as? T
-        }
-
-        if type == Date.self {
-            if case .deferredToDate = options.dateDecodingStrategy {
-                return nil
-            }
-            let parsed = try parseDate(
-                lexical,
-                codingPath: codingPath,
-                localName: localName,
-                isAttribute: isAttribute
-            )
-            return parsed as? T
-        }
-
-        if type == Data.self {
-            if case .deferredToData = options.dataDecodingStrategy {
-                return nil
-            }
-            let parsed = try parseData(lexical, codingPath: codingPath)
-            return parsed as? T
-        }
-
-        return nil
+        try scalarDecoder.decodeScalarFromLexical(
+            lexical,
+            as: type,
+            codingPath: codingPath,
+            localName: localName,
+            isAttribute: isAttribute
+        )
     }
 
     private func parseInteger<T: LosslessStringConvertible>(
@@ -779,7 +688,7 @@ struct _XMLKeyedDecodingContainer<Key: CodingKey>: KeyedDecodingContainerProtoco
         if let wrapperType = type as? _XMLTextContentDecodableValue.Type {
             let wrapped = try wrapperType._xmlDecodeTextContentLexicalValue(
                 lexical,
-                using: decoder,
+                using: decoder.scalarDecoder,
                 codingPath: textPath,
                 key: key.stringValue
             )
@@ -833,7 +742,7 @@ struct _XMLKeyedDecodingContainer<Key: CodingKey>: KeyedDecodingContainerProtoco
         if let wrapperType = type as? _XMLAttributeDecodableValue.Type {
             let wrapped = try wrapperType._xmlDecodeAttributeLexicalValue(
                 attribute.value,
-                using: decoder,
+                using: decoder.scalarDecoder,
                 codingPath: attributePath,
                 key: key.stringValue
             )

@@ -691,4 +691,38 @@ final class XMLEncoderTests: XCTestCase {
         let decoded = try decoder.decode(Article.self, from: data)
         XCTAssertEqual(decoded, original)
     }
+
+    // MARK: - Event pipeline parity
+
+    func test_encode_eventPipeline_roundTripsCorrectly() throws {
+        struct Invoice: Codable, Equatable {
+            let id: Int
+            let customer: String
+            let items: [Item]
+
+            struct Item: Codable, Equatable {
+                let sku: String
+                let quantity: Int
+            }
+        }
+
+        let original = Invoice(
+            id: 99,
+            customer: "ACME",
+            items: [
+                .init(sku: "ABC", quantity: 3),
+                .init(sku: "DEF", quantity: 1)
+            ]
+        )
+
+        let encoder = XMLEncoder(configuration: .init(rootElementName: "Invoice"))
+        let data = try encoder.encode(original)
+        let decoded = try XMLDecoder().decode(Invoice.self, from: data)
+        XCTAssertEqual(decoded, original)
+
+        // Verify the output is well-formed XML by re-parsing it.
+        var events: [XMLStreamEvent] = []
+        try XMLStreamParser().parse(data: data) { events.append($0) }
+        XCTAssertGreaterThan(events.count, 0)
+    }
 }

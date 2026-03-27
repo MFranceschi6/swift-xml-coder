@@ -8,6 +8,34 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
+- **`XMLStreamWriterSink`** — new internal incremental writer that accepts events one at a
+  time and flushes serialised bytes to a callback when a configurable threshold is exceeded.
+  Building block for all streaming pipeline improvements below.
+- **`XMLTreeDocument.walkEvents(_:)`** — tree-to-events bridge that walks a tree document
+  and emits `XMLStreamEvent` values in document order, enabling the event-based encode path.
+
+### Changed
+
+- **Encoder now bypasses libxml2 DOM** — `XMLEncoder.encode()` no longer constructs an
+  `XMLDocument` (libxml2 DOM) as an intermediate step. Instead it walks the tree to events
+  and serialises via `XMLStreamWriter`, eliminating two full-document copies.
+- **Streaming canonicalizer now writes incrementally** — the stream-based canonicalize path
+  (`canonicalize(events:..., output:)`) feeds normalised events directly to
+  `XMLStreamWriterSink` instead of accumulating all events before serialisation. The output
+  callback now receives data chunks as they are produced.
+- **`XMLStreamWriter` delegates to `XMLStreamWriterSink`** — `writeImpl` now creates a
+  sink internally, removing duplicated libxml2 event-dispatch code.
+- **`XMLItemDecoder` uses span-based decode** — item decoding now uses `nextItemSpan()` on
+  the cursor to record index ranges and creates `ContiguousArray` slices from the cursor's
+  backing buffer, reducing per-item copy overhead.
+
+## [1.4.0] — 2026-03-27
+
+### Added
+
+- **`XMLEventTransform` protocol** — new event-level canonicalization transform hook for
+  streaming pipelines. Supports per-event rewrite/filter via `process(_:)` and
+  end-of-stream flush via `finalize()`.
 - **CI coverage on Swift 6.1 lane** — `latest-linux` now collects code coverage and enforces
   the 90% threshold, covering `#if swift(>=6.0)` branches (typed throws, `~Copyable` ownership,
   `any Protocol` existentials) that the 5.10 lane cannot reach.
@@ -26,9 +54,72 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   streaming paths.
 - **Performance section in README** — decision table (tree vs streaming), benchmark coverage
   overview, and instructions for running benchmarks.
+- **Decode benchmark split (Tree vs SAX)** — internal suites now include
+  `Decode/Tree/*` and `Decode/SAX/*` (including rich fixtures), and external comparison
+  suites now report separate SwiftXMLCoder decode paths against Foundation/XMLCoder.
+- **`_XMLSAXDecoder` — zero-tree Codable decode (XML-PERF-1)** — `XMLDecoder.decode(_:from:)`
+  now drives Keyed/Unkeyed/SingleValue containers directly from `_XMLEventBuffer` without
+  materializing an `XMLTreeDocument`. Eliminates the intermediate tree allocation on the
+  standard decode path while preserving full API, diagnostics, and namespace/macro support.
+- **12 SAX/tree parity tests** — `XMLSAXTreeParityTests` asserts that `decode(_:from:)` (SAX)
+  and `decodeTree(_:from:)` (tree) produce identical results across: plain keyed structs,
+  attribute+text-content mixed, nested structs, arrays, optional present/absent, ISO 8601
+  dates, base64 data, namespaced fields, booleans, empty arrays, and rich multi-namespace
+  invoice models.
 
 ### Changed
 
+- **Canonicalizer API redesigned (BREAKING)** — `XMLCanonicalizer` now exposes
+  `canonicalize(...)` tree and streaming entry points (data/events + output callback);
+  `XMLDefaultCanonicalizer` now implements both paths and returns canonical `Data` directly.
+- **`XMLNormalizationOptions` renamed to `XMLCanonicalizationOptions` (BREAKING)** —
+  canonicalization options keep the same semantics while aligning naming with the new API.
+- **Legacy canonicalization scaffolding removed (BREAKING)** — removed
+  `XMLCanonicalView`, `XMLCanonicalizationContract`, `XMLCanonicalizationError*`,
+  `XMLCanonicalizationStage`, `XMLIdentityTransform`, and `XMLCanonicalizer+Logic`.
+- **Canonicalization tests/docs migrated** — `XMLCanonicalizerTests`, test-support harness,
+  benchmark usage, and DocC canonicalization article updated to the new API and error model.
+- **SAX parser internals now use libxml2 push parsing** — `XMLStreamParser` switched from
+  `xmlSAXUserParseMemory` to `xmlCreatePushParserCtxt` + `xmlParseChunk`, aligning the
+  implementation with the `XML-PERF-1` direction and enabling chunk-friendly internals.
+- **Streaming SAX path now feeds large inputs incrementally by default** — `XMLStreamParser`
+  resets libxml2's last error, applies the same parse options as the tree parser, and feeds
+  large payloads to `xmlParseChunk` in 1 MiB blocks. This avoids the libxml2 push-parser
+  `"huge input lookup"` failure seen on older platform-provided `libxml2` versions
+  (fixed upstream in `2.11.3`) while keeping Apple SDKs and LTS Linux distributions working
+  without requiring a system library upgrade.
+- **`XMLDecoder.decode(_:from:)` now parses via SAX-to-tree bridge** — raw XML decode no
+  longer goes through `XMLTreeParser`'s DOM-to-tree path; it now builds `XMLTreeDocument`
+  directly from streaming events and then reuses the existing tree-based Codable decoder,
+  preserving public API and diagnostics shape.
+- **`XMLItemDecoder` now decodes item events directly** — per-item decode no longer
+  serialises event slices back to XML bytes before decoding; it now builds a temporary
+  tree in-memory from the extracted events and calls `decodeTree`, reducing extra parse/write
+  work in item-by-item pipelines.
+- **Scalar decode logic extracted to `_XMLScalarDecoder`** — `_XMLTreeDecoder` and
+  wrapper decode paths (`XMLAttribute` / `XMLTextContent`) now delegate scalar lexical
+  parsing to a shared internal component, preparing reuse for upcoming SAX container decode.
+- **Lower-allocation SAX start-element path** — namespace declarations and attributes now
+  reuse per-parse buffers (`removeAll(keepingCapacity: true)`) instead of allocating fresh
+  arrays for each element callback.
+- **Internal line-aware SAX emission hook** — `XMLStreamParser` now captures libxml2 line
+  numbers (`xmlSAX2GetLineNumber`) for internal consumers, allowing decode diagnostics to
+  retain source line information in the new SAX decode path.
+- **`XMLQualifiedName` unchecked fast-path** — added an internal
+  `init(uncheckedLocalName:namespaceURI:prefix:)` and used it in SAX callbacks to avoid
+  redundant trimming of libxml2-provided names.
+- **SAX limit checks now have a no-op fast path** — optional size/node/attribute limit
+  checks are precomputed once per parse and skipped entirely when corresponding limits are
+  disabled, reducing callback overhead on trusted/unbounded inputs.
+- **Lower-allocation tree parse traversal** — `XMLTreeParser` now pre-sizes arrays for
+  attributes, namespace declarations, and children based on libxml2 sibling/list counts
+  before conversion to `XMLTreeElement`, reducing growth reallocations on large documents.
+- **`_XMLTreeElementBox` now reserves child content capacity** — encoder mutable element boxes
+  reserve an initial content capacity at creation (`estimatedContentCount`, default `4`) to
+  reduce small-array growth churn during deeply nested or repetitive encodes.
+- **`_XMLEventBuffer.childElementSpans` linearized** — span extraction no longer performs
+  nested `elementEndIndex` rescans for each child; direct-child spans are now computed in a
+  single pass with depth tracking.
 - Disabled `nesting` SwiftLint rule globally (legitimate nested types in both sources and tests).
 - Removed `force_unwrapping` from opt-in rules; replaced 25 force unwraps in tests with
   `XCTUnwrap`.

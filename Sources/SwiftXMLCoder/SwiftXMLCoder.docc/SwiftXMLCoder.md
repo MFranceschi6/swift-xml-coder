@@ -107,7 +107,9 @@ let decoded = try decoder.decode(Book.self, from: data)
 - <doc:Canonicalization>
 - ``XMLCanonicalizer``
 - ``XMLDefaultCanonicalizer``
+- ``XMLCanonicalizationOptions``
 - ``XMLTransform``
+- ``XMLEventTransform``
 
 ### XPath Queries
 
@@ -129,5 +131,4 @@ let decoded = try decoder.decode(Book.self, from: data)
 
 - ``XMLParsingError``
 - ``XMLSourceLocation``
-- ``XMLCanonicalizationError``
 - ``XMLNamespaceResolutionError``

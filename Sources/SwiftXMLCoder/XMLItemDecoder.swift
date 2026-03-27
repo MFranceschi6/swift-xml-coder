@@ -89,9 +89,9 @@ public struct XMLItemDecoder: Sendable {
     ) throws(XMLParsingError) -> [T] {
         do {
             var results: [T] = []
-            while let itemEvents = nextItemEvents(itemElement: itemElement, cursor: cursor) {
-                let itemData = try serializeItem(itemEvents)
-                let item = try decodeItem(type, itemElement: itemElement, from: itemData)
+            while let span = cursor.nextItemSpan(itemElement: itemElement) {
+                let events = cursor.eventsInRange(span)
+                let item = try decodeItemFromSpan(type, itemElement: itemElement, events: events)
                 results.append(item)
             }
             return results
@@ -117,9 +117,9 @@ public struct XMLItemDecoder: Sendable {
         from cursor: XMLEventCursor
     ) throws -> [T] {
         var results: [T] = []
-        while let itemEvents = nextItemEvents(itemElement: itemElement, cursor: cursor) {
-            let itemData = try serializeItem(itemEvents)
-            let item = try decodeItem(type, itemElement: itemElement, from: itemData)
+        while let span = cursor.nextItemSpan(itemElement: itemElement) {
+            let events = cursor.eventsInRange(span)
+            let item = try decodeItemFromSpan(type, itemElement: itemElement, events: events)
             results.append(item)
         }
         return results
@@ -158,13 +158,13 @@ public struct XMLItemDecoder: Sendable {
     ) -> AsyncThrowingStream<T, Error> {
         AsyncThrowingStream { continuation in
             do {
-                while let itemEvents = nextItemEvents(itemElement: itemElement, cursor: cursor) {
+                while let span = cursor.nextItemSpan(itemElement: itemElement) {
                     guard !Task.isCancelled else {
                         continuation.finish()
                         return
                     }
-                    let itemData = try serializeItem(itemEvents)
-                    let item = try decodeItem(type, itemElement: itemElement, from: itemData)
+                    let events = cursor.eventsInRange(span)
+                    let item = try decodeItemFromSpan(type, itemElement: itemElement, events: events)
                     continuation.yield(item)
                 }
                 continuation.finish()
@@ -176,62 +176,38 @@ public struct XMLItemDecoder: Sendable {
 
     // MARK: - Internal helpers
 
-    /// Extracts events for the next occurrence of `<itemElement>…</itemElement>` from
-    /// the cursor, or returns `nil` if no more occurrences exist.
-    ///
-    /// The returned slice starts with a `.startElement` and ends with the matching
-    /// `.endElement`. Correctly handles nested elements that share the same local name
-    /// by tracking element nesting depth.
-    func nextItemEvents(itemElement: String, cursor: XMLEventCursor) -> [XMLStreamEvent]? {
-        guard let startEvent = cursor.advance(toElement: itemElement) else { return nil }
-
-        var collected: [XMLStreamEvent] = [startEvent]
-        var depth = 1
-
-        while depth > 0, let event = cursor.next() {
-            collected.append(event)
-            switch event {
-            case .startElement:
-                depth += 1
-            case .endElement:
-                depth -= 1
-            default:
-                break
-            }
-        }
-
-        // depth > 0 means the document was malformed (no matching close tag found).
-        // Return what we have — the subsequent decode call will fail with a clear error.
-        return collected
-    }
-
-    /// Serialises a slice of events as a self-contained XML document.
-    private func serializeItem(_ itemEvents: [XMLStreamEvent]) throws -> Data {
-        let fullEvents: [XMLStreamEvent] =
-            [.startDocument(version: "1.0", encoding: "UTF-8", standalone: nil)]
-            + itemEvents
-            + [.endDocument]
-        return try XMLStreamWriter().write(fullEvents)
-    }
-
-    /// Decodes a single item from pre-serialised XML bytes.
-    private func decodeItem<T: Decodable>(
+    /// Decodes a single item from a contiguous event span via `_XMLSAXDecoder`,
+    /// bypassing tree materialisation entirely.
+    private func decodeItemFromSpan<T: Decodable>(
         _ type: T.Type,
         itemElement: String,
-        from data: Data
+        events: ContiguousArray<XMLStreamEvent>
     ) throws -> T {
-        let itemConfig = XMLDecoder.Configuration(
-            rootElementName: itemElement,
-            itemElementName: configuration.itemElementName,
-            fieldCodingOverrides: configuration.fieldCodingOverrides,
-            dateDecodingStrategy: configuration.dateDecodingStrategy,
-            dataDecodingStrategy: configuration.dataDecodingStrategy,
-            keyTransformStrategy: configuration.keyTransformStrategy,
-            parserConfiguration: configuration.parserConfiguration,
-            validationPolicy: configuration.validationPolicy,
-            logger: configuration.logger,
-            userInfo: configuration.userInfo
+        let buffer = _XMLEventBuffer(
+            events: events,
+            lineNumbers: ContiguousArray<Int?>(repeating: nil, count: events.count)
         )
-        return try XMLDecoder(configuration: itemConfig).decode(type, from: data)
+        let spanStart = 0
+        let spanEnd = events.count - 1
+
+        var options = _XMLDecoderOptions(configuration: configuration)
+        options.perPropertyDateHints = _xmlPropertyDateHints(for: T.self)
+        let saxDecoder = _XMLSAXDecoder(
+            options: options,
+            buffer: buffer,
+            start: spanStart,
+            end: spanEnd,
+            fieldNodeKinds: _xmlFieldNodeKinds(for: T.self),
+            fieldNamespaces: _xmlFieldNamespaces(for: T.self),
+            codingPath: []
+        )
+
+        if let scalar: T = try saxDecoder.decodeScalarFromSpan(
+            type, spanStart: spanStart, spanEnd: spanEnd,
+            localName: itemElement, codingPath: []
+        ) {
+            return scalar
+        }
+        return try T(from: saxDecoder)
     }
 }

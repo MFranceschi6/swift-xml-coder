@@ -165,12 +165,14 @@ final class _XMLTreeElementBox {
     init(
         name: XMLQualifiedName,
         attributes: [XMLTreeAttribute] = [],
-        namespaceDeclarations: [XMLNamespaceDeclaration] = []
+        namespaceDeclarations: [XMLNamespaceDeclaration] = [],
+        estimatedContentCount: Int = 4
     ) {
         self.name = name
         self.attributes = attributes
         self.namespaceDeclarations = namespaceDeclarations
         self.contents = []
+        self.contents.reserveCapacity(max(estimatedContentCount, 0))
     }
 
     var isEmpty: Bool { contents.isEmpty }
@@ -211,14 +213,16 @@ final class _XMLTreeElementBox {
     }
 
     func makeElement() -> XMLTreeElement {
-        let children: [XMLTreeNode] = contents.map { content in
+        var children: [XMLTreeNode] = []
+        children.reserveCapacity(contents.count)
+        for content in contents {
             switch content {
             case .text(let value):
-                return XMLTreeNode.text(value)
+                children.append(.text(value))
             case .cdata(let value):
-                return XMLTreeNode.cdata(value)
+                children.append(.cdata(value))
             case .element(let child):
-                return XMLTreeNode.element(child.makeElement())
+                children.append(.element(child.makeElement()))
             }
         }
 
