@@ -273,24 +273,18 @@ public struct XMLDecoder: Sendable {
 
     // swiftlint:disable:next function_body_length
     private func decodeSAXImpl<T: Decodable>(_ type: T.Type, from data: Data) throws -> T {
-        let parser = XMLStreamParser(configuration: configuration.parserConfiguration)
-        var events: ContiguousArray<XMLStreamEvent> = []
-        events.reserveCapacity(max(16, data.count / 32))
-
-        try parser.parseSAX(
-            data: data,
-            onEvent: { event in
-                events.append(event)
+        let session = try _XMLStreamingParserSession(data: data, configuration: configuration.parserConfiguration)
+        var rootStart: XMLStreamEvent?
+        while let event = try session.nextEvent() {
+            if case .startElement = event {
+                rootStart = event
+                break
             }
-        )
-
-        // Line numbers are computed lazily on the first error — no per-event overhead on
-        // the happy path. The table re-parses the original data when first accessed.
-        let lineTable = _LazyLineTable(data: data, parserConfig: configuration.parserConfiguration)
-        let buffer = _XMLEventBuffer(events: events, lineTable: lineTable)
-        let (rootStart, rootEnd) = try buffer.findRootElement()
-
-        guard case .startElement(let rootName, _, _) = buffer.events[rootStart] else {
+        }
+        guard let rootStart else {
+            throw XMLParsingError.parseFailed(message: "[XML6_5_MISSING_ROOT] XML document does not contain a root element.")
+        }
+        guard case .startElement(let rootName, _, _) = rootStart else {
             throw XMLParsingError.parseFailed(message: "[XML6_5_MISSING_ROOT] Cannot identify root element.")
         }
 
@@ -312,33 +306,35 @@ public struct XMLDecoder: Sendable {
 
         var options = _XMLDecoderOptions(configuration: configuration)
         options.perPropertyDateHints = _xmlPropertyDateHints(for: T.self)
-        let saxDecoder = _XMLSAXDecoder(
+        let state = try _XMLStreamingElementState(session: session, start: rootStart)
+        let streamingDecoder = _XMLStreamingDecoder(
             options: options,
-            buffer: buffer,
-            start: rootStart,
-            end: rootEnd,
+            state: state,
             fieldNodeKinds: _xmlFieldNodeKinds(for: T.self),
             fieldNamespaces: _xmlFieldNamespaces(for: T.self),
             codingPath: []
         )
 
-        if let scalar: T = try saxDecoder.decodeScalarFromSpan(
-            type, spanStart: rootStart, spanEnd: rootEnd,
-            localName: rootName.localName, codingPath: []
+        if let scalar: T = try streamingDecoder.decodeScalarFromCurrentElement(
+            type,
+            codingPath: []
         ) {
             logger.debug("XML decode completed", metadata: ["mode": "scalar"])
+            try session.drainToDocumentEnd()
             return scalar
         }
-        if saxDecoder.isKnownScalarType(type) {
+        if streamingDecoder.isKnownScalarType(type) {
             throw XMLParsingError.parseFailed(
                 message: "[XML6_5_SCALAR_PARSE_FAILED] Unable to decode scalar at root element '\(rootName.localName)'."
             )
         }
 
-        let result = try T(from: saxDecoder)
+        let result = try T(from: streamingDecoder)
+        try streamingDecoder.finish()
+        try session.drainToDocumentEnd()
         logger.debug(
             "XML decode completed",
-            metadata: ["rootElement": "\(rootName.localName)", "childCount": "\(saxDecoder.childSpans.count)"]
+            metadata: ["rootElement": "\(rootName.localName)", "childCount": "\(state.childCount)"]
         )
         return result
     }

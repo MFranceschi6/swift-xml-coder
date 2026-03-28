@@ -44,6 +44,26 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   `_XMLEventEncoder` now conform, enabling the two encoders to share scalar-boxing logic
   without coupling.
 
+- **`_XMLStreamingDecoder` — fully streaming SAX-to-Codable decoder** — new `Decoder`
+  implementation (`XMLStreamingDecoder+Codable.swift`) that reads XML events directly from the
+  libxml2 push parser session on demand, without buffering the entire document's events upfront.
+  `XMLDecoder.decode(_:from:)` now routes through this path instead of `_XMLSAXDecoder`.
+  - **Inline keyed child streaming**: in-order keyed property access reads children directly from
+    the parser session — zero event copies on the happy path.
+  - **Inline unkeyed child streaming**: after mode detection (items vs allChildren), subsequent
+    children are consumed inline from the stream.
+  - **Scalar leaf fast-path**: leaf elements (`<name>John</name>`) are decoded directly from the
+    stream text without allocating `_XMLStreamingElementState` — zero heap allocation per scalar.
+  - **Lazy line number resolution**: event indices are stored (one `Int` per element), and line
+    numbers are resolved only on error via `_LazyLineTable` re-parse. No per-event
+    `xmlSAX2GetLineNumber` call on the hot path.
+  - **`ContiguousArray<XMLStreamEvent>` queue**: eliminated the `_XMLStreamingQueuedEvent` wrapper;
+    events are stored directly without per-event struct overhead.
+  - **Out-of-order fallback**: children accessed out of document order are buffered and decoded
+    via the existing `_XMLSAXDecoder` path, preserving full Codable compatibility.
+  - **Performance**: ~5% instruction count reduction and ~7-9% throughput improvement over the
+    initial streaming decoder, narrowing the SAX→Tree decode gap to ~7-10%.
+
 ### Changed
 
 - **`XMLStreamWriterSink`** — new internal incremental writer that accepts events one at a
