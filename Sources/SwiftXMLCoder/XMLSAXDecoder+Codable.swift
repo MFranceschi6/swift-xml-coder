@@ -1,112 +1,159 @@
 // swiftlint:disable large_tuple
 import Foundation
 
+// MARK: - _LazyLineTable
+//
+// Holds the original parse input and re-parses it on demand to produce a line-number table.
+// This avoids the per-event append cost (and the ContiguousArray allocation) on the happy
+// path. The re-parse is triggered at most once, on the first call to lineNumberAt(_:), which
+// only happens when an error is being formatted.
+
+final class _LazyLineTable {
+    private let data: Data
+    private let parserConfig: XMLTreeParser.Configuration
+    private var lineNumbers: ContiguousArray<Int?>?
+
+    init(data: Data, parserConfig: XMLTreeParser.Configuration) {
+        self.data = data
+        self.parserConfig = parserConfig
+    }
+
+    /// Initialise with a pre-built table — for testing only.
+    init(prebuilt: ContiguousArray<Int?>) {
+        self.data = Data()
+        self.parserConfig = XMLTreeParser.Configuration()
+        self.lineNumbers = prebuilt
+    }
+
+    func lineNumberAt(_ index: Int) -> Int? {
+        if lineNumbers == nil { populate() }
+        guard let numbers = lineNumbers, numbers.indices.contains(index) else { return nil }
+        return numbers[index]
+    }
+
+    private func populate() {
+        let parser = XMLStreamParser(configuration: parserConfig)
+        var numbers = ContiguousArray<Int?>()
+        // If re-parse fails (shouldn't — same data + same config), leave lineNumbers nil.
+        try? parser.parseSAX(
+            data: data,
+            onEvent: { _ in },
+            onEventWithLine: { _, line in numbers.append(line) }
+        )
+        lineNumbers = numbers
+    }
+}
+
+// MARK: - _XMLEventBuffer
+
 struct _XMLEventBuffer {
     let events: ContiguousArray<XMLStreamEvent>
-    let lineNumbers: ContiguousArray<Int?>
 
-    init(events: ContiguousArray<XMLStreamEvent>, lineNumbers: ContiguousArray<Int?>) {
+    // Structural side table: startToEnd[i] == end index for the .startElement at events[i],
+    // or -1 if events[i] is not a .startElement. Built once in O(n) during init.
+    let startToEnd: ContiguousArray<Int>
+    // Precomputed root element span; nil if the buffer has no root element.
+    let rootElementRange: (start: Int, end: Int)?
+
+    // Line numbers are populated lazily via a re-parse triggered only when an error is formatted.
+    // nil means no source is available (e.g. item-decoder sub-spans).
+    private let lineTable: _LazyLineTable?
+
+    init(events: ContiguousArray<XMLStreamEvent>, lineTable: _LazyLineTable?) {
         self.events = events
-        if events.count == lineNumbers.count {
-            self.lineNumbers = lineNumbers
-        } else {
-            // Defensive fallback to keep buffer usable even if a producer misses line entries.
-            self.lineNumbers = ContiguousArray(repeating: nil, count: events.count)
+        self.lineTable = lineTable
+
+        // Single O(n) pass: pair every .startElement with its matching .endElement.
+        var map = ContiguousArray(repeating: -1, count: events.count)
+        var stack: [Int] = []
+        stack.reserveCapacity(32)
+        var foundRoot: (start: Int, end: Int)?
+        for i in events.indices {
+            switch events[i] {
+            case .startElement:
+                stack.append(i)
+            case .endElement:
+                if let startIdx = stack.popLast() {
+                    map[startIdx] = i
+                    if stack.isEmpty && foundRoot == nil {
+                        foundRoot = (startIdx, i)
+                    }
+                }
+            default:
+                break
+            }
         }
+        self.startToEnd = map
+        self.rootElementRange = foundRoot
     }
 
     var count: Int { events.count }
 
     func lineNumberAt(_ index: Int) -> Int? {
         guard events.indices.contains(index) else { return nil }
-        return lineNumbers[index]
+        return lineTable?.lineNumberAt(index)
     }
 
     func findRootElement() throws -> (start: Int, end: Int) {
-        for index in events.indices {
-            if case .startElement = events[index] {
-                guard let end = elementEndIndex(from: index) else {
+        guard let root = rootElementRange else {
+            // Distinguish between unbalanced vs. missing root.
+            for event in events {
+                if case .startElement = event {
                     throw XMLParsingError.parseFailed(
                         message: "[XML6_5_UNBALANCED_START] XML ended before all open elements were closed."
                     )
                 }
-                return (index, end)
             }
+            throw XMLParsingError.parseFailed(
+                message: "[XML6_5_MISSING_ROOT] XML document does not contain a root element."
+            )
         }
-        throw XMLParsingError.parseFailed(
-            message: "[XML6_5_MISSING_ROOT] XML document does not contain a root element."
-        )
+        return root
     }
 
     func elementEndIndex(from startIndex: Int) -> Int? {
         guard events.indices.contains(startIndex) else { return nil }
         guard case .startElement = events[startIndex] else { return nil }
-
-        var depth = 0
-        for index in startIndex..<events.count {
-            switch events[index] {
-            case .startElement:
-                depth += 1
-            case .endElement:
-                depth -= 1
-                if depth == 0 {
-                    return index
-                }
-            default:
-                break
-            }
-        }
-        return nil
+        let end = startToEnd[startIndex]
+        return end >= 0 ? end : nil
     }
 
     func childElementSpans(from start: Int, to end: Int) -> [(name: XMLQualifiedName, start: Int, end: Int)] {
         guard events.indices.contains(start), events.indices.contains(end), start < end else { return [] }
         var spans: [(name: XMLQualifiedName, start: Int, end: Int)] = []
-        var relativeDepth = 0
-        var pendingDirectChild: (name: XMLQualifiedName, start: Int)?
         var index = start + 1
 
         while index < end {
-            switch events[index] {
-            case .startElement(let name, _, _):
-                if relativeDepth == 0 {
-                    pendingDirectChild = (name: name, start: index)
-                }
-                relativeDepth += 1
-            case .endElement:
-                guard relativeDepth > 0 else {
+            if case .startElement(let name, _, _) = events[index] {
+                let childEnd = startToEnd[index]
+                if childEnd > 0 {
+                    spans.append((name: name, start: index, end: childEnd))
+                    index = childEnd + 1  // Skip the entire subtree.
+                } else {
                     index += 1
-                    continue
                 }
-                relativeDepth -= 1
-                if relativeDepth == 0, let child = pendingDirectChild {
-                    spans.append((name: child.name, start: child.start, end: index))
-                    pendingDirectChild = nil
-                }
-            default:
-                break
+            } else {
+                index += 1
             }
-            index += 1
         }
         return spans
     }
 
     func lexicalText(from start: Int, to end: Int) -> String? {
         guard events.indices.contains(start), events.indices.contains(end), start < end else { return nil }
-        var depth = 0
         var parts: [String] = []
-        for index in (start + 1)..<end {
+        var index = start + 1
+        while index < end {
             switch events[index] {
             case .startElement:
-                depth += 1
-            case .endElement:
-                depth = max(0, depth - 1)
+                // Skip the entire child subtree — only direct text at depth 0 counts.
+                let childEnd = startToEnd[index]
+                index = childEnd > 0 ? childEnd + 1 : index + 1
             case .text(let value), .cdata(let value):
-                if depth == 0 {
-                    parts.append(value)
-                }
+                parts.append(value)
+                index += 1
             default:
-                break
+                index += 1
             }
         }
         guard !parts.isEmpty else { return nil }
@@ -114,9 +161,22 @@ struct _XMLEventBuffer {
     }
 
     func isNilSpan(from start: Int, to end: Int) -> Bool {
-        guard childElementSpans(from: start, to: end).isEmpty else { return false }
-        let lexical = lexicalText(from: start, to: end)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        return lexical.isEmpty
+        guard events.indices.contains(start), events.indices.contains(end), start < end else { return true }
+        // Walk the immediate content of this span. Stop as soon as we find evidence of a value:
+        // a child element, or non-whitespace text. No array allocation needed.
+        var index = start + 1
+        while index < end {
+            switch events[index] {
+            case .startElement:
+                return false  // Has child elements — not nil.
+            case .text(let value), .cdata(let value):
+                if !value.allSatisfy(\.isWhitespace) { return false }
+                index += 1
+            default:
+                index += 1
+            }
+        }
+        return true
     }
 
     func attributesAt(_ startIndex: Int) -> [XMLTreeAttribute] {
@@ -128,7 +188,7 @@ struct _XMLEventBuffer {
     func makeTreeDocument() throws -> XMLTreeDocument {
         var builder = _XMLSAXTreeBuilder()
         for index in events.indices {
-            try builder.consume(event: events[index], line: lineNumbers[index])
+            try builder.consume(event: events[index], line: lineTable?.lineNumberAt(index))
         }
         return try builder.finalize()
     }
@@ -158,6 +218,11 @@ final class _XMLSAXDecoder: Decoder {
         buffer.childElementSpans(from: start, to: end)
     private(set) lazy var attributes: [XMLTreeAttribute] = buffer.attributesAt(start)
 
+    // Sequential cursor for in-order keyed lookup. Reset by container(keyedBy:).
+    // XML element order and Codable declaration order typically match, so the
+    // cursor hits on the first comparison for each field — O(1) amortised.
+    var childCursor: Int = 0
+
     init(
         options: _XMLDecoderOptions,
         buffer: _XMLEventBuffer,
@@ -177,7 +242,8 @@ final class _XMLSAXDecoder: Decoder {
     }
 
     func container<Key>(keyedBy type: Key.Type) throws -> KeyedDecodingContainer<Key> where Key: CodingKey {
-        KeyedDecodingContainer(_XMLSAXKeyedDecodingContainer<Key>(decoder: self, codingPath: codingPath))
+        childCursor = 0
+        return KeyedDecodingContainer(_XMLSAXKeyedDecodingContainer<Key>(decoder: self, codingPath: codingPath))
     }
 
     func unkeyedContainer() throws -> UnkeyedDecodingContainer {
@@ -190,14 +256,44 @@ final class _XMLSAXDecoder: Decoder {
 
     // MARK: - Element helpers
 
+    /// Consuming lookup: tries the current cursor position first, then falls back to a
+    /// full linear scan. Advances the cursor only on a cursor hit, so in-order Codable
+    /// access (the common case) costs one comparison per field.
     func firstChildSpan(
+        named localName: String,
+        namespaceURI: String?
+    ) -> (name: XMLQualifiedName, start: Int, end: Int)? {
+        let spans = childSpans
+        if childCursor < spans.count {
+            let candidate = spans[childCursor]
+            if candidate.name.localName == localName &&
+               (namespaceURI == nil || candidate.name.namespaceURI == namespaceURI) {
+                childCursor += 1
+                return candidate
+            }
+        }
+        // Fallback: full linear scan (out-of-order field, missing field, namespace filter).
+        for span in spans {
+            guard span.name.localName == localName else { continue }
+            if let uri = namespaceURI {
+                if span.name.namespaceURI == uri { return span }
+            } else {
+                return span
+            }
+        }
+        return nil
+    }
+
+    /// Non-consuming peek: always linear scan, never advances the cursor.
+    /// Used by contains() and decodeNil() which must not disturb decode order.
+    func peekChildSpan(
         named localName: String,
         namespaceURI: String?
     ) -> (name: XMLQualifiedName, start: Int, end: Int)? {
         for span in childSpans {
             guard span.name.localName == localName else { continue }
-            if let requiredURI = namespaceURI {
-                if span.name.namespaceURI == requiredURI { return span }
+            if let uri = namespaceURI {
+                if span.name.namespaceURI == uri { return span }
             } else {
                 return span
             }
@@ -329,7 +425,7 @@ struct _XMLSAXKeyedDecodingContainer<Key: CodingKey>: KeyedDecodingContainerProt
     func contains(_ key: Key) -> Bool {
         if resolvedNodeKind(for: key, valueType: Never.self) == .ignored { return false }
         let name = xmlName(for: key)
-        return decoder.firstChildSpan(named: name, namespaceURI: fieldNamespaceURI(for: key)) != nil
+        return decoder.peekChildSpan(named: name, namespaceURI: fieldNamespaceURI(for: key)) != nil
             || decoder.attribute(named: name) != nil
     }
 
@@ -337,7 +433,7 @@ struct _XMLSAXKeyedDecodingContainer<Key: CodingKey>: KeyedDecodingContainerProt
         if resolvedNodeKind(for: key, valueType: Never.self) == .ignored { return true }
         let name = xmlName(for: key)
         if decoder.attribute(named: name) != nil { return false }
-        guard let span = decoder.firstChildSpan(named: name, namespaceURI: fieldNamespaceURI(for: key)) else {
+        guard let span = decoder.peekChildSpan(named: name, namespaceURI: fieldNamespaceURI(for: key)) else {
             return true
         }
         return decoder.isNilSpan(start: span.start, end: span.end)

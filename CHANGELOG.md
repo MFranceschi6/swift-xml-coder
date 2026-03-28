@@ -8,6 +8,30 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
+- **`_LazyLineTable`** — line numbers are now captured lazily: the side table is populated
+  only on first diagnostic access instead of being collected on every parse event. Eliminates
+  one allocation and one `append` per event on the hot path when no error occurs.
+- **`_XMLEventBuffer.startToEnd`** — new O(n) precomputed side table mapping every
+  `.startElement` event index to its matching `.endElement` index. Enables O(1)
+  `elementEndIndex(from:)`, O(1) `findRootElement()`, and subtree-skip (`index = childEnd + 1`)
+  in `childElementSpans` and `lexicalText`, replacing repeated depth scans.
+- **Sequential cursor (`childCursor`) in `_XMLSAXDecoder`** — keyed container decode
+  now tries `childSpans[childCursor]` first before falling back to a linear scan. Because XML
+  document order matches Codable declaration order in the common case, this makes the hot path
+  O(1) amortised with zero additional allocation. Added `peekChildSpan` (non-consuming) for
+  `contains`/`decodeNil` paths that must not advance the cursor.
+- **`isNilSpan` fast-exit** — `_XMLEventBuffer.isNilSpan(from:to:)` now returns on the first
+  child element or non-whitespace text node with no intermediate array allocation.
+- **`parseSAX` made `public`** — `XMLStreamParser.parseSAX(data:handler:)` is now publicly
+  accessible, enabling benchmark decomposition (parser-only throughput vs full decode cost).
+- **Microbenchmark suite** — new `MicrobenchmarksBenchmarks.swift` and extended `Fixtures.swift`
+  covering `SAXParseOnly/*` (libxml2 + event callbacks only), `KeyedDecode/Flat/*` (5 fields),
+  `KeyedDecode/Wide/*` (20 fields, keyed-lookup density), and `KeyedDecode/Nested/*`
+  (3-level nesting, child-span creation). Benchmark results in
+  `Benchmarks/Results/2026-03-28-cursor-optimization.txt`.
+
+### Changed
+
 - **`XMLStreamWriterSink`** — new internal incremental writer that accepts events one at a
   time and flushes serialised bytes to a callback when a configurable threshold is exceeded.
   Building block for all streaming pipeline improvements below.

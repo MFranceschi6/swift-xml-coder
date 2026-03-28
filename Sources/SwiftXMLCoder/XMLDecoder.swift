@@ -275,21 +275,19 @@ public struct XMLDecoder: Sendable {
     private func decodeSAXImpl<T: Decodable>(_ type: T.Type, from data: Data) throws -> T {
         let parser = XMLStreamParser(configuration: configuration.parserConfiguration)
         var events: ContiguousArray<XMLStreamEvent> = []
-        var lineNumbers: ContiguousArray<Int?> = []
         events.reserveCapacity(max(16, data.count / 32))
-        lineNumbers.reserveCapacity(max(16, data.count / 32))
 
         try parser.parseSAX(
             data: data,
             onEvent: { event in
                 events.append(event)
-            },
-            onEventWithLine: { _, line in
-                lineNumbers.append(line)
             }
         )
 
-        let buffer = _XMLEventBuffer(events: events, lineNumbers: lineNumbers)
+        // Line numbers are computed lazily on the first error — no per-event overhead on
+        // the happy path. The table re-parses the original data when first accessed.
+        let lineTable = _LazyLineTable(data: data, parserConfig: configuration.parserConfiguration)
+        let buffer = _XMLEventBuffer(events: events, lineTable: lineTable)
         let (rootStart, rootEnd) = try buffer.findRootElement()
 
         guard case .startElement(let rootName, _, _) = buffer.events[rootStart] else {

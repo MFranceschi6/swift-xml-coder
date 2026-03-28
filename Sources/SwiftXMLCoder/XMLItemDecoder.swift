@@ -183,10 +183,7 @@ public struct XMLItemDecoder: Sendable {
         itemElement: String,
         events: ContiguousArray<XMLStreamEvent>
     ) throws -> T {
-        let buffer = _XMLEventBuffer(
-            events: events,
-            lineNumbers: ContiguousArray<Int?>(repeating: nil, count: events.count)
-        )
+        let buffer = _XMLEventBuffer(events: events, lineTable: nil)
         let spanStart = 0
         let spanEnd = events.count - 1
 

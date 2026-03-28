@@ -88,7 +88,14 @@ final class SAXContext {
 
 extension XMLStreamParser {
     // swiftlint:disable:next function_body_length cyclomatic_complexity
-    func parseSAX(
+    /// Synchronous SAX-style parse. Calls `onEvent` once per `XMLStreamEvent` in document order.
+    ///
+    /// - Parameters:
+    ///   - data: The XML bytes to parse.
+    ///   - onEvent: Invoked for every event. Not retained after this method returns.
+    ///   - onEventWithLine: Optional second callback receiving the same event together with the
+    ///     libxml2 source line number. Pass `nil` (the default) to skip line tracking entirely.
+    public func parseSAX(
         data: Data,
         onEvent: (XMLStreamEvent) -> Void,
         onEventWithLine: ((XMLStreamEvent, Int?) -> Void)? = nil

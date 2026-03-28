@@ -5,11 +5,8 @@ import XCTest
 final class XMLSAXDecoderTests: XCTestCase {
 
     private func makeBuffer(_ events: [XMLStreamEvent], _ lines: [Int?]? = nil) -> _XMLEventBuffer {
-        let lineValues = lines ?? Array(repeating: nil, count: events.count)
-        return _XMLEventBuffer(
-            events: ContiguousArray(events),
-            lineNumbers: ContiguousArray(lineValues)
-        )
+        let lineTable = lines.map { _LazyLineTable(prebuilt: ContiguousArray($0)) }
+        return _XMLEventBuffer(events: ContiguousArray(events), lineTable: lineTable)
     }
 
     func test_eventBuffer_findRootElement_returnsRootSpan() throws {
