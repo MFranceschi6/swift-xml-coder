@@ -88,6 +88,7 @@ final class _XMLStreamingParserSession {
         parserConfig: configuration
     )
 
+    // swiftlint:disable:next cyclomatic_complexity function_body_length
     init(data: Data, configuration: XMLTreeParser.Configuration) throws {
         self.data = data
         self.configuration = configuration
@@ -1250,7 +1251,8 @@ struct _XMLStreamingKeyedDecodingContainer<Key: CodingKey>: KeyedDecodingContain
         guard let result = try consumedChildInline(for: key) else {
             throw decoder.decodeFailed(
                 codingPath: childPath,
-                message: "[XML6_5_KEY_NOT_FOUND] Missing scalar key '\(key.stringValue)' at path '\(decoder.renderPath(codingPath))'\(decoder.sourceLocation())."
+                message: "[XML6_5_KEY_NOT_FOUND] Missing scalar key '\(key.stringValue)'"
+                    + " at path '\(decoder.renderPath(codingPath))'\(decoder.sourceLocation())."
             )
         }
         return try decoder.decodeValue(type, from: result, codingPath: childPath)
@@ -1309,7 +1311,8 @@ struct _XMLStreamingKeyedDecodingContainer<Key: CodingKey>: KeyedDecodingContain
         guard let attribute = decoder.attribute(named: xmlName(for: key)) else {
             throw decoder.decodeFailed(
                 codingPath: codingPath + [key],
-                message: "[XML6_6_ATTRIBUTE_NOT_FOUND] Missing attribute '\(key.stringValue)' at path '\(decoder.renderPath(codingPath))'\(decoder.sourceLocation())."
+                message: "[XML6_6_ATTRIBUTE_NOT_FOUND] Missing attribute '\(key.stringValue)'"
+                    + " at path '\(decoder.renderPath(codingPath))'\(decoder.sourceLocation())."
             )
         }
 
