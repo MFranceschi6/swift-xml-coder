@@ -1,5 +1,32 @@
 import Foundation
 
+extension XMLTreeElement {
+
+    /// Walks this element and calls `emit` for each ``XMLStreamEvent`` in document order,
+    /// starting with `.startElement` for this element and ending with `.endElement`.
+    ///
+    /// Used by the event encoder's sub-tree fallback to serialise elements produced via
+    /// `nestedContainer` / `nestedUnkeyedContainer` / `superEncoder` into the collector.
+    func walkEvents(_ emit: (XMLStreamEvent) -> Void) {
+        emit(.startElement(name: name, attributes: attributes, namespaceDeclarations: namespaceDeclarations))
+        for child in children {
+            switch child {
+            case .element(let childElement):
+                childElement.walkEvents(emit)
+            case .text(let value):
+                emit(.text(value))
+            case .cdata(let value):
+                emit(.cdata(value))
+            case .comment(let value):
+                emit(.comment(value))
+            case .processingInstruction(let target, let data):
+                emit(.processingInstruction(target: target, data: data))
+            }
+        }
+        emit(.endElement(name: name))
+    }
+}
+
 extension XMLTreeDocument {
 
     /// Walks the tree document and calls `emit` for each ``XMLStreamEvent`` in document order.

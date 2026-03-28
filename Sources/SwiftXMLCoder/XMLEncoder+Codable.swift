@@ -124,7 +124,7 @@ struct _XMLEncoderOptions {
 // `policy.validateElementNames` is `true`. Rejects characters that would cause
 // a late libxml2 writer failure with no actionable diagnostic: whitespace and
 // XML structure metacharacters.
-private func _validateXMLFieldName(_ name: String, context: String, policy: XMLValidationPolicy) throws {
+func _validateXMLFieldName(_ name: String, context: String, policy: XMLValidationPolicy) throws {
     guard policy.validateElementNames else { return }
     let invalid = name.isEmpty || name.unicodeScalars.contains { scalar in
         let codePoint = scalar.value
@@ -255,7 +255,7 @@ struct _XMLEncodingKey: CodingKey {
     }
 }
 
-final class _XMLTreeEncoder: Encoder {
+final class _XMLTreeEncoder: Encoder, _XMLScalarBoxer {
     let options: _XMLEncoderOptions
     let node: _XMLTreeElementBox
     let fieldNodeKinds: [String: XMLFieldNodeKind]

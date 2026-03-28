@@ -30,6 +30,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   (3-level nesting, child-span creation). Benchmark results in
   `Benchmarks/Results/2026-03-28-cursor-optimization.txt`.
 
+- **`_XMLEventEncoder` — direct-to-events Codable encoder** — new `Encoder` implementation
+  (`XMLEventEncoder+Codable.swift`) that emits `XMLStreamEvent` values into a shared
+  `_XMLEventCollector` without constructing an intermediate `XMLTreeDocument`. Attribute
+  deferral, optional nil strategies, CDATA, key transforms, `XMLRootNode`, per-property date
+  and string hints, `@XMLAttribute`/`@XMLTextContent` property wrappers, and `nestedContainer`
+  fallback via `_XMLTreeElementBox` sub-trees are all supported. `XMLEncoder.encode()` now
+  routes through this path, bypassing tree construction entirely.
+- **`XMLTreeElement.walkEvents(_:)`** — non-throwing helper that serialises a
+  `_XMLTreeElementBox` sub-tree (nested/unkeyed fallback) to the event collector.
+- **`_XMLScalarBoxer` protocol** — decouples `_XMLAttributeEncodableValue` and
+  `_XMLTextContentEncodableValue` from `_XMLTreeEncoder`; both `_XMLTreeEncoder` and
+  `_XMLEventEncoder` now conform, enabling the two encoders to share scalar-boxing logic
+  without coupling.
+
 ### Changed
 
 - **`XMLStreamWriterSink`** — new internal incremental writer that accepts events one at a
@@ -40,9 +54,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Changed
 
-- **Encoder now bypasses libxml2 DOM** — `XMLEncoder.encode()` no longer constructs an
-  `XMLDocument` (libxml2 DOM) as an intermediate step. Instead it walks the tree to events
-  and serialises via `XMLStreamWriter`, eliminating two full-document copies.
+- **Encoder now routes through `_XMLEventEncoder`** — `XMLEncoder.encode()` no longer
+  constructs an `XMLTreeDocument` as an intermediate step. Instead it accumulates events in
+  `_XMLEventCollector` and serialises via `XMLStreamWriterSink`, eliminating all intermediate
+  tree allocations on the hot path.
 - **Streaming canonicalizer now writes incrementally** — the stream-based canonicalize path
   (`canonicalize(events:..., output:)`) feeds normalised events directly to
   `XMLStreamWriterSink` instead of accumulating all events before serialisation. The output

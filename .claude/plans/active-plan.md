@@ -36,6 +36,14 @@ Key files: `XMLSAXDecoder+Codable.swift`, `XMLScalarDecoder.swift`, `XMLEventTra
 - [x] Lint pass — 0 serious violations
 - [x] Release notes in CHANGELOG.md — 1.4.0 stamped
 
+## Phase 2c — `_XMLEventEncoder` (direct-to-events Codable encoder) — **Complete (2026-03-28)**
+
+`XMLEncoder.encode()` now routes through `_XMLEventEncoder` → `_XMLEventCollector` →
+`XMLStreamWriterSink`, bypassing `XMLTreeDocument` entirely. All Codable features supported:
+scalar roots, flat/nested structs, arrays, optionals, `@XMLAttribute`, CDATA, key transforms,
+`XMLRootNode`, per-property date/string hints, `nestedContainer` fallback via
+`_XMLTreeElementBox`. 600/600 tests pass, 0 new lint violations. CHANGELOG updated.
+
 ## Post-1.4.0 Follow-On — SAX Decode Hot-Path Tightening — **Complete (2026-03-28)**
 
 Achieved −8-10% vs baseline across all sizes. `Decode/SAX/100KB` now beats `Decode/Tree/100KB`
