@@ -68,15 +68,15 @@ struct _XMLEventBuffer {
         var stack: [Int] = []
         stack.reserveCapacity(32)
         var foundRoot: (start: Int, end: Int)?
-        for i in events.indices {
-            switch events[i] {
+        for idx in events.indices {
+            switch events[idx] {
             case .startElement:
-                stack.append(i)
+                stack.append(idx)
             case .endElement:
                 if let startIdx = stack.popLast() {
-                    map[startIdx] = i
+                    map[startIdx] = idx
                     if stack.isEmpty && foundRoot == nil {
-                        foundRoot = (startIdx, i)
+                        foundRoot = (startIdx, idx)
                     }
                 }
             default:

@@ -95,6 +95,7 @@ extension XMLStreamParser {
     ///   - onEvent: Invoked for every event. Not retained after this method returns.
     ///   - onEventWithLine: Optional second callback receiving the same event together with the
     ///     libxml2 source line number. Pass `nil` (the default) to skip line tracking entirely.
+    // swiftlint:disable:next cyclomatic_complexity function_body_length
     public func parseSAX(
         data: Data,
         onEvent: (XMLStreamEvent) -> Void,
