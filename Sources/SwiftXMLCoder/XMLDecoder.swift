@@ -281,7 +281,7 @@ public struct XMLDecoder: Sendable {
                 break
             }
         }
-        guard let rootStart else {
+        guard let rootStart = rootStart else {
             throw XMLParsingError.parseFailed(message: "[XML6_5_MISSING_ROOT] XML document does not contain a root element.")
         }
         guard case .startElement(let rootName, _, _) = rootStart else {

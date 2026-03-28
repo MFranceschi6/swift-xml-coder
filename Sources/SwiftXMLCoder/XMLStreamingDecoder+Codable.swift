@@ -310,7 +310,7 @@ final class _XMLStreamingParserSession {
     }
 
     deinit {
-        if let parserCtxt {
+        if let parserCtxt = parserCtxt {
             xmlFreeParserCtxt(parserCtxt)
             self.parserCtxt = nil
         }
@@ -353,7 +353,7 @@ final class _XMLStreamingParserSession {
     }
 
     private func pump() throws {
-        guard let parserCtxt else {
+        guard let parserCtxt = parserCtxt else {
             throw XMLParsingError.parseFailed(message: "Streaming parser context is not available.")
         }
 
@@ -470,7 +470,7 @@ final class _XMLStreamingElementState {
     }
 
     func throwIfStoredError() throws {
-        if let storedError {
+        if let storedError = storedError {
             throw storedError
         }
     }
@@ -763,7 +763,7 @@ final class _XMLStreamingElementState {
 
     private func childMatchesName(_ name: XMLQualifiedName, localName: String, namespaceURI: String?) -> Bool {
         guard name.localName == localName else { return false }
-        if let namespaceURI {
+        if let namespaceURI = namespaceURI {
             return name.namespaceURI == namespaceURI
         }
         return true
@@ -886,7 +886,7 @@ final class _XMLStreamingDecoder: Decoder {
         _XMLScalarDecoder(
             options: options,
             fail: { [weak self] codingPath, message in
-                guard let self else { return XMLParsingError.parseFailed(message: message) }
+                guard let self = self else { return XMLParsingError.parseFailed(message: message) }
                 return self.decodeFailed(codingPath: codingPath, message: message)
             }
         )
@@ -1655,7 +1655,7 @@ private struct _XMLAnyDecoderBridge: Decodable {
 }
 
 private func _xmlStreamingContext(from ptr: UnsafeMutableRawPointer?) -> _XMLStreamingParserSessionContext? {
-    guard let ptr else { return nil }
+    guard let ptr = ptr else { return nil }
     return Unmanaged<_XMLStreamingParserSessionContext>.fromOpaque(ptr).takeUnretainedValue()
 }
 
@@ -1666,7 +1666,7 @@ private func _xmlStreamingEnsureLimit(
     context: String,
     logger: Logger
 ) throws {
-    guard let limit else { return }
+    guard let limit = limit else { return }
     guard actual <= limit else {
         logger.warning(
             "XML stream parse limit exceeded",
@@ -1716,7 +1716,7 @@ private func _xmlStreamingIncrementAndCheckNodeCount(ctx: _XMLStreamingParserSes
 }
 
 private func _xmlStreamingString(from ptr: UnsafePointer<xmlChar>?) -> String? {
-    guard let ptr else { return nil }
+    guard let ptr = ptr else { return nil }
     return String(cString: UnsafeRawPointer(ptr).assumingMemoryBound(to: CChar.self))
 }
 

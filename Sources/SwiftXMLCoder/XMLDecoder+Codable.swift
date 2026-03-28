@@ -238,7 +238,7 @@ final class _XMLTreeDecoder: Decoder {
         _XMLScalarDecoder(
             options: options,
             fail: { [weak self] codingPath, message in
-                guard let self else {
+                guard let self = self else {
                     return XMLParsingError.parseFailed(message: message)
                 }
                 return self.decodeFailed(codingPath: codingPath, message: message)
