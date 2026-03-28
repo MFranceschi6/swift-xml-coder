@@ -106,7 +106,7 @@ struct _XMLSAXTreeBuilder {
                 message: "[XML6_5_UNBALANCED_START] XML ended before all open elements were closed."
             )
         }
-        guard let root else {
+        guard let root = root else {
             throw XMLParsingError.parseFailed(message: "[XML6_5_MISSING_ROOT] XML document does not contain a root element.")
         }
         return XMLTreeDocument(

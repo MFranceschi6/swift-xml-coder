@@ -1689,7 +1689,7 @@ private func _xmlStreamingCheckByteLimit(
     code: String,
     ctx: _XMLStreamingParserSessionContext
 ) -> Bool {
-    guard let limit, bytes > limit else { return false }
+    guard let limit = limit, bytes > limit else { return false }
     ctx.error = XMLParsingError.parseFailed(
         message: "[\(code)] Content size \(bytes) bytes exceeds limit \(limit) bytes."
     )

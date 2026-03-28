@@ -72,9 +72,9 @@ final class SAXContext {
 
     func emit(_ event: XMLStreamEvent) {
         onEvent(event)
-        guard let onEventWithLine else { return }
+        guard let onEventWithLine = onEventWithLine else { return }
         let line: Int?
-        if let parserCtxt {
+        if let parserCtxt = parserCtxt {
             let rawLine = Int(xmlSAX2GetLineNumber(UnsafeMutableRawPointer(parserCtxt)))
             line = rawLine > 0 ? rawLine : nil
         } else {

@@ -340,7 +340,7 @@ final class _XMLSAXDecoder: Decoder {
         _XMLScalarDecoder(
             options: options,
             fail: { [weak self] codingPath, message in
-                guard let self else { return XMLParsingError.parseFailed(message: message) }
+                guard let self = self else { return XMLParsingError.parseFailed(message: message) }
                 return self.decodeFailed(codingPath: codingPath, message: message)
             }
         )
