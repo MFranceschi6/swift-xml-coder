@@ -97,3 +97,39 @@ Key design:
 - Benchmark: streaming canonicalize memory (peak RSS or malloc count)
 - Update `Benchmarks/Results/` with findings
 - CHANGELOG entry for streaming internals work
+
+## Follow-Up — Buffered SAX Decode Hot-Path Tightening
+
+Status: **complete (2026-03-28)** — `_LazyLineTable`, `startToEnd` side table, sequential cursor.
+Results in `Benchmarks/Results/2026-03-28-cursor-optimization.txt`.
+
+This is intentionally separate from the true streaming decode goal above.
+
+Rationale:
+- The current decode architecture still buffers all SAX events before `_XMLSAXDecoder`
+  runs, so the hot path is often dominated by event-buffer scans and name lookup rather
+  than libxml2 parse throughput.
+- The latest benchmark summaries show tree decode still ahead on current fixtures, which
+  means there is worthwhile CPU work left in the buffered SAX path even before fully
+  streaming decode lands.
+
+Worthwhile steps:
+1. Add structural side tables to `_XMLEventBuffer`
+   - root span
+   - `start -> end` map
+   - optional direct-child span lists
+2. Add per-span lookup caches in `_XMLSAXDecoder`
+   - first child by `(localName, namespaceURI)`
+   - children by name for repeated keyed lookups
+   - attributes by name
+3. Cache scalar-oriented queries
+   - lexical text per span
+   - nil-ness per span
+   - filtered unkeyed item spans
+4. Make line-number collection optional or lazy for internal fast paths
+5. Add microbenchmarks so parser cost and decoder-buffer cost are measured separately
+
+Why this belongs here:
+- These optimizations help the current buffered decode path.
+- They also reduce baseline CPU cost for any future hybrid path that still uses event spans
+  for fallback, item decoding, diagnostics, or partial buffering.

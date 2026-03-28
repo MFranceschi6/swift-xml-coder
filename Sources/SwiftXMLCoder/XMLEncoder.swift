@@ -281,10 +281,23 @@ public struct XMLEncoder: Sendable {
             expandEmptyElements: configuration.writerConfiguration.expandEmptyElements,
             limits: streamWriterLimits(from: configuration.writerConfiguration.limits)
         )
-        let writer = XMLStreamWriter(configuration: writerConfig)
-        var events: [XMLStreamEvent] = []
-        try tree.walkEvents { events.append($0) }
-        return try writer.write(events)
+        var xmlData = Data()
+        var totalBytes = 0
+        let sink = try XMLStreamWriterSink(configuration: writerConfig) { chunk in
+            totalBytes += chunk.count
+            if let maxBytes = writerConfig.limits.maxOutputBytes, totalBytes > maxBytes {
+                throw XMLParsingError.parseFailed(
+                    message: "[XML6_2H_MAX_OUTPUT_BYTES] Output size \(totalBytes) bytes exceeds limit \(maxBytes) bytes."
+                )
+            }
+            xmlData.append(chunk)
+        }
+
+        try tree.walkEvents { event in
+            try sink.write(event)
+        }
+        try sink.finish()
+        return xmlData
     }
 
     private func streamWriterLimits(

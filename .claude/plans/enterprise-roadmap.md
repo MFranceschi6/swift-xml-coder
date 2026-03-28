@@ -1,6 +1,6 @@
 # Enterprise XML Roadmap
 
-Last updated: 2026-03-23. Baseline: release `1.3.0`.
+Last updated: 2026-03-27. Baseline: release `1.3.0`.
 
 ## Vision
 
@@ -25,7 +25,7 @@ Transform `swift-xml-coder` into a full enterprise XML stack for Swift: core run
 | --- | --- | --- |
 | 1 — Core Completeness | done | tree model, Codable, namespace, XPath, macro, streaming, diagnostics |
 | 2 — Pull Cursor + Item Streaming | done | `XMLEventCursor`, `XMLItemDecoder`, backpressure, cancellation |
-| 2b — SAX-to-Codable (XML-PERF-1) | **active** | SAX decoder, parser optimizations, canonicalizer redesign. Plan: `active-plan.md` |
+| 2b — SAX-to-Codable (XML-PERF-1) | done | SAX decoder, parser optimizations, canonicalizer redesign. Post-1.4.0 SAX decode hot-path tightening remains tracked in `active-plan.md`. |
 | 2c — SAX Encoder + Pipeline Composition | planned | `_XMLSAXEncoder`, callback/AsyncSequence composition, NIO bridge primitive |
 | 3 — Framework Interop | planned | `swift-xml-nio`, `swift-xml-vapor`, `swift-xml-hummingbird` |
 | 4 — Schema + Validation | planned | `swift-xml-schema`: XSD parser, `XMLSchemaSet`, validation |
@@ -49,3 +49,11 @@ Transform `swift-xml-coder` into a full enterprise XML stack for Swift: core run
 - Final naming of satellite packages (branding/availability)
 - Minimum feature set for first release of `swift-xml-xslt` and `swift-xml-dsig`
 - Monorepo vs multi-repo for ecosystem
+
+## Performance Notes
+
+- SAX decode hot-path tightening complete (2026-03-28): `_LazyLineTable`, `startToEnd` side
+  table, sequential cursor (`childCursor`). `Decode/SAX/100KB` now beats `Decode/Tree/100KB`.
+  Results: `Benchmarks/Results/2026-03-28-cursor-optimization.txt`.
+- Next performance gate: evaluate pure-Swift parser core after Phase 2c SAX encoder lands,
+  using `SAXParseOnly/*` microbenchmarks to isolate parser-vs-decoder cost.
