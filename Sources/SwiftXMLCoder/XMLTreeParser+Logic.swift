@@ -143,6 +143,7 @@ extension XMLTreeParser {
 
     private func parseAttributes(nodePointer: xmlNodePtr) -> [XMLTreeAttribute] {
         var attributes: [XMLTreeAttribute] = []
+        attributes.reserveCapacity(countAttributes(nodePointer: nodePointer))
         var attributePointer = nodePointer.pointee.properties
 
         while let currentAttributePointer = attributePointer {
@@ -175,6 +176,7 @@ extension XMLTreeParser {
 
     private func parseNamespaceDeclarations(nodePointer: xmlNodePtr) -> [XMLNamespaceDeclaration] {
         var declarations: [XMLNamespaceDeclaration] = []
+        declarations.reserveCapacity(countNamespaceDeclarations(nodePointer: nodePointer))
         var namespacePointer = nodePointer.pointee.nsDef
 
         while let currentNamespacePointer = namespacePointer {
@@ -193,6 +195,7 @@ extension XMLTreeParser {
         parseState: inout ParseState
     ) throws -> [XMLTreeNode] {
         var children: [XMLTreeNode] = []
+        children.reserveCapacity(countInterestingChildren(nodePointer: nodePointer))
         var childPointer = nodePointer.pointee.children
         var sourceOrder = 0
 
@@ -250,6 +253,41 @@ extension XMLTreeParser {
         }
 
         return children
+    }
+
+    private func countAttributes(nodePointer: xmlNodePtr) -> Int {
+        var count = 0
+        var cursor = nodePointer.pointee.properties
+        while let pointer = cursor {
+            count += 1
+            cursor = pointer.pointee.next
+        }
+        return count
+    }
+
+    private func countNamespaceDeclarations(nodePointer: xmlNodePtr) -> Int {
+        var count = 0
+        var cursor = nodePointer.pointee.nsDef
+        while let pointer = cursor {
+            count += 1
+            cursor = pointer.pointee.next
+        }
+        return count
+    }
+
+    private func countInterestingChildren(nodePointer: xmlNodePtr) -> Int {
+        var count = 0
+        var cursor = nodePointer.pointee.children
+        while let pointer = cursor {
+            switch pointer.pointee.type {
+            case XML_ELEMENT_NODE, XML_TEXT_NODE, XML_CDATA_SECTION_NODE, XML_COMMENT_NODE, XML_PI_NODE:
+                count += 1
+            default:
+                break
+            }
+            cursor = pointer.pointee.next
+        }
+        return count
     }
 
     private func parseDocumentMetadata(from documentPointer: xmlDocPtr?) -> XMLDocumentStructuralMetadata {

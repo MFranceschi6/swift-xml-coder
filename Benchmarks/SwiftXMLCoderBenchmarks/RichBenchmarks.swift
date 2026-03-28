@@ -33,6 +33,29 @@ func richBenchmarks() {
         }
     }
 
+    // MARK: - Rich Codable Decode split (SAX vs Tree)
+
+    for (label, data) in [
+        ("10KB", richXmlData10KB), ("100KB", richXmlData100KB),
+        ("1MB", richXmlData1MB), ("10MB", richXmlData10MB)
+    ] {
+        Benchmark("Decode/Rich/SAX/\(label)") { benchmark in
+            for _ in benchmark.scaledIterations {
+                blackHole(try? decoder.decode(RichCollection.self, from: data))
+            }
+        }
+
+        Benchmark("Decode/Rich/Tree/\(label)") { benchmark in
+            for _ in benchmark.scaledIterations {
+                guard let tree = try? parser.parse(data: data) else {
+                    blackHole(nil as RichCollection?)
+                    continue
+                }
+                blackHole(try? decoder.decodeTree(RichCollection.self, from: tree))
+            }
+        }
+    }
+
     // MARK: - Rich Codable Encode
 
     for (label, collection) in [

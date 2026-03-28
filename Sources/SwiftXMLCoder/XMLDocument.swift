@@ -95,7 +95,7 @@ public struct XMLDocument: Sendable {
             )
         }
 
-        fileprivate var libxmlOptions: Int32 {
+        var libxmlOptions: Int32 {
             var options: Int32 = 0
 
             if trimBlankTextNodes {

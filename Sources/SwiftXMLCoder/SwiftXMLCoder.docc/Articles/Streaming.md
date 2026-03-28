@@ -86,6 +86,8 @@ let parser = XMLStreamParser(configuration: config)
 
 For untrusted input, use ``XMLTreeParser/Configuration/untrustedInputProfile(whitespaceTextNodePolicy:logger:)`` to apply conservative security limits automatically.
 
+> Implementation note: ``XMLStreamParser`` uses libxml2 push parsing internally. SwiftXMLCoder feeds large inputs to the push parser incrementally by default so streaming APIs remain stable on platforms that still ship libxml2 versions older than `2.11.3`, where upstream fixed the `"huge input lookup"` push-parser error.
+
 ## Serialising
 
 ### Sync API (all Swift versions)

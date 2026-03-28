@@ -177,9 +177,20 @@ protocol _XMLFieldKindOverrideType {
     static var _xmlFieldNodeKindOverride: XMLFieldNodeKind { get }
 }
 
+/// Internal protocol for types that can box themselves as XML scalar strings.
+/// Conforming types: `_XMLTreeEncoder`, `_XMLEventEncoder`.
+protocol _XMLScalarBoxer {
+    func boxedScalar<T: Encodable>(
+        _ value: T,
+        codingPath: [CodingKey],
+        localName: String?,
+        isAttribute: Bool
+    ) throws -> String?
+}
+
 protocol _XMLAttributeEncodableValue {
     func _xmlAttributeLexicalValue(
-        using encoder: _XMLTreeEncoder,
+        using encoder: any _XMLScalarBoxer,
         codingPath: [CodingKey],
         key: String
     ) throws -> String
@@ -188,7 +199,7 @@ protocol _XMLAttributeEncodableValue {
 protocol _XMLAttributeDecodableValue {
     static func _xmlDecodeAttributeLexicalValue(
         _ lexicalValue: String,
-        using decoder: _XMLTreeDecoder,
+        using decoder: _XMLScalarDecoder,
         codingPath: [CodingKey],
         key: String
     ) throws -> Self
@@ -196,7 +207,7 @@ protocol _XMLAttributeDecodableValue {
 
 protocol _XMLTextContentEncodableValue {
     func _xmlTextContentLexicalValue(
-        using encoder: _XMLTreeEncoder,
+        using encoder: any _XMLScalarBoxer,
         codingPath: [CodingKey],
         key: String
     ) throws -> String
@@ -205,7 +216,7 @@ protocol _XMLTextContentEncodableValue {
 protocol _XMLTextContentDecodableValue {
     static func _xmlDecodeTextContentLexicalValue(
         _ lexicalValue: String,
-        using decoder: _XMLTreeDecoder,
+        using decoder: _XMLScalarDecoder,
         codingPath: [CodingKey],
         key: String
     ) throws -> Self
@@ -265,7 +276,7 @@ extension XMLAttribute: _XMLFieldKindOverrideType {
 
 extension XMLAttribute: _XMLAttributeEncodableValue {
     func _xmlAttributeLexicalValue(
-        using encoder: _XMLTreeEncoder,
+        using encoder: any _XMLScalarBoxer,
         codingPath: [CodingKey],
         key: String
     ) throws -> String {
@@ -286,7 +297,7 @@ extension XMLAttribute: _XMLAttributeEncodableValue {
 extension XMLAttribute: _XMLAttributeDecodableValue {
     static func _xmlDecodeAttributeLexicalValue(
         _ lexicalValue: String,
-        using decoder: _XMLTreeDecoder,
+        using decoder: _XMLScalarDecoder,
         codingPath: [CodingKey],
         key: String
     ) throws -> XMLAttribute<Value> {
@@ -398,7 +409,7 @@ extension XMLTextContent: _XMLFieldKindOverrideType {
 
 extension XMLTextContent: _XMLTextContentEncodableValue {
     func _xmlTextContentLexicalValue(
-        using encoder: _XMLTreeEncoder,
+        using encoder: any _XMLScalarBoxer,
         codingPath: [CodingKey],
         key: String
     ) throws -> String {
@@ -419,7 +430,7 @@ extension XMLTextContent: _XMLTextContentEncodableValue {
 extension XMLTextContent: _XMLTextContentDecodableValue {
     static func _xmlDecodeTextContentLexicalValue(
         _ lexicalValue: String,
-        using decoder: _XMLTreeDecoder,
+        using decoder: _XMLScalarDecoder,
         codingPath: [CodingKey],
         key: String
     ) throws -> XMLTextContent<Value> {

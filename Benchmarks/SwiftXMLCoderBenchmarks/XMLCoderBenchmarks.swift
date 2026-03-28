@@ -10,4 +10,5 @@ let benchmarks: @Sendable () -> Void = {
     streamingBenchmarks()
     richBenchmarks()
     foundationComparison()
+    microbenchmarks()
 }

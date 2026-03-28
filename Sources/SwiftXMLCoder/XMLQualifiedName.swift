@@ -38,6 +38,18 @@ public struct XMLQualifiedName: Sendable, Hashable, Codable {
         self.prefix = (cleanedPrefix?.isEmpty == true) ? nil : cleanedPrefix
     }
 
+    // Internal fast-path used by SAX callbacks where libxml2 already provides
+    // normalized name components, so extra trimming is unnecessary overhead.
+    init(
+        uncheckedLocalName localName: String,
+        namespaceURI: String? = nil,
+        prefix: String? = nil
+    ) {
+        self.localName = localName
+        self.namespaceURI = (namespaceURI?.isEmpty == true) ? nil : namespaceURI
+        self.prefix = (prefix?.isEmpty == true) ? nil : prefix
+    }
+
     /// The prefix-qualified name (e.g. `"soap:body"`), or just `localName` if unprefixed.
     public var qualifiedName: String {
         if let prefix = prefix {

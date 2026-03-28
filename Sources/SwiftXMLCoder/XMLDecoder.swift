@@ -194,9 +194,7 @@ public struct XMLDecoder: Sendable {
     /// - Throws: `XMLParsingError` on parse or decode failure.
     public func decode<T: Decodable>(_ type: T.Type, from data: Data) throws(XMLParsingError) -> T {
         do {
-            let parser = XMLTreeParser(configuration: configuration.parserConfiguration)
-            let tree = try parser.parse(data: data)
-            return try decodeTreeImpl(type, from: tree)
+            return try decodeSAXImpl(type, from: data)
         } catch let error as XMLParsingError {
             throw error
         } catch {
@@ -223,9 +221,7 @@ public struct XMLDecoder: Sendable {
     /// - Returns: A decoded instance of `type`.
     /// - Throws: `XMLParsingError` on parse or decode failure.
     public func decode<T: Decodable>(_ type: T.Type, from data: Data) throws -> T {
-        let parser = XMLTreeParser(configuration: configuration.parserConfiguration)
-        let tree = try parser.parse(data: data)
-        return try decodeTreeImpl(type, from: tree)
+        try decodeSAXImpl(type, from: data)
     }
     #endif
 
@@ -271,6 +267,74 @@ public struct XMLDecoder: Sendable {
         logger.debug(
             "XML decode completed",
             metadata: ["rootElement": "\(tree.root.name.localName)", "childCount": "\(tree.root.children.count)"]
+        )
+        return result
+    }
+
+    // swiftlint:disable:next function_body_length
+    private func decodeSAXImpl<T: Decodable>(_ type: T.Type, from data: Data) throws -> T {
+        let session = try _XMLStreamingParserSession(data: data, configuration: configuration.parserConfiguration)
+        var rootStart: XMLStreamEvent?
+        while let event = try session.nextEvent() {
+            if case .startElement = event {
+                rootStart = event
+                break
+            }
+        }
+        guard let rootStart = rootStart else {
+            throw XMLParsingError.parseFailed(message: "[XML6_5_MISSING_ROOT] XML document does not contain a root element.")
+        }
+        guard case .startElement(let rootName, _, _) = rootStart else {
+            throw XMLParsingError.parseFailed(message: "[XML6_5_MISSING_ROOT] Cannot identify root element.")
+        }
+
+        var logger = configuration.logger
+        logger[metadataKey: "component"] = "XMLDecoder"
+
+        if let expectedRootName = try resolveExpectedRootElementName(for: type),
+           rootName.localName != expectedRootName {
+            logger.error(
+                "XML root element mismatch",
+                metadata: ["expected": "\(expectedRootName)", "found": "\(rootName.localName)", "type": "\(T.self)"]
+            )
+            throw XMLParsingError.parseFailed(
+                message: "[XML6_5_ROOT_MISMATCH] Expected root '\(expectedRootName)' but found '\(rootName.localName)'."
+            )
+        }
+
+        logger.debug("XML decode started", metadata: ["type": "\(T.self)", "rootElement": "\(rootName.localName)"])
+
+        var options = _XMLDecoderOptions(configuration: configuration)
+        options.perPropertyDateHints = _xmlPropertyDateHints(for: T.self)
+        let state = try _XMLStreamingElementState(session: session, start: rootStart)
+        let streamingDecoder = _XMLStreamingDecoder(
+            options: options,
+            state: state,
+            fieldNodeKinds: _xmlFieldNodeKinds(for: T.self),
+            fieldNamespaces: _xmlFieldNamespaces(for: T.self),
+            codingPath: []
+        )
+
+        if let scalar: T = try streamingDecoder.decodeScalarFromCurrentElement(
+            type,
+            codingPath: []
+        ) {
+            logger.debug("XML decode completed", metadata: ["mode": "scalar"])
+            try session.drainToDocumentEnd()
+            return scalar
+        }
+        if streamingDecoder.isKnownScalarType(type) {
+            throw XMLParsingError.parseFailed(
+                message: "[XML6_5_SCALAR_PARSE_FAILED] Unable to decode scalar at root element '\(rootName.localName)'."
+            )
+        }
+
+        let result = try T(from: streamingDecoder)
+        try streamingDecoder.finish()
+        try session.drainToDocumentEnd()
+        logger.debug(
+            "XML decode completed",
+            metadata: ["rootElement": "\(rootName.localName)", "childCount": "\(state.childCount)"]
         )
         return result
     }

@@ -5,7 +5,7 @@ import XCTest
 // swiftlint:disable type_body_length file_length
 
 /// Targeted coverage tests for container internals (keyed/unkeyed/SVC decoder + encoder),
-/// parser/writer configuration factories, and XMLIdentityTransform.
+/// parser/writer configuration factories.
 /// These complement XMLScalarCoverageTests.swift to hit uncovered branches.
 final class XMLContainerCoverageTests: XCTestCase {
 
@@ -929,16 +929,19 @@ final class XMLContainerCoverageTests: XCTestCase {
         XCTAssertTrue(config.prettyPrinted)
     }
 
-    // MARK: - XMLIdentityTransform
+    // MARK: - Canonicalization options
 
-    func test_identityTransform_returnsDocumentUnchanged() throws {
-        let xml = Data("<Root><Child>text</Child></Root>".utf8)
-        let parser = XMLTreeParser()
-        let doc = try parser.parse(data: xml)
-        let transform = XMLIdentityTransform()
-        let result = try transform.apply(to: doc, options: XMLNormalizationOptions())
-        XCTAssertEqual(result.root.name.localName, "Root")
-        XCTAssertEqual(result.root.children.count, doc.root.children.count)
+    func test_canonicalizationOptions_defaultValues() {
+        let options = XMLCanonicalizationOptions()
+        XCTAssertEqual(options.attributeOrderingPolicy, .lexicographical)
+        XCTAssertEqual(options.namespaceDeclarationOrderingPolicy, .lexicographical)
+        XCTAssertEqual(options.whitespaceTextNodePolicy, .normalizeAndTrim)
+        XCTAssertEqual(options.deterministicSerializationMode, .stable)
+        XCTAssertFalse(options.includeComments)
+        XCTAssertFalse(options.includeProcessingInstructions)
+        XCTAssertTrue(options.convertCDATAIntoText)
+        XCTAssertEqual(options.outputEncoding, "UTF-8")
+        XCTAssertFalse(options.prettyPrintedOutput)
     }
 
     // MARK: - Decoder: SVC typed decode for Int through UInt64 (explicit non-generic dispatch)
@@ -1189,29 +1192,6 @@ extension XMLContainerCoverageTests {
         struct ConformerWithDefaultKinds: XMLFieldCodingOverrideProvider {}
         XCTAssertTrue(ConformerWithDefaultKinds.xmlFieldNodeKinds.isEmpty)
     }
-}
-
-// MARK: - XMLCanonicalizationContract static factory coverage
-
-extension XMLContainerCoverageTests {
-
-    func test_xmlCanonicalizationContract_unexpectedFailure_returnsOtherError() {
-        // Covers XMLCanonicalizationContract.unexpectedFailure (lines 43-44)
-        struct DummyError: Error {}
-
-        let error = XMLCanonicalizationContract.unexpectedFailure(
-            underlyingError: DummyError(),
-            message: "test message"
-        )
-
-        if case .other(let code, _, let message) = error {
-            XCTAssertEqual(code, XMLCanonicalizationErrorCode.unexpected)
-            XCTAssertTrue(message?.contains("test message") == true)
-        } else {
-            XCTFail("Expected .other error case, got \(error)")
-        }
-    }
-
 }
 
 // MARK: - XMLDecoder error path coverage (decodeTree and isKnownScalarType)
