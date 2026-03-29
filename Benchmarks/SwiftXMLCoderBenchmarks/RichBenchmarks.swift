@@ -45,15 +45,6 @@ func richBenchmarks() {
             }
         }
 
-        Benchmark("Decode/Rich/Tree/\(label)") { benchmark in
-            for _ in benchmark.scaledIterations {
-                guard let tree = try? parser.parse(data: data) else {
-                    blackHole(nil as RichCollection?)
-                    continue
-                }
-                blackHole(try? decoder.decodeTree(RichCollection.self, from: tree))
-            }
-        }
     }
 
     // MARK: - Rich Codable Encode

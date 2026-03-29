@@ -185,13 +185,6 @@ struct _XMLEventBuffer {
         return attributes
     }
 
-    func makeTreeDocument() throws -> XMLTreeDocument {
-        var builder = _XMLSAXTreeBuilder()
-        for index in events.indices {
-            try builder.consume(event: events[index], line: lineTable?.lineNumberAt(index))
-        }
-        return try builder.finalize()
-    }
 }
 
 // MARK: - _XMLSAXDecoder

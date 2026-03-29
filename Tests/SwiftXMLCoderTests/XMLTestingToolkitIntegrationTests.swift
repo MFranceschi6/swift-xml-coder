@@ -85,20 +85,7 @@ final class XMLTestingToolkitIntegrationTests: XCTestCase {
         XCTAssertEqual(result.root.name.localName, "Payload")
     }
 
-    // MARK: - DecoderSpy.decodeTree and forced-error/stub paths
-
-    func test_decoderSpy_decodeTree_recordsCall() throws {
-        let xml = Data("<Payload><value>hello</value></Payload>".utf8)
-        let parser = XMLTreeParser()
-        let tree = try parser.parse(data: xml)
-        let decoderSpy = XMLTestDecoderSpy(
-            decoder: XMLDecoder(configuration: .init(rootElementName: "Payload"))
-        )
-        let decoded = try decoderSpy.decodeTree(Payload.self, from: tree)
-        XCTAssertEqual(decoded.value, "hello")
-        XCTAssertEqual(decoderSpy.calls.count, 1)
-        XCTAssertEqual(decoderSpy.calls.first?.method, .decodeTree)
-    }
+    // MARK: - DecoderSpy.decode forced-error path
 
     func test_decoderSpy_decode_forcedError_throws() {
         let decoderSpy = XMLTestDecoderSpy()
@@ -107,27 +94,5 @@ final class XMLTestingToolkitIntegrationTests: XCTestCase {
         XCTAssertThrowsError(try decoderSpy.decode(Payload.self, from: xml)) { error in
             XCTAssertEqual(error as? XMLTestCodecError, .forcedFailure(message: "decode-error"))
         }
-    }
-
-    func test_decoderSpy_decodeTree_forcedError_throws() throws {
-        let xml = Data("<Payload><value>x</value></Payload>".utf8)
-        let parser = XMLTreeParser()
-        let tree = try parser.parse(data: xml)
-        let decoderSpy = XMLTestDecoderSpy()
-        decoderSpy.forcedError = XMLTestCodecError.forcedFailure(message: "tree-error")
-        XCTAssertThrowsError(try decoderSpy.decodeTree(Payload.self, from: tree)) { error in
-            XCTAssertEqual(error as? XMLTestCodecError, .forcedFailure(message: "tree-error"))
-        }
-    }
-
-    func test_decoderSpy_decodeTree_withStub_returnsStub() throws {
-        let xml = Data("<Payload><value>x</value></Payload>".utf8)
-        let parser = XMLTreeParser()
-        let tree = try parser.parse(data: xml)
-        let stub = Payload(value: "stubbed")
-        let decoderSpy = XMLTestDecoderSpy()
-        decoderSpy.decodeTreeStub = { _, _ in stub }
-        let result = try decoderSpy.decodeTree(Payload.self, from: tree)
-        XCTAssertEqual(result.value, "stubbed")
     }
 }

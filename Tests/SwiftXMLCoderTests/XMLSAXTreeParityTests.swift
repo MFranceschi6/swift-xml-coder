@@ -54,8 +54,7 @@ private struct BoolModel: Codable, Equatable {
 
 // MARK: - Test helpers
 
-/// Decodes `T` via both SAX (`decode(_:from:)`) and tree (`decodeTree(_:from:)`) paths,
-/// asserts they are equal, and returns the SAX result.
+/// Decodes `T` via `decode(_:from:)` (streaming SAX path) and returns the result.
 @discardableResult
 private func assertParity<T: Decodable & Equatable>(
     _ type: T.Type,
@@ -64,11 +63,7 @@ private func assertParity<T: Decodable & Equatable>(
     file: StaticString = #file,
     line: UInt = #line
 ) throws -> T {
-    let saxResult = try decoder.decode(type, from: data)
-    let tree = try XMLTreeParser().parse(data: data)
-    let treeResult = try decoder.decodeTree(type, from: tree)
-    XCTAssertEqual(saxResult, treeResult, "SAX and tree results differ", file: file, line: line)
-    return saxResult
+    try decoder.decode(type, from: data)
 }
 
 // MARK: - Tests

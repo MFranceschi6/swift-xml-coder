@@ -166,24 +166,6 @@ public struct XMLDecoder: Sendable {
     }
 
     #if swift(>=6.0)
-    /// Decodes `type` from a pre-parsed `XMLTreeDocument`.
-    ///
-    /// Use this when the XML tree is already available (e.g. from the SOAP wire codec).
-    /// - Parameters:
-    ///   - type: The `Decodable` type to decode into.
-    ///   - tree: The source document tree.
-    /// - Returns: A decoded instance of `type`.
-    /// - Throws: `XMLParsingError` on decoding failure or root element mismatch.
-    public func decodeTree<T: Decodable>(_ type: T.Type, from tree: XMLTreeDocument) throws(XMLParsingError) -> T {
-        do {
-            return try decodeTreeImpl(type, from: tree)
-        } catch let error as XMLParsingError {
-            throw error
-        } catch {
-            throw XMLParsingError.other(underlyingError: error, message: "Unexpected XML decode tree error.")
-        }
-    }
-
     /// Decodes `type` from raw XML `Data`.
     ///
     /// Parses the data into an `XMLTreeDocument` using `parserConfiguration` and then decodes.
@@ -202,17 +184,6 @@ public struct XMLDecoder: Sendable {
         }
     }
     #else
-    /// Decodes `type` from a pre-parsed `XMLTreeDocument`.
-    ///
-    /// - Parameters:
-    ///   - type: The `Decodable` type to decode into.
-    ///   - tree: The source document tree.
-    /// - Returns: A decoded instance of `type`.
-    /// - Throws: `XMLParsingError` on decoding failure or root element mismatch.
-    public func decodeTree<T: Decodable>(_ type: T.Type, from tree: XMLTreeDocument) throws -> T {
-        try decodeTreeImpl(type, from: tree)
-    }
-
     /// Decodes `type` from raw XML `Data`.
     ///
     /// - Parameters:
@@ -224,52 +195,6 @@ public struct XMLDecoder: Sendable {
         try decodeSAXImpl(type, from: data)
     }
     #endif
-
-    private func decodeTreeImpl<T: Decodable>(_ type: T.Type, from tree: XMLTreeDocument) throws -> T {
-        var logger = configuration.logger
-        logger[metadataKey: "component"] = "XMLDecoder"
-        logger.debug("XML decode started", metadata: ["type": "\(T.self)", "rootElement": "\(tree.root.name.localName)"])
-
-        if let expectedRootName = try resolveExpectedRootElementName(for: type),
-           tree.root.name.localName != expectedRootName {
-            logger.error(
-                "XML root element mismatch",
-                metadata: ["expected": "\(expectedRootName)", "found": "\(tree.root.name.localName)", "type": "\(T.self)"]
-            )
-            throw XMLParsingError.parseFailed(
-                message: "[XML6_5_ROOT_MISMATCH] Expected root '\(expectedRootName)' but found '\(tree.root.name.localName)'."
-            )
-        }
-
-        var options = _XMLDecoderOptions(configuration: configuration)
-        options.perPropertyDateHints = _xmlPropertyDateHints(for: T.self)
-        let decoder = _XMLTreeDecoder(
-            options: options,
-            codingPath: [],
-            node: tree.root,
-            fieldNodeKinds: _xmlFieldNodeKinds(for: T.self),
-            fieldNamespaces: _xmlFieldNamespaces(for: T.self)
-        )
-        // Intercept Foundation scalar types (Decimal, URL, UUID, Date, Data, …) whose
-        // Codable conformances call container(keyedBy:) or decode(String.self) internally,
-        // bypassing our scalar path. This mirrors the JSONDecoder approach of special-casing
-        // Foundation types via a direct unbox call instead of relying on T.init(from:).
-        if let scalar: T = try decoder.decodeScalar(type, from: tree.root, codingPath: []) {
-            logger.debug("XML decode completed", metadata: ["mode": "scalar"])
-            return scalar
-        }
-        if decoder.isKnownScalarType(type) {
-            throw XMLParsingError.parseFailed(
-                message: "[XML6_5_SCALAR_PARSE_FAILED] Unable to decode scalar at root element '\(tree.root.name.localName)'."
-            )
-        }
-        let result = try T(from: decoder)
-        logger.debug(
-            "XML decode completed",
-            metadata: ["rootElement": "\(tree.root.name.localName)", "childCount": "\(tree.root.children.count)"]
-        )
-        return result
-    }
 
     // swiftlint:disable:next function_body_length
     private func decodeSAXImpl<T: Decodable>(_ type: T.Type, from data: Data) throws -> T {

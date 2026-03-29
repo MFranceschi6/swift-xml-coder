@@ -1194,30 +1194,9 @@ extension XMLContainerCoverageTests {
     }
 }
 
-// MARK: - XMLDecoder error path coverage (decodeTree and isKnownScalarType)
+// MARK: - XMLDecoder error path coverage (isKnownScalarType)
 
 extension XMLContainerCoverageTests {
-
-    func test_decoder_decodeTree_rootMismatch_throwsXMLParsingError() {
-        // Covers the catch let error as XMLParsingError block in decodeTree (line 103)
-        struct SimplePayload: Codable { let value: String }
-
-        let decoder = XMLDecoder(configuration: .init(rootElementName: "Expected"))
-        // Tree has root "Actual" — mismatches "Expected" → decodeTreeImpl throws XMLParsingError
-        let tree = XMLTreeDocument(
-            root: XMLTreeElement(
-                name: XMLQualifiedName(localName: "Actual"),
-                children: [.element(XMLTreeElement(name: XMLQualifiedName(localName: "value"),
-                                                   children: [.text("x")]))]
-            )
-        )
-        XCTAssertThrowsError(
-            try decoder.decodeTree(SimplePayload.self, from: tree)
-        ) { error in
-            // The error is rethrown as XMLParsingError from the catch block
-            XCTAssertTrue(error is XMLParsingError, "Expected XMLParsingError, got \(error)")
-        }
-    }
 
     func test_decoder_decode_knownScalarType_invalidContent_throwsParseError() {
         // Covers the isKnownScalarType check (line 163 in XMLDecoder.swift)

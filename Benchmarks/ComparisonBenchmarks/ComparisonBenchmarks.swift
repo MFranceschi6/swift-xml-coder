@@ -25,18 +25,6 @@ func comparisonBenchmarks() {
             }
         }
 
-        Benchmark("Compare/Decode/SwiftXMLCoder/Tree/\(label)") { benchmark in
-            let parser = SwiftXMLCoder.XMLTreeParser()
-            let decoder = SwiftXMLCoder.XMLDecoder()
-            for _ in benchmark.scaledIterations {
-                guard let tree = try? parser.parse(data: data) else {
-                    blackHole(nil as CompBenchmarkCollection?)
-                    continue
-                }
-                blackHole(try? decoder.decodeTree(CompBenchmarkCollection.self, from: tree))
-            }
-        }
-
         Benchmark("Compare/Decode/XMLCoder/\(label)") { benchmark in
             let decoder = XMLCoder.XMLDecoder()
             for _ in benchmark.scaledIterations {

@@ -89,17 +89,6 @@ func foundationComparison() {
             }
         }
 
-        Benchmark("Compare/SwiftXMLCoder/Decode/Tree/\(label)") { benchmark in
-            let parser = XMLTreeParser()
-            let decoder = XMLDecoder()
-            for _ in benchmark.scaledIterations {
-                guard let tree = try? parser.parse(data: data) else {
-                    blackHole(nil as BenchmarkCollection?)
-                    continue
-                }
-                blackHole(try? decoder.decodeTree(BenchmarkCollection.self, from: tree))
-            }
-        }
     }
     #endif
 }
