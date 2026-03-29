@@ -8,6 +8,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
+- **Coverage boost tests for internal streaming/encoder paths** — expanded
+  `XMLCoverageBoostTests` with direct tests for `_XMLTreeEncoder` internals
+  (date strategy variants, custom-date error wrapping, keyed attribute/text-content
+  fallbacks, unkeyed/single-value internals), `parseSAX` node/attribute limit
+  branches, and additional streaming decoder helper paths.
 - **`_LazyLineTable`** — line numbers are now captured lazily: the side table is populated
   only on first diagnostic access instead of being collected on every parse event. Eliminates
   one allocation and one `append` per event on the hot path when no error occurs.
