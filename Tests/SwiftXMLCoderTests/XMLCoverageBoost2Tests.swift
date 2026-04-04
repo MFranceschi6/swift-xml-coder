@@ -916,4 +916,240 @@ final class XMLCoverageBoost2Tests: XCTestCase {
         let xml = String(decoding: chunks.reduce(Data(), +), as: UTF8.self)
         XCTAssert(xml.contains("<![CDATA["), "Expected CDATA section in: \(xml)")
     }
+
+    // MARK: - Encoder: encodeTree public API
+
+    func test_encoder_encodeTree_producesTreeDocument() throws {
+        struct Simple: Codable { let name: String }
+        let tree = try XMLEncoder(configuration: .init(rootElementName: "root")).encodeTree(Simple(name: "hello"))
+        XCTAssertEqual(tree.root.name.localName, "root")
+        XCTAssertFalse(tree.root.children.isEmpty)
+    }
+
+    // MARK: - Encoder: output byte limit
+
+    func test_encoder_maxOutputBytes_throws() throws {
+        struct Big: Codable {
+            let a: String; let b: String; let c: String; let d: String
+        }
+        let writerLimits = XMLTreeWriter.Limits(maxOutputBytes: 10)
+        let writerConfig = XMLTreeWriter.Configuration(limits: writerLimits)
+        let config = XMLEncoder.Configuration(rootElementName: "root", writerConfiguration: writerConfig)
+        XCTAssertThrowsError(
+            try XMLEncoder(configuration: config).encode(
+                Big(a: "long text here", b: "more text", c: "even more", d: "overflow")
+            )
+        )
+    }
+
+    // MARK: - Encoder: scalar root types (URL, UUID, Decimal)
+
+    func test_encoder_urlRoot_roundTrips() throws {
+        let config = XMLEncoder.Configuration(rootElementName: "url")
+        let decoderConfig = XMLDecoder.Configuration()
+        let url = URL(string: "https://example.com/path")!
+        let data = try XMLEncoder(configuration: config).encode(url)
+        let decoded = try XMLDecoder(configuration: decoderConfig).decode(URL.self, from: data)
+        XCTAssertEqual(url, decoded)
+    }
+
+    func test_encoder_uuidRoot_roundTrips() throws {
+        let config = XMLEncoder.Configuration(rootElementName: "id")
+        let uuid = UUID()
+        let data = try XMLEncoder(configuration: config).encode(uuid)
+        let decoded = try XMLDecoder().decode(UUID.self, from: data)
+        XCTAssertEqual(uuid, decoded)
+    }
+
+    func test_encoder_decimalRoot_roundTrips() throws {
+        let config = XMLEncoder.Configuration(rootElementName: "num")
+        let decimal = Decimal(string: "123.456")!
+        let data = try XMLEncoder(configuration: config).encode(decimal)
+        let decoded = try XMLDecoder().decode(Decimal.self, from: data)
+        XCTAssertEqual(decimal, decoded)
+    }
+
+    // MARK: - Decoder: allKeys on keyed container
+
+    func test_decoder_allKeysOnKeyedContainer() throws {
+        struct DynamicKeys: Decodable {
+            let keys: [String]
+
+            enum CodingKeys: String, CodingKey { case a, b, c }
+
+            init(from decoder: Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                keys = container.allKeys.map(\.stringValue)
+            }
+        }
+        let xml = Data("<root><a>1</a><b>2</b></root>".utf8)
+        let decoded = try XMLDecoder().decode(DynamicKeys.self, from: xml)
+        XCTAssert(decoded.keys.contains("a"))
+        XCTAssert(decoded.keys.contains("b"))
+    }
+
+    // MARK: - Decoder: unkeyed container count and isAtEnd
+
+    func test_decoder_unkeyedContainerIteration() throws {
+        struct Items: Decodable {
+            let values: [Int]
+
+            enum CodingKeys: String, CodingKey { case values }
+
+            init(from decoder: Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                var unkeyed = try container.nestedUnkeyedContainer(forKey: .values)
+                var result: [Int] = []
+                while !unkeyed.isAtEnd {
+                    result.append(try unkeyed.decode(Int.self))
+                }
+                values = result
+            }
+        }
+        let xml = Data("<root><values><item>1</item><item>2</item><item>3</item></values></root>".utf8)
+        let decoded = try XMLDecoder().decode(Items.self, from: xml)
+        XCTAssertEqual(decoded.values, [1, 2, 3])
+    }
+
+    // MARK: - Decoder: nestedContainer in keyed container
+
+    func test_decoder_nestedKeyedContainer() throws {
+        struct Nested: Decodable, Equatable {
+            let outer: String
+            let innerVal: Int
+
+            enum OuterKeys: String, CodingKey { case outer, inner }
+            enum InnerKeys: String, CodingKey { case innerVal }
+
+            init(from decoder: Decoder) throws {
+                let container = try decoder.container(keyedBy: OuterKeys.self)
+                outer = try container.decode(String.self, forKey: .outer)
+                let nested = try container.nestedContainer(keyedBy: InnerKeys.self, forKey: .inner)
+                innerVal = try nested.decode(Int.self, forKey: .innerVal)
+            }
+        }
+        let xml = Data("<root><outer>hello</outer><inner><innerVal>42</innerVal></inner></root>".utf8)
+        let decoded = try XMLDecoder().decode(Nested.self, from: xml)
+        XCTAssertEqual(decoded.outer, "hello")
+        XCTAssertEqual(decoded.innerVal, 42)
+    }
+
+    // MARK: - Canonicalizer: tree-based with transforms
+
+    func test_canonicalizer_treeBased_roundTrip() throws {
+        let xml = Data("<root><b>2</b><a>1</a></root>".utf8)
+        let tree = try XMLTreeParser().parse(data: xml)
+        let canonicalizer = XMLDefaultCanonicalizer()
+        let result = try canonicalizer.canonicalize(tree)
+        let output = String(decoding: result, as: UTF8.self)
+        XCTAssert(output.contains("<root>"), "Expected root in: \(output)")
+    }
+
+    // MARK: - Canonicalizer: stream-based with event transforms
+
+    func test_canonicalizer_streamBased_withEventTransform() throws {
+        let xml = Data("<root><item>val</item></root>".utf8)
+        let canonicalizer = XMLDefaultCanonicalizer()
+        // Use empty transform pipeline
+        let result = try canonicalizer.canonicalize(
+            data: xml,
+            options: XMLCanonicalizationOptions(),
+            eventTransforms: []
+        )
+        let output = String(decoding: result, as: UTF8.self)
+        XCTAssert(output.contains("<item>val</item>"), "Expected item in: \(output)")
+    }
+
+    // MARK: - Encoder: XMLTextContent property wrapper
+
+    func test_encoder_textContentWrapper_emitsTextDirectly() throws {
+        struct Tag: Codable, Equatable {
+            @XMLAttribute var lang: String
+            @XMLTextContent var text: String
+        }
+        let original = Tag(lang: "en", text: "Hello World")
+        let data = try XMLEncoder(configuration: .init(rootElementName: "tag")).encode(original)
+        let xml = String(decoding: data, as: UTF8.self)
+        XCTAssert(xml.contains("lang=\"en\""), "Expected lang attribute in: \(xml)")
+        XCTAssert(xml.contains("Hello World"), "Expected text content in: \(xml)")
+        XCTAssertFalse(xml.contains("<text>"), "Text content should not be wrapped in element: \(xml)")
+    }
+
+    // MARK: - Decoder: single value container
+
+    func test_decoder_singleValueContainer() throws {
+        let xml = Data("<value>42</value>".utf8)
+        let decoded = try XMLDecoder().decode(Int.self, from: xml)
+        XCTAssertEqual(decoded, 42)
+    }
+
+    func test_decoder_singleValueContainer_string() throws {
+        let xml = Data("<value>hello</value>".utf8)
+        let decoded = try XMLDecoder().decode(String.self, from: xml)
+        XCTAssertEqual(decoded, "hello")
+    }
+
+    // MARK: - Encoder: ignored field via XMLFieldCodingOverrides
+
+    func test_encoder_fieldOverrides_ignoredField() throws {
+        struct WithIgnored: Codable { let visible: String; let hidden: String }
+        let overrides = XMLFieldCodingOverrides().setting(path: [], key: "hidden", as: .ignored)
+        let config = XMLEncoder.Configuration(rootElementName: "root", fieldCodingOverrides: overrides)
+        let data = try XMLEncoder(configuration: config).encode(WithIgnored(visible: "yes", hidden: "no"))
+        let xml = String(decoding: data, as: UTF8.self)
+        XCTAssert(xml.contains("<visible>yes</visible>"), "Expected visible in: \(xml)")
+        XCTAssertFalse(xml.contains("hidden"), "Hidden field should be ignored: \(xml)")
+    }
+
+    // MARK: - Encoder: field override as attribute
+
+    func test_encoder_fieldOverrides_asAttribute() throws {
+        struct Item: Codable { let id: Int; let name: String }
+        let overrides = XMLFieldCodingOverrides().setting(path: [], key: "id", as: .attribute)
+        let config = XMLEncoder.Configuration(rootElementName: "item", fieldCodingOverrides: overrides)
+        let data = try XMLEncoder(configuration: config).encode(Item(id: 7, name: "widget"))
+        let xml = String(decoding: data, as: UTF8.self)
+        XCTAssert(xml.contains("id=\"7\""), "Expected id as attribute in: \(xml)")
+    }
+
+    // MARK: - Streaming decoder: large number of children (sequential cursor)
+
+    func test_decoder_manyChildren_decodesCorrectly() throws {
+        struct Wide: Decodable, Equatable {
+            let a: String; let b: String; let c: String; let d: String; let e: String
+            let f: String; let g: String; let h: String; let i: String; let j: String
+        }
+        var xmlStr = "<Wide>"
+        for key in ["a","b","c","d","e","f","g","h","i","j"] {
+            xmlStr += "<\(key)>val_\(key)</\(key)>"
+        }
+        xmlStr += "</Wide>"
+        let decoded = try XMLDecoder().decode(Wide.self, from: Data(xmlStr.utf8))
+        XCTAssertEqual(decoded.a, "val_a")
+        XCTAssertEqual(decoded.j, "val_j")
+    }
+
+    // MARK: - Encoder: date secondsSince1970 strategy
+
+    func test_encoder_dateSecondsSince1970_roundTrips() throws {
+        struct D: Codable, Equatable { let d: Date }
+        let original = D(d: Date(timeIntervalSince1970: 1234567890))
+        let config = XMLEncoder.Configuration(rootElementName: "root", dateEncodingStrategy: .secondsSince1970)
+        let decoderConfig = XMLDecoder.Configuration(dateDecodingStrategy: .secondsSince1970)
+        let data = try XMLEncoder(configuration: config).encode(original)
+        let decoded = try XMLDecoder(configuration: decoderConfig).decode(D.self, from: data)
+        XCTAssertEqual(decoded.d.timeIntervalSince1970, original.d.timeIntervalSince1970, accuracy: 1)
+    }
+
+    // MARK: - Encoder: date millisecondsSince1970 strategy
+
+    func test_encoder_dateMillisecondsSince1970_roundTrips() throws {
+        struct D: Codable, Equatable { let d: Date }
+        let original = D(d: Date(timeIntervalSince1970: 1234567890))
+        let config = XMLEncoder.Configuration(rootElementName: "root", dateEncodingStrategy: .millisecondsSince1970)
+        let decoderConfig = XMLDecoder.Configuration(dateDecodingStrategy: .millisecondsSince1970)
+        let data = try XMLEncoder(configuration: config).encode(original)
+        let decoded = try XMLDecoder(configuration: decoderConfig).decode(D.self, from: data)
+        XCTAssertEqual(decoded.d.timeIntervalSince1970, original.d.timeIntervalSince1970, accuracy: 1)
+    }
 }
