@@ -60,7 +60,7 @@ final class _XMLEventCollector {
     func append(_ event: XMLStreamEvent) {
         events.append(event)
         switch event {
-        case .startElement: depth += 1; if depth == 1 { childCount += 1 }
+        case .startElement: depth += 1; if depth == 2 { childCount += 1 }
         case .endElement:   depth -= 1
         default: break
         }
