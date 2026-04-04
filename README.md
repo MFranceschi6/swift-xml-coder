@@ -2,13 +2,14 @@
 
 [![CI](https://github.com/MFranceschi6/swift-xml-coder/actions/workflows/ci.yml/badge.svg)](https://github.com/MFranceschi6/swift-xml-coder/actions/workflows/ci.yml)
 [![Lint](https://github.com/MFranceschi6/swift-xml-coder/actions/workflows/lint.yml/badge.svg)](https://github.com/MFranceschi6/swift-xml-coder/actions/workflows/lint.yml)
-[![Swift 5.6+](https://img.shields.io/badge/Swift-5.6%2B-orange)](https://swift.org)
-[![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20iOS%20%7C%20tvOS%20%7C%20watchOS%20%7C%20Linux-lightgrey)](https://swift.org)
+[![codecov](https://img.shields.io/badge/coverage-%E2%89%A590%25-brightgreen)](https://github.com/MFranceschi6/swift-xml-coder/actions/workflows/ci.yml)
+[![](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2FMFranceschi6%2Fswift-xml-coder%2Fbadge%3Ftype%3Dswift-versions)](https://swiftpackageindex.com/MFranceschi6/swift-xml-coder)
+[![](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2FMFranceschi6%2Fswift-xml-coder%2Fbadge%3Ftype%3Dplatforms)](https://swiftpackageindex.com/MFranceschi6/swift-xml-coder)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue)](LICENSE)
 
-A Codable-compatible XML encoder and decoder for Swift, backed by libxml2.
+A high-performance, Codable-compatible XML encoder and decoder for Swift, backed by libxml2.
 
-Encode and decode any `Codable` type to XML with control over element vs. attribute mapping, namespace declarations, date strategies, XPath queries, and deterministic canonicalization.
+Encode and decode any `Codable` type to XML with streaming support, element vs. attribute mapping, namespace declarations, date strategies, XPath queries, and deterministic canonicalization — all with zero reflection, full `Sendable` safety, and constant-memory streaming for large documents.
 
 ---
 
@@ -33,7 +34,7 @@ Encode and decode any `Codable` type to XML with control over element vs. attrib
 ```swift
 // Package.swift
 dependencies: [
-    .package(url: "https://github.com/MFranceschi6/swift-xml-coder.git", from: "1.0.0")
+    .package(url: "https://github.com/MFranceschi6/swift-xml-coder.git", from: "2.0.0")
 ],
 targets: [
     .target(
@@ -135,7 +136,9 @@ for try await product in XMLItemDecoder().items(Product.self, itemElement: "Prod
 
 ## Documentation
 
-Full API documentation and guides:
+**[Full API Reference (DocC)](https://mfranceschi6.github.io/swift-xml-coder/documentation/swiftxmlcoder/)**
+
+Guides:
 
 - [Getting Started](Sources/SwiftXMLCoder/SwiftXMLCoder.docc/Articles/GettingStarted.md)
 - [Field Mapping](Sources/SwiftXMLCoder/SwiftXMLCoder.docc/Articles/FieldMapping.md)
@@ -187,6 +190,26 @@ swift package --disable-sandbox benchmark --target ComparisonBenchmarks
 ```
 
 Benchmarks use [ordo-one/package-benchmark](https://github.com/ordo-one/package-benchmark) and require macOS 13+ with jemalloc (`brew install jemalloc`).
+
+---
+
+## Why SwiftXMLCoder?
+
+| Feature | **SwiftXMLCoder** | [CoreOffice/XMLCoder](https://github.com/CoreOffice/XMLCoder) | Foundation `XMLParser` |
+|---------|:-:|:-:|:-:|
+| `Codable` encode/decode | Yes | Yes | No |
+| Streaming (constant memory) | Yes | No | Yes (SAX only) |
+| Item-by-item Codable decode | Yes | No | No |
+| `async`/`await` streaming | Yes | No | No |
+| XML namespaces | Full | Partial | Yes |
+| XPath 1.0 queries | Yes | No | No |
+| Canonicalization (C14N) | Yes | No | No |
+| `@XMLAttribute` / `@XMLChild` macros | Yes (5.9+) | No | No |
+| `Sendable` types | All public types | No | No |
+| Configurable parser limits | Yes | No | No |
+| Linux support | Yes | Yes | Limited |
+| Codable encode speed (1 MB) | **81 ms** | 133 ms | N/A |
+| Codable decode speed (1 MB) | **55 ms** | 83 ms | N/A |
 
 ---
 
