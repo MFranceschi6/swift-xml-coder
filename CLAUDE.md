@@ -19,46 +19,60 @@ swiftlint lint
 
 ## Scope
 
-Work is scoped to **this repository only**. Do not suggest changes to external dependencies, transport layers, SOAP concerns, or other repos unless explicitly asked. When in doubt, narrow scope rather than expand it.
+Work is scoped to **this repository only**. No changes to external dependencies, transport layers, SOAP concerns, or other repos unless explicitly asked.
 
 ## Workflow
 
-- Search with Grep first, then Read only the specific files needed. Never read files one-by-one sequentially when Grep can identify the relevant subset.
-- After any refactor touching multiple files, run the full test suite immediately and fix all failures before reporting completion. Never report a task as done with pending test failures.
-- When continuing a multi-session task, read the release plan at `.claude/plans/release-1.0.md` and the last CHANGELOG entry to orient before acting.
+- Search with Grep first, then Read only the specific files needed.
+- After refactors touching multiple files, run the full test suite immediately.
+- When continuing a multi-session task, read `.claude/plans/active-plan.md` and the last CHANGELOG entry to orient.
 
 ## Design Rules
 
-- No raw strings for namespace URIs, element names, or coding keys — use typed `String`-backed enums or `static let` constants.
-- Typed errors (`enum` + `Error`). Stable error contracts. Include a generic fallback case on public error enums.
-- Dual `#if swift(>=6.0)` typed-throws branches for all throw-capable public methods.
+- No raw strings for namespace URIs, element names, or coding keys — use typed enums or `static let`.
+- Typed errors (`enum` + `Error`). Stable contracts. Generic fallback case on public error enums.
+- Dual `#if swift(>=6.0)` typed-throws branches for throw-capable public methods.
 - `internal` by default; `public` only when intentional.
+- All public types must be `Sendable`. Prefer immutable value types.
+- Type declarations in `Type.swift`. Extended logic in `Type+Logic.swift`, `Type+Codable.swift`.
 - Bug fixes must include regression tests. Features must cover core behavior and edge cases.
-- Tests must be deterministic and isolated (no real network/time/filesystem dependencies).
+- Tests must be deterministic and isolated.
+- All source comments and documentation in English.
+
+## Module Layout
+
+| Module | Purpose |
+|--------|---------|
+| `SwiftXMLCoder` | Core encoder/decoder, tree model, parser, writer, canonicalization |
+| `SwiftXMLCoderCShim` | C interop shim for libxml2 |
+| `CLibXML2` | System library wrapper for libxml2 |
+| `XMLCoderCompatibility` | Cross-version compatibility shims |
+| `SwiftXMLCoderOwnership6` | Swift 6.0+ ownership semantics |
+| `SwiftXMLCoderMacros` | Public macro facade (`@XMLCodable`, `@XMLAttribute`, `@XMLElement`) |
+| `SwiftXMLCoderMacroImplementation` | Macro compiler plugin (swift-syntax) |
+| `SwiftXMLCoderTestSupport` | Spy encoders/decoders, contract harness, canonicalizer probes |
 
 ## Safety
 
 - Never revert unrelated local changes.
 - No new dependencies without documented rationale (problem, alternatives, license/security, rollback).
+- Current approved: `swift-log`, `swift-syntax`.
 - Always update `CHANGELOG.md` for completed technical tasks.
 - Gitmoji commit prefix. Selective staging.
 - Branch naming: `claude/epic-<n>-<slug>`.
 
 ## Skills
 
-Invoke with `/skill-name`. Details in `.claude/skills/<name>/SKILL.md`.
+Invoke with `/skill-name`. Definitions in `.claude/skills.md`.
 
 | Skill | When to invoke |
 | --- | --- |
 | `baseline-validation` | Before any task closure — run build/test/lint gates |
 | `step-report-and-changelog` | When work is functionally complete — step report + CHANGELOG |
 | `commit-checkpoint` | At a meaningful checkpoint — safe commit preparation |
-| `plan-status` | At the start of any session — check release plan status and orient to next task |
+| `plan-status` | At the start of any session — check plan status and orient |
 
-## Deep-Dive Policy (read on demand only)
+## Plans
 
-- `.claude/agent/01-project-profile.md` — scope, platform, dependency policy
-- `.claude/agent/02-engineering-standards.md` — API design, file structure, concurrency
-- `.claude/agent/03-validation-and-quality-gates.md` — coverage targets, test isolation
-- `.claude/agent/04-workflow-reporting-and-commits.md` — workflow, branching, reporting
-- `.claude/agent/05-skills-and-context-organization.md` — skill authoring rules
+- Active plan: `.claude/plans/active-plan.md`
+- Enterprise roadmap (read on demand): `.claude/plans/enterprise-roadmap.md`

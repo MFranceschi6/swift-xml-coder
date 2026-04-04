@@ -1,257 +1,313 @@
-Status: Active
-Last Updated: 2026-03-21
-Owner: Maintainers
-Related: [README.md](./README.md), [03-ecosystem-topology.md](./03-ecosystem-topology.md), [04-capability-matrix.md](./04-capability-matrix.md), [05-milestones-and-exit-criteria.md](./05-milestones-and-exit-criteria.md), [06-decision-log.md](./06-decision-log.md)
+## Status
+- Draft strategic roadmap
 
-# Roadmap Target
+## Last Updated
+- 2026-03-21
+
+## Owner
+- Matteo Franceschi
+- Shared planning artifact for Codex and Claude
+
+## Related
+- [README.md](README.md)
+- [01-current-state.md](01-current-state.md)
+- [03-ecosystem-topology.md](03-ecosystem-topology.md)
+- [05-milestones-and-exit-criteria.md](05-milestones-and-exit-criteria.md)
+
+# Enterprise XML Roadmap — Target State
 
 ## Scopo
 
-Definire la sequenza primaria di lavoro che porta `swift-xml-coder` e i suoi futuri package satellite alla soglia di un vero stack XML enterprise per Swift.
+Definire la roadmap master per portare SwiftXMLCoder da libreria XML gia' molto capace a
+ecosistema XML enterprise completo abbastanza da entrare poi in una fase di sola
+manutenzione.
 
 ## Contesto
 
-Il core attuale e' gia' capace sul piano `Codable` e XML runtime, ma il target finale non e' soltanto una buona libreria di encode/decode: e' un ecosistema XML completo, integrabile con framework esterni e credibile anche nei casi enterprise e schema-first.
+L'obiettivo finale non e' solo avere un ottimo encoder/decoder XML per Swift.
 
-## Definizione Di Enterprise XML Stack
+La soglia voluta e':
 
-Per questo progetto, `enterprise XML stack` significa:
+- core XML forte
+- streaming serio
+- interop con framework server Swift
+- schema validation e code generation ufficiali
+- transform e signature stack ufficiali nell'ecosistema
 
-- core runtime affidabile per parsing, serializzazione, tree model, namespace e `Codable`
-- API low-level e streaming sufficienti per documenti grandi e pipeline server-side
-- integrazione semplice con runtime esterni come Vapor e Hummingbird senza contaminare il core
-- supporto ufficiale a schema, validazione e code generation in package dedicati
-- supporto ufficiale a transform e digital signature in package dedicati, con boundary chiaro rispetto al core
+## Definizione esplicita di "enterprise XML stack"
 
-## Fase 1 - Core Completeness
+Per questo progetto, "enterprise XML stack" significa:
+
+- un core runtime stabile e framework-neutral
+- primitive tree, streaming push e streaming pull
+- supporto namespace e diagnostics robusti
+- fidelity strutturale sufficiente per casi XML reali
+- validazione schema ufficiale
+- code generation ufficiale da XSD
+- trasformazioni XML ufficiali via XSLT
+- canonicalization e signature stack standard-grade in package ufficiali dedicati
+- adapter ufficiali per i framework server Swift principali
+
+Non significa invece:
+
+- inglobare WSDL o SOAP dentro il core
+- inglobare i transport layer dentro il core
+- trasformare `swift-xml-coder` in un monolite
+
+## Fase 1 — Core Completeness
 
 ### Obiettivo
 
-Completare il core XML fino a una soglia in cui il package principale sia percepito come solido e coerente anche senza i package satellite.
+Chiudere il gap tra "ottimo core XML Swift" e "core XML completo abbastanza da non
+richiedere altre rifondazioni architetturali".
 
-### Output Attesi
+### Output attesi
 
-- chiarimento netto del confine tra API streaming reali e API convenience
-- maggiore fedelta' strutturale del modello XML
-- migliore ergonomia per namespace, mapping e diagnostica
-- documentazione aggiornata sul baseline pubblico e sulle capability reali
+- baseline streaming locale pubblicata in modo coerente
+- distinzione chiara tra stato pubblico e stato locale nei documenti
+- diagnostica sorgente piu' ricca
+- structural fidelity estesa per PI e doctype nel modello pubblico
+- chiarimento esplicito della boundary del canonicalizer di default
 
-### Resta Nel Core
+### Cosa resta nel core
 
 - tree model
-- `Codable` XML
-- namespace
-- XPath
-- canonicalization del core
-- parser e writer streaming di base
-- macro e property wrappers XML
+- document model
+- parser e writer
+- namespace support
+- diagnostics e metadata
+- canonicalization boundary
 
-### Va In Satellite
+### Cosa va in satellite
 
-- nessun package nuovo obbligatorio in questa fase
-
-### Dipendenze
-
-- allineamento con lo stato attuale documentato in [01-current-state.md](./01-current-state.md)
-- chiarimento delle decisioni bloccate in [06-decision-log.md](./06-decision-log.md)
-
-### Criterio Di Completamento
-
-Il core offre un set coerente di capability XML senza gap macroscopici nel runtime di base e senza ambiguita' sul significato delle API pubbliche.
-
-## Fase 2 - Pull Cursor API E Item Streaming
-
-### Obiettivo
-
-Rendere il runtime competitivo anche per workload grandi o selettivi, affiancando alle API push una storia pull/cursor e item-by-item piu' completa.
-
-### Output Attesi
-
-- `XMLStreamReader` o equivalente API pull/cursor pubblica
-- decode item-by-item da stream grandi
-- migliore story di cancellation, backpressure e selective decoding
-
-### Resta Nel Core
-
-- primitive parsing e writer streaming
-- `XMLStreamReader`
-- decode item-by-item del runtime
-
-### Va In Satellite
-
-- niente in questa fase, salvo benchmark o harness separati se diventano troppo specialistici
+- nessuna capability satellite obbligatoria in questa fase
 
 ### Dipendenze
 
-- fase 1 consolidata
-- capability matrix aggiornata
+- nessuna oltre al lavoro gia' presente nella repository
 
-### Criterio Di Completamento
+### Criterio di completamento
 
-Il core supporta in modo chiaro sia parsing push sia parsing pull/cursor, oltre al consumo incrementale di payload grandi.
+Il core espone un modello XML piu' fedele e una diagnostica abbastanza ricca da diventare
+base stabile per schema, transform e signature stack futuri.
 
-## Fase 3 - Framework Interop
+## Fase 2 — Pull/Cursor API e Item Streaming
 
 ### Obiettivo
 
-Offrire integrazione ufficiale con stack server-side diffusi senza caricare il core di dipendenze framework-specifiche.
+Aggiungere le primitive low-level che negli stack XML maturi rendono possibile la lettura
+selettiva, efficiente e controllata di documenti grandi.
 
-### Output Attesi
+### Output attesi
+
+- `XMLStreamReader` o equivalente cursor API pubblica
+- helper di navigation tipo `read()`, `skipSubtree()`, `readElementText()`
+- supporto item-by-item decode realmente streaming
+- posizione corrente con `line`, `column`, `byteOffset` e metadata utili
+
+### Cosa resta nel core
+
+- cursor API
+- item streaming decode
+- metadata di location
+
+### Cosa va in satellite
+
+- nessuna capability satellite obbligatoria in questa fase
+
+### Dipendenze
+
+- Fase 1 completata
+
+### Criterio di completamento
+
+Il core copre sia il paradigma push/eventi sia il paradigma pull/cursor, con un percorso
+pratico per leggere feed XML grandi senza materializzare tutto.
+
+## Fase 3 — Framework Interop
+
+### Obiettivo
+
+Rendere l'ecosistema XML integrabile in modo naturale con i framework server Swift
+principali, senza contaminare il core con dipendenze di framework.
+
+### Output attesi
 
 - package `swift-xml-nio`
-- adapter `swift-xml-vapor`
-- adapter `swift-xml-hummingbird`
-- esempi e test end-to-end request/response
+- package `swift-xml-vapor`
+- package `swift-xml-hummingbird`
+- esempi end-to-end request/response
+- test e benchmark con body grandi e backpressure
 
-### Resta Nel Core
+### Cosa resta nel core
 
-- API framework-neutral
-- tipi base e primitive di serializzazione/parsing
+- primitive framework-neutral
+- nessuna dipendenza su NIO o framework
 
-### Va In Satellite
+### Cosa va in satellite
 
-- bridge NIO
-- integration helpers per Vapor
-- integration helpers per Hummingbird
+- tutto cio' che dipende da NIO
+- bridge request/response framework-specifici
 
 ### Dipendenze
 
-- fase 2 disponibile
-- topologia package bloccata in [03-ecosystem-topology.md](./03-ecosystem-topology.md)
+- Fase 2 completata
 
-### Criterio Di Completamento
+### Criterio di completamento
 
-Un utente puo' integrare XML request/response in Vapor o Hummingbird tramite adapter first-party senza introdurre dipendenze framework-specifiche nel core.
+Esistono adapter ufficiali sottili e testati, ma il core resta indipendente dai framework.
 
-## Fase 4 - Schema E Validation
+## Fase 4 — Schema / Validation
 
 ### Obiettivo
 
-Portare lo stack oltre il solo encode/decode e coprire la validazione schema-first.
+Aggiungere la parte di validazione XML assente oggi: parsing schema, compilazione di schema
+set, validazione documento e risoluzione risorse controllata.
 
-### Output Attesi
+### Output attesi
+
+- package `swift-xml-schema`
+- `XMLSchemaSet`
+- `XMLSchemaValidator`
+- model XSD ufficiale
+- resource resolver ufficiale con policy sicure e offline-first
+
+### Cosa resta nel core
+
+- al massimo i protocolli o boundary minimi riusabili
+
+### Cosa va in satellite
 
 - parser XSD
-- `XMLSchemaSet`
-- validazione documento contro XSD
-- resource resolution controllata
-
-### Resta Nel Core
-
-- nessuna logica schema complessa
-
-### Va In Satellite
-
-- `swift-xml-schema`
+- schema compiler
+- document validation
+- import/include resolution
 
 ### Dipendenze
 
-- modello di topologia ecosistema stabile
-- diagnostica e namespace del core sufficientemente mature
+- Fase 1 completata
+- consigliata la Fase 2 per una migliore story di diagnostica e streaming
 
-### Criterio Di Completamento
+### Criterio di completamento
 
-Esiste un package schema dedicato che consente parsing XSD e validazione documentale con diagnostica credibile.
+L'ecosistema supporta validazione XSD reale senza introdurre nel core un carico non
+necessario.
 
-## Fase 5 - Codegen
+## Fase 5 — Codegen
 
 ### Obiettivo
 
-Offrire il percorso ufficiale `XSD -> Swift models` orientato a `swift-xml-coder`.
+Costruire il percorso ufficiale `XSD -> Swift models` orientato a SwiftXMLCoder.
 
-### Output Attesi
+### Output attesi
 
-- CLI o plugin SPM per code generation
-- naming policy
-- namespace mapping coerente
-- validazione di output tramite golden tests e compile tests
+- package `swift-xml-codegen`
+- CLI ufficiale
+- plugin SPM ufficiale
+- naming policies
+- type mapping policies
+- field ordering, namespace mapping e validation hooks
 
-### Resta Nel Core
+### Cosa resta nel core
 
-- nessun engine di generazione codice
+- niente code generation nel core runtime
 
-### Va In Satellite
+### Cosa va in satellite
 
-- `swift-xml-codegen`
+- IR di codegen
+- emitter
+- plugin e CLI
+- snapshot tests dedicati
 
 ### Dipendenze
 
-- `swift-xml-schema`
-- capability namespace e diagnostica consolidate
+- Fase 4 completata
 
-### Criterio Di Completamento
+### Criterio di completamento
 
-L'ecosistema fornisce un percorso ufficiale e ripetibile per generare modelli Swift a partire da XSD.
+Esiste un percorso ufficiale e mantenibile per generare modelli Swift da XSD senza
+trasformare il core in un toolchain package.
 
-## Fase 6 - XSLT
+## Fase 6 — XSLT
 
 ### Obiettivo
 
-Aggiungere trasformazioni XML standard dove ha senso farlo senza snaturare il core.
+Aggiungere un layer ufficiale di trasformazione XML, separato dal core ma parte
+dell'ecosistema supportato.
 
-### Output Attesi
+### Output attesi
 
 - package `swift-xml-xslt`
-- wrapping o integrazione controllata con motore XSLT affidabile
-- story chiara per include, import e resource resolution
+- wrapper chiaro sopra libxslt
+- gestione sicura di import/include e resource resolution
+- fixture di interoperabilita'
 
-### Resta Nel Core
+### Cosa resta nel core
 
-- trasformazioni XML semplici gia' pertinenti al core, se presenti
+- solo i tipi base XML riusabili
 
-### Va In Satellite
+### Cosa va in satellite
 
-- motore XSLT e relativa integrazione
+- tutte le API XSLT
+- caching stylesheet
+- parameter binding
+- transform result handling
 
 ### Dipendenze
 
-- schema e resource resolution gia' pensati in ottica shared concerns
+- Fase 4 consigliata per allineare il resolver delle risorse
 
-### Criterio Di Completamento
+### Criterio di completamento
 
-Esiste un modulo ufficiale per eseguire trasformazioni XSLT senza espandere il perimetro del core runtime.
+L'ecosistema ufficiale copre il caso d'uso transform senza caricare il core di dipendenze e
+concetti non essenziali.
 
-## Fase 7 - DSig E C14N
+## Fase 7 — DSig / C14N
 
 ### Obiettivo
 
-Separare in modo esplicito la normalizzazione del core dalle esigenze di interoperabilita' XML Digital Signature.
+Fornire un percorso ufficiale per canonicalization standard-grade e firma XML senza
+confondere il normalizer di default del core con un engine di compliance completa.
 
-### Output Attesi
+### Output attesi
 
 - package `swift-xml-dsig`
-- supporto a C14N standard-grade
-- exclusive canonicalization e helper digest/signature
-- fixture di interoperabilita' esterna
+- `C14NCanonicalizer`
+- `ExclusiveC14NCanonicalizer`
+- digest/signature helpers
+- fixture standard e test di interoperabilita'
 
-### Resta Nel Core
+### Cosa resta nel core
 
-- canonicalizer interno come normalizzatore del modello corrente
+- `XMLCanonicalizer` come boundary pubblico
+- `XMLDefaultCanonicalizer` come deterministic normalizer
 
-### Va In Satellite
+### Cosa va in satellite
 
-- XML Digital Signature
-- canonicalization standard-grade per DSig
+- C14N 1.0
+- Exclusive C14N
+- XML Signature helpers
+- policy e test di interoperabilita'
 
 ### Dipendenze
 
-- topologia ecosistema bloccata
-- decisione esplicita su canonicalization vs DSig registrata in [06-decision-log.md](./06-decision-log.md)
+- Fase 1 completata
+- consigliata la Fase 4 per una migliore story di resolver e diagnostics
 
-### Criterio Di Completamento
+### Criterio di completamento
 
-La differenza tra canonicalization del core e DSig-grade canonicalization e' resa esplicita sia nel design sia nell'implementazione.
+L'ecosistema ha una story ufficiale per XML Signature e canonicalization standard-grade,
+senza compromettere la semplicità del core.
 
-## Decisioni O Implicazioni
+## Decisioni o implicazioni
 
-- Il core non deve assorbire automaticamente schema, codegen, XSLT o DSig.
-- Gli adapter framework devono vivere fuori dal package principale.
-- La roadmap ha una forma intenzionalmente incrementale: prima si completa il runtime XML, poi si apre l'ecosistema.
+- La roadmap non implica che tutto debba finire nello stesso repository.
+- Il core deve restare il foundation runtime dell'ecosistema, non il contenitore di ogni
+  capability XML possibile.
+- WSDL e SOAP restano deliberatamente fuori da questa roadmap come obiettivi del core XML.
 
 ## Riferimenti
 
-- [README.md](./README.md)
-- [03-ecosystem-topology.md](./03-ecosystem-topology.md)
-- [04-capability-matrix.md](./04-capability-matrix.md)
-- [05-milestones-and-exit-criteria.md](./05-milestones-and-exit-criteria.md)
-- [06-decision-log.md](./06-decision-log.md)
+- [01-current-state.md](01-current-state.md)
+- [03-ecosystem-topology.md](03-ecosystem-topology.md)
+- [05-milestones-and-exit-criteria.md](05-milestones-and-exit-criteria.md)

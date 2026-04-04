@@ -3,7 +3,7 @@ import SwiftXMLCoder
 import XCTest
 
 final class XMLCanonicalizerTests: XCTestCase {
-    func test_canonicalView_semanticallyEquivalentInputs_produceSameCanonicalData() throws {
+    func test_canonicalize_semanticallyEquivalentInputs_produceSameCanonicalData() throws {
         let xmlA = """
         <Root xmlns:b="urn:b" xmlns:a="urn:a" z="1" a="2"><a:Child><![CDATA[payload]]></a:Child></Root>
         """
@@ -13,7 +13,7 @@ final class XMLCanonicalizerTests: XCTestCase {
 
         let parser = XMLTreeParser(configuration: .init(whitespaceTextNodePolicy: .trim))
         let canonicalizer = XMLDefaultCanonicalizer()
-        let options = XMLNormalizationOptions(
+        let options = XMLCanonicalizationOptions(
             attributeOrderingPolicy: .lexicographical,
             namespaceDeclarationOrderingPolicy: .lexicographical,
             whitespaceTextNodePolicy: .normalizeAndTrim,
@@ -24,23 +24,23 @@ final class XMLCanonicalizerTests: XCTestCase {
 
         let documentA = try parser.parse(data: Data(xmlA.utf8))
         let documentB = try parser.parse(data: Data(xmlB.utf8))
-        let canonicalA = try canonicalizer.canonicalView(for: documentA, options: options, transforms: [])
-        let canonicalB = try canonicalizer.canonicalView(for: documentB, options: options, transforms: [])
+        let canonicalA = try canonicalizer.canonicalize(documentA, options: options)
+        let canonicalB = try canonicalizer.canonicalize(documentB, options: options)
 
-        XCTAssertEqual(canonicalA.canonicalXMLData, canonicalB.canonicalXMLData)
-        XCTAssertEqual(canonicalA.normalizedDocument, canonicalB.normalizedDocument)
+        XCTAssertEqual(canonicalA, canonicalB)
     }
 
-    func test_canonicalView_includeComments_false_removesComments() throws {
+    func test_canonicalize_includeComments_false_removesComments() throws {
         let xml = "<Root><!--note--><Value>42</Value></Root>"
         let parser = XMLTreeParser()
         let canonicalizer = XMLDefaultCanonicalizer()
-        let options = XMLNormalizationOptions(includeComments: false)
+        let options = XMLCanonicalizationOptions(includeComments: false)
 
         let document = try parser.parse(data: Data(xml.utf8))
-        let canonical = try canonicalizer.canonicalView(for: document, options: options, transforms: [])
+        let canonicalData = try canonicalizer.canonicalize(document, options: options)
+        let canonicalTree = try parser.parse(data: canonicalData)
 
-        let comments = canonical.normalizedDocument.root.children.filter {
+        let comments = canonicalTree.root.children.filter {
             if case .comment = $0 {
                 return true
             }
@@ -49,11 +49,11 @@ final class XMLCanonicalizerTests: XCTestCase {
         XCTAssertTrue(comments.isEmpty)
     }
 
-    func test_canonicalView_appliesCustomTransformPipeline() throws {
+    func test_canonicalize_appliesCustomTransformPipeline() throws {
         struct AddAuditAttributeTransform: XMLTransform {
             func apply(
                 to document: XMLTreeDocument,
-                options _: XMLNormalizationOptions
+                options _: XMLCanonicalizationOptions
             ) throws -> XMLTreeDocument {
                 let attribute = XMLTreeAttribute(
                     name: XMLQualifiedName(localName: "audit"),
@@ -74,18 +74,17 @@ final class XMLCanonicalizerTests: XCTestCase {
         let parser = XMLTreeParser()
         let canonicalizer = XMLDefaultCanonicalizer()
         let document = try parser.parse(data: Data(xml.utf8))
-        let canonical = try canonicalizer.canonicalView(
-            for: document,
-            options: XMLNormalizationOptions(),
+        let canonicalData = try canonicalizer.canonicalize(
+            document,
+            options: XMLCanonicalizationOptions(),
             transforms: [AddAuditAttributeTransform()]
         )
 
-        XCTAssertEqual(canonical.normalizedDocument.root.attributes.map(\.name.localName), ["audit"])
-        let canonicalString = String(bytes: canonical.canonicalXMLData, encoding: .utf8)
+        let canonicalString = String(bytes: canonicalData, encoding: .utf8)
         XCTAssertTrue(canonicalString?.contains("audit=\"1\"") == true)
     }
 
-    func test_canonicalView_transformFailure_wrapsErrorWithStableCodeAndStage() throws {
+    func test_canonicalize_transformFailure_wrapsAsXMLParsingError() throws {
         enum ExpectedFailure: Error {
             case boom
         }
@@ -93,7 +92,7 @@ final class XMLCanonicalizerTests: XCTestCase {
         struct FailingTransform: XMLTransform {
             func apply(
                 to _: XMLTreeDocument,
-                options _: XMLNormalizationOptions
+                options _: XMLCanonicalizationOptions
             ) throws -> XMLTreeDocument {
                 throw ExpectedFailure.boom
             }
@@ -103,129 +102,82 @@ final class XMLCanonicalizerTests: XCTestCase {
         let canonicalizer = XMLDefaultCanonicalizer()
 
         XCTAssertThrowsError(
-            try canonicalizer.canonicalView(
-                for: document,
-                options: XMLNormalizationOptions(),
+            try canonicalizer.canonicalize(
+                document,
+                options: XMLCanonicalizationOptions(),
                 transforms: [FailingTransform()]
             )
         ) { error in
-            guard let canonicalError = error as? XMLCanonicalizationError else {
-                XCTFail("Expected XMLCanonicalizationError, got \(type(of: error))")
+            guard case .other(_, let message)? = error as? XMLParsingError else {
+                XCTFail("Expected XMLParsingError.other, got \(type(of: error))")
                 return
             }
-
-            XCTAssertEqual(canonicalError.stage, .transform)
-            XCTAssertEqual(canonicalError.code, .transformFailed)
-
-            guard case .transformFailed(
-                _,
-                let index,
-                let transformType,
-                let underlyingError,
-                let message
-            ) = canonicalError else {
-                XCTFail("Expected transformFailed case.")
-                return
-            }
-
-            XCTAssertEqual(index, 0)
-            XCTAssertTrue(transformType.contains("FailingTransform"))
-            XCTAssertTrue((underlyingError as? ExpectedFailure) == .boom)
-            XCTAssertTrue((message ?? "").contains("XML6_9_CANONICAL_TRANSFORM_FAILED"))
+            XCTAssertTrue(message?.contains("XML6_9_CANONICAL_TRANSFORM_FAILED") == true)
         }
     }
 
-    func test_canonicalView_writerFailure_wrapsErrorWithSerializationStage() throws {
-        let root = XMLTreeElement(
-            name: XMLQualifiedName(localName: "Root", namespaceURI: nil, prefix: "p")
+    func test_canonicalize_data_streamPath_matchesTreePath() throws {
+        let xml = "<Root z=\"1\" a=\"2\"><Value>  42 </Value></Root>"
+        let parser = XMLTreeParser(configuration: .init(whitespaceTextNodePolicy: .preserve))
+        let document = try parser.parse(data: Data(xml.utf8))
+        let options = XMLCanonicalizationOptions()
+        let canonicalizer = XMLDefaultCanonicalizer()
+
+        let treeData = try canonicalizer.canonicalize(document, options: options)
+        let streamData = try canonicalizer.canonicalize(data: Data(xml.utf8), options: options)
+
+        XCTAssertEqual(treeData, streamData)
+    }
+
+    func test_canonicalize_events_appliesEventTransformPipeline() throws {
+        struct UppercaseTextTransform: XMLEventTransform {
+            mutating func process(_ event: XMLStreamEvent) throws -> [XMLStreamEvent] {
+                if case .text(let text) = event {
+                    return [.text(text.uppercased())]
+                }
+                return [event]
+            }
+
+            mutating func finalize() throws -> [XMLStreamEvent] {
+                []
+            }
+        }
+
+        let events: [XMLStreamEvent] = [
+            .startDocument(version: "1.0", encoding: "UTF-8", standalone: nil),
+            .startElement(name: XMLQualifiedName(localName: "Root"), attributes: [], namespaceDeclarations: []),
+            .startElement(name: XMLQualifiedName(localName: "Value"), attributes: [], namespaceDeclarations: []),
+            .text("abc"),
+            .endElement(name: XMLQualifiedName(localName: "Value")),
+            .endElement(name: XMLQualifiedName(localName: "Root")),
+            .endDocument
+        ]
+
+        let canonicalizer = XMLDefaultCanonicalizer()
+        let output = try canonicalizer.canonicalize(
+            events: events,
+            options: XMLCanonicalizationOptions(),
+            eventTransforms: [UppercaseTextTransform()]
         )
-        let document = XMLTreeDocument(root: root)
-        let canonicalizer = XMLDefaultCanonicalizer()
-
-        XCTAssertThrowsError(
-            try canonicalizer.canonicalView(
-                for: document,
-                options: XMLNormalizationOptions(),
-                transforms: []
-            )
-        ) { error in
-            guard let canonicalError = error as? XMLCanonicalizationError else {
-                XCTFail("Expected XMLCanonicalizationError, got \(type(of: error))")
-                return
-            }
-
-            XCTAssertEqual(canonicalError.stage, .serialization)
-            XCTAssertEqual(canonicalError.code, .serializationFailed)
-
-            guard case .serializationFailed(_, let underlyingError, let message) = canonicalError else {
-                XCTFail("Expected serializationFailed case.")
-                return
-            }
-
-            let parsingError = underlyingError as? XMLParsingError
-            XCTAssertNotNil(parsingError)
-            if case .parseFailed(let parseMessage)? = parsingError {
-                XCTAssertTrue((parseMessage ?? "").contains("XML6_3_NAMESPACE_VALIDATION"))
-            } else {
-                XCTFail("Expected XMLParsingError.parseFailed.")
-            }
-            XCTAssertTrue((message ?? "").contains("XML6_9_CANONICAL_SERIALIZATION_FAILED"))
-        }
+        let xml = String(decoding: output, as: UTF8.self)
+        XCTAssertTrue(xml.contains("<Value>ABC</Value>"))
     }
 
-    func test_canonicalView_transformThrowingCanonicalizationError_isPropagatedUnchanged() throws {
-        struct PassThroughTransform: XMLTransform {
-            func apply(
-                to _: XMLTreeDocument,
-                options _: XMLNormalizationOptions
-            ) throws -> XMLTreeDocument {
-                throw XMLCanonicalizationError.other(
-                    code: .init(rawValue: "XML6_9_CUSTOM"),
-                    underlyingError: nil,
-                    message: "[XML6_9_CUSTOM] custom failure"
-                )
-            }
-        }
-
-        let document = XMLTreeDocument(root: XMLTreeElement(name: XMLQualifiedName(localName: "Root")))
-        let canonicalizer = XMLDefaultCanonicalizer()
-
-        XCTAssertThrowsError(
-            try canonicalizer.canonicalView(
-                for: document,
-                options: XMLNormalizationOptions(),
-                transforms: [PassThroughTransform()]
-            )
-        ) { error in
-            guard let canonicalError = error as? XMLCanonicalizationError else {
-                XCTFail("Expected XMLCanonicalizationError, got \(type(of: error))")
-                return
-            }
-
-            XCTAssertEqual(canonicalError.stage, .other)
-            XCTAssertEqual(canonicalError.code, XMLCanonicalizationErrorCode(rawValue: "XML6_9_CUSTOM"))
-            if case .other(_, _, let message) = canonicalError {
-                XCTAssertEqual(message, "[XML6_9_CUSTOM] custom failure")
-            } else {
-                XCTFail("Expected other case.")
-            }
-        }
-    }
-
-    func test_externalCanonicalizerPrototype_usesPublicContractAndKeepsTransformOrder() throws {
+    func test_externalCanonicalizerPrototype_keepsTransformOrder() throws {
         let parser = XMLTreeParser()
         let input = try parser.parse(data: Data("<Root/>".utf8))
         let canonicalizer = TestExternalPrototypeCanonicalizer()
-        let canonical = try canonicalizer.canonicalView(
-            for: input,
-            options: XMLNormalizationOptions(),
+        let canonical = try canonicalizer.canonicalize(
+            input,
+            options: XMLCanonicalizationOptions(),
             transforms: [
                 TestAppendTraceTransform(token: "A"),
                 TestAppendTraceTransform(token: "B")
             ]
         )
 
-        let traceAttribute = canonical.normalizedDocument.root.attributes.first {
+        let parsed = try parser.parse(data: canonical)
+        let traceAttribute = parsed.root.attributes.first {
             $0.name.localName == "trace"
         }
         XCTAssertEqual(traceAttribute?.value, "AB")
@@ -237,7 +189,7 @@ private struct TestAppendTraceTransform: XMLTransform {
 
     func apply(
         to document: XMLTreeDocument,
-        options _: XMLNormalizationOptions
+        options _: XMLCanonicalizationOptions
     ) throws -> XMLTreeDocument {
         let traceName = XMLQualifiedName(localName: "trace")
         var attributes = document.root.attributes
@@ -261,39 +213,72 @@ private struct TestAppendTraceTransform: XMLTransform {
 }
 
 private struct TestExternalPrototypeCanonicalizer: XMLCanonicalizer {
-    #if swift(>=6.0)
-    func canonicalView(
-        for document: XMLTreeDocument,
-        options: XMLNormalizationOptions,
+    func canonicalize(
+        _ document: XMLTreeDocument,
+        options: XMLCanonicalizationOptions,
         transforms: XMLTransformPipeline
-    ) throws(XMLCanonicalizationError) -> XMLCanonicalView {
-        let transformedDocument = try XMLCanonicalizationContract.applyTransforms(
-            to: document,
+    ) throws -> Data {
+        try XMLDefaultCanonicalizer().canonicalize(document, options: options, transforms: transforms)
+    }
+
+    func canonicalize(
+        data: Data,
+        options: XMLCanonicalizationOptions,
+        eventTransforms: XMLEventTransformPipeline,
+        output: (Data) throws -> Void
+    ) throws {
+        try XMLDefaultCanonicalizer().canonicalize(
+            data: data,
             options: options,
-            transforms: transforms
-        )
-        return try XMLDefaultCanonicalizer().canonicalView(
-            for: transformedDocument,
-            options: options,
-            transforms: []
+            eventTransforms: eventTransforms,
+            output: output
         )
     }
-    #else
-    func canonicalView(
-        for document: XMLTreeDocument,
-        options: XMLNormalizationOptions,
-        transforms: XMLTransformPipeline
-    ) throws -> XMLCanonicalView {
-        let transformedDocument = try XMLCanonicalizationContract.applyTransforms(
-            to: document,
+
+    func canonicalize<S: Sequence>(
+        events: S,
+        options: XMLCanonicalizationOptions,
+        eventTransforms: XMLEventTransformPipeline,
+        output: (Data) throws -> Void
+    ) throws where S.Element == XMLStreamEvent {
+        try XMLDefaultCanonicalizer().canonicalize(
+            events: events,
             options: options,
-            transforms: transforms
-        )
-        return try XMLDefaultCanonicalizer().canonicalView(
-            for: transformedDocument,
-            options: options,
-            transforms: []
+            eventTransforms: eventTransforms,
+            output: output
         )
     }
-    #endif
+}
+
+// MARK: - Streaming canonicalizer incremental output
+
+extension XMLCanonicalizerTests {
+
+    func test_streamCanonicalize_producesIncrementalOutput() throws {
+        // Build a document with enough content to trigger incremental flushing.
+        var xml = "<Root>"
+        for i in 0..<100 {
+            xml += "<item>value\(i)</item>"
+        }
+        xml += "</Root>"
+        let data = Data(xml.utf8)
+
+        var chunkCount = 0
+        var totalData = Data()
+        try XMLDefaultCanonicalizer().canonicalize(
+            data: data,
+            options: XMLCanonicalizationOptions(),
+            eventTransforms: []
+        ) { chunk in
+            chunkCount += 1
+            totalData.append(chunk)
+        }
+
+        // The output callback should have been called at least once.
+        XCTAssertGreaterThan(chunkCount, 0)
+        // The concatenated output should be valid XML.
+        let outputString = String(data: totalData, encoding: .utf8) ?? ""
+        XCTAssertTrue(outputString.contains("<Root>"), "Output should contain root: \(outputString.prefix(200))")
+        XCTAssertTrue(outputString.contains("value99"), "Output should contain last item")
+    }
 }

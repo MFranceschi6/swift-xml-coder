@@ -149,6 +149,59 @@ jobs:
           retention-days: 30
 
   # ──────────────────────────────────────────────────────────────────────────
+  # internal: runs on workflow_dispatch.
+  # Executes the internal benchmark suite on the GitHub-hosted macOS runner
+  # so local README / markdown measurements can be compared against CI output.
+  # ──────────────────────────────────────────────────────────────────────────
+  internal:
+    name: Internal Benchmarks
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Swift
+        uses: swift-actions/setup-swift@v2
+        with:
+          swift-version: "6.1"
+
+      - name: Cache Benchmarks SPM
+        uses: actions/cache@v4
+        with:
+          path: Benchmarks/.build
+          key: macos-15-benchmarks-spm-${{ hashFiles('Benchmarks/Package.swift') }}
+          restore-keys: |
+            macos-15-benchmarks-spm-
+
+      - name: Install jemalloc
+        run: brew install jemalloc
+
+      - name: Run internal benchmarks
+        run: |
+          cd Benchmarks
+          swift package --disable-sandbox benchmark \
+            --format markdown 2>&1 | tee /tmp/internal-benchmark-results.md
+
+      - name: Post results to step summary
+        if: always()
+        run: |
+          echo "## Internal Benchmarks" >> "$GITHUB_STEP_SUMMARY"
+          if [ -f /tmp/internal-benchmark-results.md ]; then
+            cat /tmp/internal-benchmark-results.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "_No benchmark output was generated._" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload internal benchmark results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: internal-benchmarks-${{ github.sha }}
+          path: /tmp/internal-benchmark-results.md
+          if-no-files-found: warn
+          retention-days: 90
+
+  # ──────────────────────────────────────────────────────────────────────────
   # comparative: runs on workflow_dispatch or weekly schedule.
   # Compares SwiftXMLCoder vs CoreOffice/XMLCoder (Codable encode/decode).
   # Not part of regression checks — XMLCoder version changes independently.

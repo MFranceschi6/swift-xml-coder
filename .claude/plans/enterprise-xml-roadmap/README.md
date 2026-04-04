@@ -1,62 +1,115 @@
-Status: Active
-Last Updated: 2026-03-21
-Owner: Maintainers
-Related: [01-current-state.md](./01-current-state.md), [02-target-roadmap.md](./02-target-roadmap.md), [03-ecosystem-topology.md](./03-ecosystem-topology.md), [04-capability-matrix.md](./04-capability-matrix.md), [05-milestones-and-exit-criteria.md](./05-milestones-and-exit-criteria.md), [06-decision-log.md](./06-decision-log.md), [../post-release-roadmap.md](../post-release-roadmap.md)
+## Status
+- Draft
 
-# Enterprise XML Roadmap
+## Last Updated
+- 2026-03-21
+
+## Owner
+- Matteo Franceschi
+- Shared planning artifact for Codex and Claude
+
+## Related
+- [01-current-state.md](01-current-state.md)
+- [02-target-roadmap.md](02-target-roadmap.md)
+- [03-ecosystem-topology.md](03-ecosystem-topology.md)
+- [04-capability-matrix.md](04-capability-matrix.md)
+- [05-milestones-and-exit-criteria.md](05-milestones-and-exit-criteria.md)
+- [06-decision-log.md](06-decision-log.md)
+- [../post-release-roadmap.md](../post-release-roadmap.md)
+
+# Enterprise XML Roadmap — Entry Point
 
 ## Scopo
 
-Questo pacchetto documentale descrive lo stato attuale, la destinazione architetturale e la sequenza di lavoro necessaria per trasformare `swift-xml-coder` in un ecosistema XML Swift di riferimento. I file sono scritti in Markdown puro e in forma agent-neutral, in modo che possano essere letti, aggiornati e utilizzati sia da Codex sia da Claude.
+Questo pacchetto documentale raccoglie in un solo posto la pianificazione end-to-end di
+SwiftXMLCoder come ecosistema XML di livello enterprise.
+
+L'obiettivo non e' descrivere una singola release, ma fornire una base condivisa e
+agent-neutral per:
+
+- orientamento sullo stato reale del progetto
+- allineamento tra roadmap del core e futuri progetti satelliti
+- pianificazione incrementale di milestone successive
+- riduzione delle fonti di verita' duplicate tra sessioni e tra agenti
 
 ## Contesto
 
-Il baseline documentale corretto e' il seguente:
+La repository contiene gia' diversi piani tecnici focalizzati soprattutto sulla fase
+post-1.0 e sul layer streaming. Questi documenti restano validi come piani di dettaglio,
+ma non bastano da soli a descrivere:
 
-- l'ultima release pubblica verificata e' `1.1.0`, pubblicata il `2026-03-21`
-- il lavoro `1.2.0+` esiste come stato locale, backlog o roadmap, ma non deve essere trattato come release pubblicata finche' non esistono tag e release note reali
-- la roadmap qui descritta copre sia il core runtime sia i futuri package satellite che compongono uno stack XML piu' ampio
+- la differenza tra stato pubblicato e stato solo locale
+- la topologia completa dell'ecosistema XML futuro
+- la soglia finale per poter dire "ora il progetto si mantiene e basta"
 
-## Ordine Di Lettura Consigliato
+Questo pacchetto colma quel vuoto senza sostituire i piani tecnici gia' utili.
 
-1. [01-current-state.md](./01-current-state.md) per riallinearsi ai fatti verificati oggi
-2. [02-target-roadmap.md](./02-target-roadmap.md) per capire la sequenza completa del lavoro
-3. [03-ecosystem-topology.md](./03-ecosystem-topology.md) per sapere dove deve vivere ogni responsabilita'
-4. [04-capability-matrix.md](./04-capability-matrix.md) per valutare gap, priorita' e differenze rispetto ad altri stack XML
-5. [05-milestones-and-exit-criteria.md](./05-milestones-and-exit-criteria.md) per trasformare la roadmap in milestone eseguibili
-6. [06-decision-log.md](./06-decision-log.md) per evitare di riaprire decisioni gia' prese
+## Baseline del progetto
 
-## File Del Pacchetto
+- Ultima release pubblica verificata: `1.1.0`
+- Data release pubblica verificata: `2026-03-21`
+- I riferimenti a `1.2.0+` presenti in alcuni piani locali vanno letti come stato di
+  pianificazione o lavoro locale, non come release gia' pubblicate
+- La roadmap qui descritta assume una topologia `core + satellites`
 
-| File | Uso Principale | Quando Consultarlo |
-| --- | --- | --- |
-| [01-current-state.md](./01-current-state.md) | fotografia del presente | quando serve confermare cosa esiste davvero oggi |
-| [02-target-roadmap.md](./02-target-roadmap.md) | roadmap master | quando si pianifica la sequenza futura |
-| [03-ecosystem-topology.md](./03-ecosystem-topology.md) | confini core vs satellite | quando si decide dove implementare una capability |
-| [04-capability-matrix.md](./04-capability-matrix.md) | gap analysis | quando si prioritizzano le prossime iniziative |
-| [05-milestones-and-exit-criteria.md](./05-milestones-and-exit-criteria.md) | milestone e stop condition | quando si converte la roadmap in lavoro operativo |
-| [06-decision-log.md](./06-decision-log.md) | decisioni bloccate o aperte | quando un agente deve verificare se una scelta e' gia' stata presa |
-| [../post-release-roadmap.md](../post-release-roadmap.md) | ponte con la roadmap post-release gia' esistente | quando si parte dal piano storico e si vuole entrare nella roadmap enterprise |
+## Ordine di lettura raccomandato
+
+1. Leggere [01-current-state.md](01-current-state.md) per capire il baseline reale.
+2. Leggere [02-target-roadmap.md](02-target-roadmap.md) per la sequenza strategica.
+3. Leggere [03-ecosystem-topology.md](03-ecosystem-topology.md) per sapere dove vive cosa.
+4. Leggere [04-capability-matrix.md](04-capability-matrix.md) per il gap analysis.
+5. Leggere [05-milestones-and-exit-criteria.md](05-milestones-and-exit-criteria.md) per
+   la sequenza eseguibile.
+6. Consultare [06-decision-log.md](06-decision-log.md) prima di riaprire decisioni gia'
+   bloccate.
+
+## Contenuto del pacchetto
+
+| File | Ruolo | Quando usarlo |
+|---|---|---|
+| `README.md` | Entry point unico | All'inizio di ogni nuova sessione di roadmap |
+| `01-current-state.md` | Fotografia del presente | Quando serve evitare assunzioni sbagliate sul baseline |
+| `02-target-roadmap.md` | Documento master della roadmap | Quando si decide la direzione di medio-lungo termine |
+| `03-ecosystem-topology.md` | Confini tra core e satelliti | Quando bisogna decidere dove implementare una capability |
+| `04-capability-matrix.md` | Gap analysis per capability | Quando si valuta se una funzione manca davvero o no |
+| `05-milestones-and-exit-criteria.md` | Sequenza operativa | Quando si deve trasformare la roadmap in tranche di lavoro |
+| `06-decision-log.md` | Registro decisioni | Quando si vuole capire cosa e' gia' stato deciso e perche' |
 
 ## Glossario
 
-- `core`: il package principale `swift-xml-coder`, focalizzato su parsing, tree model, `Codable`, namespace, XPath, security presets, macro XML e primitive streaming
-- `satellite`: un package separato che dipende dal core e aggiunge una capability specialistica o un adattatore di integrazione
-- `maintenance-only`: stato in cui il perimetro definito e' considerato completo e il lavoro diventa prevalentemente manutenzione, hardening e compatibilita'
-- `stop condition`: insieme di criteri misurabili che stabiliscono quando il core o l'ecosistema hanno raggiunto la soglia maintenance-only
+### Core
 
-## Decisioni O Implicazioni
+`swift-xml-coder`, cioe' il package/runtime principale. Deve restare stabile, piccolo
+quanto basta, framework-neutral e orientato alle primitive XML generali.
 
-- Questo pacchetto e' la fonte primaria per la visione di medio-lungo termine.
-- Il file `post-release-roadmap.md` resta utile come ponte storico e operativo, ma non sostituisce questa roadmap enterprise.
-- Le decisioni su release pubblicate, topologia dell'ecosistema e stop condition devono essere mantenute coerenti in tutti i file collegati.
+### Satellite
+
+Un package o repository separato che estende il core per un dominio specifico, per esempio
+schema validation, code generation, NIO interoperability, XSLT o XML Digital Signature.
+
+### Maintenance-only
+
+Stato obiettivo in cui il core e l'ecosistema ufficiale hanno completato il set di
+capability considerate essenziali. Da quel momento il lavoro prevalente diventa:
+
+- manutenzione ordinaria
+- bug fix
+- aggiornamenti compatibilita'
+- miglioramenti incrementali non strutturali
+
+### Stop condition
+
+L'insieme esplicito delle condizioni che devono essere vere prima di dichiarare il progetto
+"completo abbastanza" per entrare in una fase di sola manutenzione.
+
+## Decisioni e implicazioni
+
+- Questo pacchetto documentale e' la fonte primaria per il planning strategico XML.
+- I piani tecnici preesistenti restano validi come approfondimenti di singole milestone.
+- Non viene introdotta una cartella `.Codex/` parallela per evitare duplicazione.
 
 ## Riferimenti
 
-- [01-current-state.md](./01-current-state.md)
-- [02-target-roadmap.md](./02-target-roadmap.md)
-- [03-ecosystem-topology.md](./03-ecosystem-topology.md)
-- [04-capability-matrix.md](./04-capability-matrix.md)
-- [05-milestones-and-exit-criteria.md](./05-milestones-and-exit-criteria.md)
-- [06-decision-log.md](./06-decision-log.md)
+- [01-current-state.md](01-current-state.md)
+- [02-target-roadmap.md](02-target-roadmap.md)
 - [../post-release-roadmap.md](../post-release-roadmap.md)

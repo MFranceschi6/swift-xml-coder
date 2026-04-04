@@ -1,316 +1,296 @@
-Status: Active
-Last Updated: 2026-03-22
-Owner: Maintainers
-Related: [README.md](./README.md), [02-target-roadmap.md](./02-target-roadmap.md), [03-ecosystem-topology.md](./03-ecosystem-topology.md), [04-capability-matrix.md](./04-capability-matrix.md), [06-decision-log.md](./06-decision-log.md)
+## Status
+- Draft milestone plan
 
-# Milestone E Exit Criteria
+## Last Updated
+- 2026-03-21
+
+## Owner
+- Matteo Franceschi
+- Shared planning artifact for Codex and Claude
+
+## Related
+- [README.md](README.md)
+- [02-target-roadmap.md](02-target-roadmap.md)
+- [04-capability-matrix.md](04-capability-matrix.md)
+- [06-decision-log.md](06-decision-log.md)
+
+# Enterprise XML Roadmap — Milestones and Exit Criteria
 
 ## Scopo
 
-Tradurre la roadmap target in una sequenza eseguibile di milestone con criteri di uscita abbastanza chiari da essere riutilizzabili da piu' agenti e sessioni.
+Tradurre la roadmap strategica in milestone ordinate e con criteri di completamento
+misurabili.
 
 ## Contesto
 
-La roadmap e' volutamente ampia. Senza milestone e stop condition, il lavoro rischia di trasformarsi in backlog aperto permanente. Questa sezione definisce invece cosa significa davvero completare il core e poi l'ecosistema.
+Le milestone qui sotto non sono task atomici di implementazione. Sono tranche di lavoro
+coerenti che possono poi essere spezzate in piani tecnici piu' dettagliati.
 
-## XML-R1 - Core Baseline Alignment
+## XML-R1 — Baseline Alignment and Core Publishability
 
 ### Scope
 
-Allineare documentazione, naming e confini del core al baseline pubblico `1.1.0`, chiarendo cosa e' gia' disponibile e cosa resta locale o pianificato.
+- riallineare stato pubblico, piani locali e packaging documentale
+- stabilizzare la prossima wave del core streaming da stato locale a stato pubblicabile
+- chiarire la boundary del canonicalizer default
 
-### Deliverable Attesi
+### Deliverable attesi
 
 - baseline documentale coerente
-- documentazione chiara su release pubblicata vs roadmap futura
-- lista debiti core piu' urgenti
+- roadmap enterprise agganciata ai piani esistenti
+- release successiva del core pubblicata in modo coerente
 
 ### Prerequisiti
 
-- fotografia attuale consolidata
+- nessuno oltre allo stato corrente della repository
 
 ### Rischi
 
-- partire da assunzioni sbagliate sulle release
-- roadmap futura costruita su milestone non ancora pubblicate
+- confondere ancora stato locale e stato pubblico
+- promuovere come "release" capability solo locali
 
-### Segnali Non Pronta
+### Segnali "non pronta"
 
-- file di piano che trattano `1.2.0+` come pubblicata
-- mancanza di un entrypoint unico per la roadmap enterprise
+- i piani continuano a parlare di release non pubblicate come se fossero gia' online
+- non c'e' una storia chiara per lo stato del layer streaming
 
-### Exit Criteria
+### Exit criteria
 
-- esiste una sola fonte di verita' per il baseline pubblico
-- la roadmap enterprise e il piano post-release storico non sono in conflitto
+- una sola fonte di verita' per baseline pubblico
+- milestone streaming locale almeno documentata come pubblicata o come ancora locale
+- documentation package enterprise presente e coerente
 
-## XML-R2 - Core Completeness
+## XML-R2 — Core XML Completeness
 
 ### Scope
 
-Chiudere i gap piu' evidenti del core runtime.
+- chiudere i principali gap del core non coperti dal solo `Codable`
+- aumentare fidelity e diagnostics
 
-### Deliverable Attesi
+### Deliverable attesi
 
-- maggiore fedelta' del modello XML
-- migliore ergonomia namespace e mapping
-- story documentata per canonicalization e diagnostica
+- PI e doctype nel modello pubblico
+- location diagnostica completa
+- metadata piu' ricchi
 
 ### Prerequisiti
 
-- `XML-R1`
+- XML-R1 completata
 
 ### Rischi
 
-- allargare troppo il perimetro del core
-- rimandare problemi di fidelity che poi bloccano schema e codegen
+- introdurre complessita' senza un modello pubblico pulito
+- rompere la distinzione tra metadata e content model
 
-### Segnali Non Pronta
+### Segnali "non pronta"
 
-- gap ancora aperti su PI/doctype o namespace ergonomics
-- confusione persistente su cosa promette il core
+- impossibilita' di round-trip su PI/doctype
+- errori ancora identificabili solo con `line` o con messaggi generici
 
-### Exit Criteria
+### Exit criteria
 
-- il core copre in modo credibile il runtime XML generale
-- i gap rimasti non impediscono l'apertura dell'ecosistema satellite
+- tree model abbastanza fedele per documenti XML reali
+- diagnostics usabili per validation e tooling successivi
 
-## XML-R3 - Pull Cursor E Incremental Processing
+## XML-R3 — Pull/Cursor and Item Streaming
 
 ### Scope
 
-Portare il core a una story streaming completa e chiara.
+- introdurre cursor API e item streaming decode
 
-### Deliverable Attesi
+### Deliverable attesi
 
-- pull/cursor API pubblica
-- decode item-by-item
-- comportamento documentato per cancellation e backpressure
+- `XMLStreamReader` o equivalente
+- navigation helpers
+- `decodeEach` o equivalente
 
 ### Prerequisiti
 
-- `XML-R2`
+- XML-R2 completata
 
 ### Rischi
 
-- API incompleta o ridondante con quella push
-- implementazione percepita come convenience bufferizzata anziche' truly streaming
+- creare una API low-level non ergonomica
+- duplicare in modo incoerente il layer event-based esistente
 
-### Segnali Non Pronta
+### Segnali "non pronta"
 
-- assenza di una narrativa semplice per documenti grandi
-- difficolta' nel collegare parsing selettivo e `Codable`
+- streaming presente solo come event stream push
+- impossibilita' di consumare record grandi uno per volta
 
-### Exit Criteria
+### Exit criteria
 
-- il core espone API push e pull/cursor coerenti
-- esiste un percorso incrementale per consumare documenti grandi
+- il core copre sia push sia pull
+- esiste un percorso ufficiale per leggere feed XML grandi record-by-record
 
-## XML-R4 - Framework Interop
+## XML-R4 — Framework Interop
 
 ### Scope
 
-Costruire l'integrazione ufficiale con stack server-side esterni.
+- creare gli adapter ufficiali lato server Swift
 
-### Deliverable Attesi
+### Deliverable attesi
 
 - `swift-xml-nio`
 - `swift-xml-vapor`
 - `swift-xml-hummingbird`
-- esempi e test di integrazione
+- esempi e smoke test end-to-end
 
 ### Prerequisiti
 
-- `XML-R3`
-- topologia package bloccata
+- XML-R3 completata
 
 ### Rischi
 
-- contaminare il core con dipendenze framework-specifiche
-- creare adapter troppo sottili o non opinionati quanto basta
+- far entrare dipendenze framework nel core
+- creare adapter troppo opinionated
 
-### Segnali Non Pronta
+### Segnali "non pronta"
 
-- mancanza di un bridge NIO comune
-- integrazioni duplicate e non allineate tra framework
+- integrazione Vapor/Hummingbird possibile solo tramite codice ad hoc dell'utente
 
-### Exit Criteria
+### Exit criteria
 
-- esiste un percorso ufficiale e documentato per usare XML con Vapor e Hummingbird
+- esistono package ufficiali e testati
+- il core resta framework-neutral
 
-## XML-R5 - Schema Ecosystem
+## XML-R5 — Schema and Validation
 
 ### Scope
 
-Aggiungere parsing XSD e validazione ufficiale tramite package satellite.
+- introdurre il validation stack ufficiale
 
-### Deliverable Attesi
+### Deliverable attesi
 
 - `swift-xml-schema`
 - `XMLSchemaSet`
-- validazione documentale
-- resource resolution controllata
+- `XMLSchemaValidator`
+- resolver risorse controllato
 
 ### Prerequisiti
 
-- `XML-R2`
-- `XML-R3`
+- XML-R2 completata
 
 ### Rischi
 
-- introdurre troppa complessita' troppo presto
-- dipendere da un core non ancora abbastanza fedele
+- allargare troppo il core
+- introdurre resolver non sicuri
 
-### Segnali Non Pronta
+### Segnali "non pronta"
 
-- namespace e diagnostica ancora troppo deboli
-- confini poco chiari tra schema e codegen
+- manca una story ufficiale per XSD
+- validation possibile solo tramite tool esterni o codice custom
 
-### Exit Criteria
+### Exit criteria
 
-- schema parsing e validation funzionano come capability ufficiale dell'ecosistema
+- esiste un package ufficiale di validation con API e test chiari
 
-## XML-R6 - Codegen Ecosystem
+## XML-R6 — Codegen
 
 ### Scope
 
-Trasformare il supporto schema-first in un workflow produttivo `XSD -> Swift models`.
+- costruire la toolchain ufficiale da XSD a modelli Swift
 
-### Deliverable Attesi
+### Deliverable attesi
 
 - `swift-xml-codegen`
-- golden tests
-- compile tests
-- naming e namespace policy esplicite
+- CLI
+- plugin SPM
+- policy di naming e mapping ufficiali
 
 ### Prerequisiti
 
-- `XML-R5`
+- XML-R5 completata
 
 ### Rischi
 
-- generazione codice accoppiata troppo al caso SOAP
-- modelli generati difficili da mantenere o stabilizzare
+- mischiare codegen generico XML con WSDL/SOAP
+- generare API troppo dipendenti da dettagli del momento
 
-### Segnali Non Pronta
+### Segnali "non pronta"
 
-- assenza di schema model abbastanza stabile
-- output generato non sufficientemente deterministico
+- i modelli XSD-first richiedono ancora tool custom o codice manuale pesante
 
-### Exit Criteria
+### Exit criteria
 
-- l'ecosistema offre codegen ufficiale credibile e ripetibile
+- esiste un percorso ufficiale e mantenibile per generare modelli SwiftXMLCoder-first
 
-## XML-R7 - Transform E Signature Ecosystem
+## XML-R7 — Transform and Signature Ecosystem
 
 ### Scope
 
-Completare l'ecosistema ufficiale con XSLT e DSig/C14N standard-grade.
+- completare lo story enterprise con transform e signature stack ufficiali
 
-### Deliverable Attesi
+### Deliverable attesi
 
 - `swift-xml-xslt`
 - `swift-xml-dsig`
+- canonicalizer standard-grade separati dal core
 - fixture di interoperabilita'
-- boundary espliciti tra core canonicalization e DSig
 
 ### Prerequisiti
 
-- topologia package stabile
-- `XML-R5`
+- XML-R2 completata
+- idealmente XML-R5 completata per una story di resolver piu' robusta
 
 ### Rischi
 
-- confondere i bisogni di interoperabilita' con il runtime base
-- espandere troppo il perimetro del core
+- confondere il normalizer del core con un engine di compliance
+- introdurre un satellite signature senza fixture esterne reali
 
-### Segnali Non Pronta
+### Segnali "non pronta"
 
-- aspettative ancora ambigue sul canonicalizer del core
-- mancanza di package dedicati per gli standard avanzati
+- XSLT e DSig ancora possibili solo via integrazioni ad hoc
+- manca una implementazione ufficiale di C14N / Exclusive C14N
 
-### Exit Criteria
+### Exit criteria
 
-- lo stack XML ufficiale copre transform e signature tramite package dedicati
-
-## XML-R8 - Pure Swift Streaming Backend
-
-### Scope
-
-Aggiungere un backend di parsing SAX/streaming interamente in Swift, senza dipendenze da libxml2 né da Foundation, per abilitare lo stack di streaming su target dove queste librerie non sono disponibili (WebAssembly, embedded, ambienti sandbox).
-
-### Razionale
-
-`Foundation.XMLParser` su Linux è internamente backed da libxml2 e non è "puro Swift". Su WASM e ambienti embedded ne libxml2 ne Foundation sono disponibili. Un backend puro Swift a livello SAX consente di usare `XMLStreamParser`/`XMLEventCursor`/`XMLItemDecoder` su questi target senza modificare l'API pubblica del core.
-
-Il backend puro Swift copre **solo lo strato streaming** (`XMLStreamEvent`). DOM, XPath e i Codable encoder/decoder restano legati a libxml2 nel core principale — non è obiettivo di questa milestone rimpiazzare l'intero stack.
-
-### Deliverable Attesi
-
-- package satellite `swift-xml-pure` con un parser SAX Swift nativo
-- produce la stessa sequenza di `XMLStreamEvent` del backend libxml2
-- stessa suite di test di conformità (round-trip, limiti di sicurezza, whitespace policy)
-- documentato come "streaming-only, no DOM/XPath" — chi ha bisogno di XPath usa il core con libxml2
-
-### Prerequisiti
-
-- `XML-R3` (story streaming matura — garantisce che l'API `XMLStreamEvent` sia stabile prima di costruirci sopra un secondo backend)
-
-### Rischi
-
-- parità di comportamento difficile da garantire (edge case XML, encoding, namespace handling)
-- un parser XML conforme alle spec è molto lavoro — rischio di under-spec
-- potenziale confusione su quale package usare e quando
-
-### Segnali Non Pronta
-
-- API `XMLStreamEvent` non ancora stabile
-- assenza di test di conformità cross-backend
-
-### Parallelismo
-
-Indipendente da XML-R4, R5, R6, R7. Può partire in qualsiasi momento dopo XML-R3.
-
-### Exit Criteria
-
-- `swift-xml-pure` produce output `XMLStreamEvent` identico al backend libxml2 su tutti i fixture di test esistenti
-- funziona su WebAssembly (verificato con toolchain Swift WASM)
-- documentato esplicitamente il perimetro: streaming/SAX sì, DOM/XPath no
+- l'ecosistema ufficiale copre transform e signature in package dedicati e testati
 
 ## Maintenance-Only Stop Condition
 
-### Quando Il Core Si Considera Completo
+### Quando il core si considera completo
 
-Il core `swift-xml-coder` puo' essere trattato come `maintenance-only` quando:
+Il core `swift-xml-coder` puo' dirsi "maintenance-only" quando:
 
-- offre runtime XML generale credibile
-- copre tree model, namespace, XPath, `Codable`, macro XML e streaming di base
-- espone anche una story pull/cursor e item streaming abbastanza matura
-- la fidelity strutturale e la diagnostica non presentano gap bloccanti
-- l'integrazione con framework esterni non richiede cambiare il core
+- supporta tree, document, namespace, XPath e diagnostics mature
+- supporta streaming push e pull
+- supporta item streaming decode
+- ha fidelity sufficiente per PI e doctype
+- resta framework-neutral e con confini chiari
 
-### Quando L'Ecosistema Ufficiale Si Considera Completo
+### Quando l'ecosistema ufficiale si considera completo
 
-L'ecosistema puo' essere trattato come `maintenance-only` quando:
+L'ecosistema ufficiale puo' dirsi "maintenance-only" quando, oltre al core, esistono e
+sono stabili:
 
-- esistono package ufficiali per interop server-side
-- esiste un package schema/validation
-- esiste un package codegen
-- esistono package dedicati per XSLT e DSig/C14N
-- i confini tra core e satellite sono stabili e documentati
+- `swift-xml-nio`
+- `swift-xml-vapor`
+- `swift-xml-hummingbird`
+- `swift-xml-schema`
+- `swift-xml-codegen`
+- `swift-xml-xslt`
+- `swift-xml-dsig`
 
-### Backlog Opzionale Esplicito
+### Backlog opzionale esplicitamente non bloccante
 
-Questi temi non bloccano la stop line maintenance-only:
+Le capability seguenti non bloccano la dichiarazione di "maintenance-only":
 
-- WSDL e SOAP transport
-- MTOM, XOP o concern transport-specifici
-- standard XML specialistici non necessari al posizionamento base dello stack
+- WSDL-specific tooling
+- SOAP-specific runtime
+- transport layer SOAP
+- MTOM/XOP
+- SwA
+- funzionalita' ultra-specialistiche non richieste dal core XML generalista
+
+## Decisioni o implicazioni
+
+- La stop condition e' ecosystem-wide, non solo core-wide.
+- Una volta raggiunta, il lavoro principale dovrebbe spostarsi da espansione di scope a
+  manutenzione, compatibilita' e bug fixing.
 
 ## Riferimenti
 
-- [README.md](./README.md)
-- [02-target-roadmap.md](./02-target-roadmap.md)
-- [03-ecosystem-topology.md](./03-ecosystem-topology.md)
-- [04-capability-matrix.md](./04-capability-matrix.md)
-- [06-decision-log.md](./06-decision-log.md)
+- [02-target-roadmap.md](02-target-roadmap.md)
+- [04-capability-matrix.md](04-capability-matrix.md)
+- [06-decision-log.md](06-decision-log.md)

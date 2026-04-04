@@ -12,7 +12,7 @@ public struct XMLTestRecordingTransform: XMLTransform {
 
     public func apply(
         to document: XMLTreeDocument,
-        options _: XMLNormalizationOptions
+        options _: XMLCanonicalizationOptions
     ) throws -> XMLTreeDocument {
         recorder.record(token)
         return appendingTraceToken(token, to: document)

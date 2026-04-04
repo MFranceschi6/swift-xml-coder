@@ -4,7 +4,6 @@ import SwiftXMLCoder
 public final class XMLTestDecoderSpy {
     public enum Method: String, Equatable {
         case decodeData
-        case decodeTree
     }
 
     public struct Call: Equatable {
@@ -23,27 +22,10 @@ public final class XMLTestDecoderSpy {
 
     public private(set) var calls: [Call] = []
     public var forcedError: Error?
-    public var decodeTreeStub: ((Any.Type, XMLTreeDocument) throws -> Any)?
     public var decodeDataStub: ((Any.Type, Data) throws -> Any)?
 
     public init(decoder: XMLDecoder = XMLDecoder()) {
         self.decoder = decoder
-    }
-
-    public func decodeTree<T: Decodable>(_ type: T.Type, from tree: XMLTreeDocument) throws -> T {
-        recordCall(method: .decodeTree, valueType: type, payloadSize: tree.root.children.count)
-
-        if let forcedError = forcedError {
-            throw forcedError
-        }
-        if let decodeTreeStub = decodeTreeStub {
-            return try resolveStubbedValue(
-                expectedType: type,
-                stubbedValue: decodeTreeStub(type, tree)
-            )
-        }
-
-        return try decoder.decodeTree(type, from: tree)
     }
 
     public func decode<T: Decodable>(_ type: T.Type, from data: Data) throws -> T {

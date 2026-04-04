@@ -4,14 +4,14 @@ import SwiftXMLCoder
 public enum XMLCanonicalizerContractProbe {
     public typealias CanonicalizeClosure = (
         _ document: XMLTreeDocument,
-        _ options: XMLNormalizationOptions,
+        _ options: XMLCanonicalizationOptions,
         _ transforms: XMLTransformPipeline
-    ) throws -> XMLCanonicalView
+    ) throws -> Data
 
     public static func makeDefaultCanonicalizeClosure() -> CanonicalizeClosure {
         let canonicalizer = XMLDefaultCanonicalizer()
         return { document, options, transforms in
-            try canonicalizer.canonicalView(for: document, options: options, transforms: transforms)
+            try canonicalizer.canonicalize(document, options: options, transforms: transforms)
         }
     }
 
@@ -21,12 +21,14 @@ public enum XMLCanonicalizerContractProbe {
     ) throws -> XMLCanonicalizerOrderProbeResult {
         let recorder = XMLTestCallRecorder()
         let transforms = tokens.map { XMLTestRecordingTransform(token: $0, recorder: recorder) }
-        let canonical = try canonicalize(
+        let data = try canonicalize(
             minimalDocument(),
-            XMLNormalizationOptions(),
+            XMLCanonicalizationOptions(),
             transforms
         )
-        let traceAttribute = canonical.normalizedDocument.root.attributes.first {
+        let parser = XMLTreeParser()
+        let canonicalDocument = try parser.parse(data: data)
+        let traceAttribute = canonicalDocument.root.attributes.first {
             $0.name.localName == "trace"
         }
 
@@ -49,14 +51,19 @@ public enum XMLCanonicalizerContractProbe {
         ]
 
         do {
-            _ = try canonicalize(minimalDocument(), XMLNormalizationOptions(), transforms)
+            _ = try canonicalize(minimalDocument(), XMLCanonicalizationOptions(), transforms)
             throw XMLTestCodecError.forcedFailure(
                 message: "Expected canonicalize closure to fail for failing transform."
             )
-        } catch let canonicalError as XMLCanonicalizationError {
+        } catch let parsingError as XMLParsingError {
+            if case .other(_, let message) = parsingError {
+                return XMLCanonicalizerFailureProbeResult(
+                    message: message,
+                    recordedTokens: recorder.snapshot()
+                )
+            }
             return XMLCanonicalizerFailureProbeResult(
-                stage: canonicalError.stage,
-                code: canonicalError.code,
+                message: nil,
                 recordedTokens: recorder.snapshot()
             )
         }

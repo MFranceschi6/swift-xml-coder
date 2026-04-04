@@ -11,13 +11,11 @@ SwiftXMLCoder provides two event-driven types for working with XML as a stream o
 
 Both types are `Sendable` and work on all Swift versions. Async APIs are available on macOS 12+, iOS 15+, watchOS 8+, and tvOS 15+.
 
-### Push Model vs Pull/Cursor
+### Push Model vs Item Decode
 
-``XMLStreamParser`` uses a **push-based** model: the parser drives execution, calling your handler (or yielding to your `for await` loop) for each event in document order. The caller does not control the pace.
+``XMLStreamParser`` uses a **push-based** model: the parser drives execution, calling your handler (or yielding to your `for await` loop) for each event in document order. The caller does not control the pace. Use this API for selective extraction — reading a subset of fields from a large document without constructing the full DOM.
 
-``XMLEventCursor`` provides a **pull-based** interface: you advance the cursor explicitly by calling ``XMLEventCursor/next()`` or ``XMLEventCursor/advance(toElement:)``; events are returned on demand. ``XMLItemDecoder`` builds on top of the cursor to decode `Codable` items one at a time from a named repeating element.
-
-> Note: All three APIs — callback, `AsyncSequence`, and cursor — parse the full byte sequence before returning control. ``XMLEventCursor`` pre-buffers all events on creation; the memory advantage over ``XMLTreeParser`` is that events are smaller than the full DOM tree, not that events are produced lazily from a socket or file handle. For very large documents (hundreds of MB), the push callback API remains the most memory-efficient option.
+``XMLItemDecoder`` provides **item-by-item Codable decode**: it streams through raw XML `Data` using a chunk-based SAX parser, finds each occurrence of a named element, and decodes it inline as its events arrive. Peak memory is proportional to the largest single item, not the full document.
 
 ## XMLStreamEvent
 
@@ -85,6 +83,8 @@ let parser = XMLStreamParser(configuration: config)
 ```
 
 For untrusted input, use ``XMLTreeParser/Configuration/untrustedInputProfile(whitespaceTextNodePolicy:logger:)`` to apply conservative security limits automatically.
+
+> Implementation note: ``XMLStreamParser`` uses libxml2 push parsing internally. SwiftXMLCoder feeds large inputs to the push parser incrementally by default so streaming APIs remain stable on platforms that still ship libxml2 versions older than `2.11.3`, where upstream fixed the `"huge input lookup"` push-parser error.
 
 ## Serialising
 
@@ -176,31 +176,9 @@ func extractPrices(from xmlData: Data) throws -> [PriceEntry] {
 
 This approach keeps peak memory proportional to the number of matched items, not to the size of the document.
 
-## Pull Cursor
-
-``XMLEventCursor`` provides a pull-style interface for consuming events one at a time:
-
-```swift
-let cursor = try XMLEventCursor(data: xmlData)
-while let event = cursor.next() {
-    if case .startElement(let name, _, _) = event {
-        print(name.localName)
-    }
-}
-```
-
-Use ``XMLEventCursor/advance(toElement:)`` to skip ahead to a named element without writing a manual depth-tracking loop:
-
-```swift
-let cursor = try XMLEventCursor(data: xmlData)
-while cursor.advance(toElement: "Product") != nil {
-    // cursor is now positioned right after <Product> — read child events until </Product>
-}
-```
-
 ## Item-by-Item Codable Decode
 
-``XMLItemDecoder`` connects the cursor API with `Codable`: it finds each occurrence of a named element, serialises its events as a self-contained XML fragment, and decodes it using ``XMLDecoder``. Only one item's events are in a temporary buffer at a time.
+``XMLItemDecoder`` streams through raw XML `Data` using a chunk-based SAX parser, finds each occurrence of a named element, and decodes it inline using ``XMLDecoder``'s streaming decoder. Peak memory is proportional to the largest single item, not the full document.
 
 ```swift
 struct Product: Decodable {
@@ -208,15 +186,13 @@ struct Product: Decodable {
     let price: Double
 }
 
-let cursor = try XMLEventCursor(data: catalogData)
-let products = try XMLItemDecoder().decode(Product.self, itemElement: "Product", from: cursor)
+let products = try XMLItemDecoder().decode(Product.self, itemElement: "Product", from: catalogData)
 ```
 
 For backpressure-aware processing on macOS 12+ / iOS 15+, use the async stream overload. The next item is not decoded until the consumer requests it:
 
 ```swift
-let cursor = try XMLEventCursor(data: catalogData)
-for try await product in XMLItemDecoder().items(Product.self, itemElement: "Product", from: cursor) {
+for try await product in XMLItemDecoder().items(Product.self, itemElement: "Product", from: catalogData) {
     await persist(product)
 }
 ```
@@ -231,7 +207,6 @@ Pass a ``XMLDecoder/Configuration`` to ``XMLItemDecoder/init(configuration:)`` t
 | Transforming or filtering an XML document without full load | ``XMLStreamParser`` + ``XMLStreamWriter`` |
 | Building or querying a document structure in memory | ``XMLTreeParser`` / ``XMLDocument`` |
 | Encoding/decoding `Codable` types | ``XMLEncoder`` / ``XMLDecoder`` |
-| Forward-only cursor reads without a closure | ``XMLEventCursor`` |
 | Decoding a repeating element one item at a time | ``XMLItemDecoder`` |
 
 > Tip: If you need to decode a `Codable` type from a specific child element within a large document, use ``XMLItemDecoder`` to locate and decode just that element without constructing the full DOM.
@@ -251,10 +226,6 @@ Pass a ``XMLDecoder/Configuration`` to ``XMLItemDecoder/init(configuration:)`` t
 - ``XMLStreamWriter``
 - ``XMLStreamWriter/Configuration``
 - ``XMLStreamWriter/WriterLimits``
-
-### Cursor
-
-- ``XMLEventCursor``
 
 ### Item-by-Item Decoder
 

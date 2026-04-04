@@ -1,17 +1,27 @@
 import Foundation
 
-/// Public canonicalization boundary used by SOAP/runtime layers and external XML signature engines.
-///
-/// `SwiftXMLCoder` provides deterministic normalization and extensibility hooks, but intentionally
-/// does not implement XMLDSig canonicalization/signature algorithms directly.
-///
-/// External libraries can implement `XMLCanonicalizer` and optionally reuse
-/// `XMLCanonicalizationContract` helpers to keep transform ordering and error propagation
-/// semantics consistent with the default runtime behavior.
+/// Public canonicalization boundary used by runtime layers and external signature engines.
 public protocol XMLCanonicalizer: Sendable {
-    func canonicalView(
-        for document: XMLTreeDocument,
-        options: XMLNormalizationOptions,
+    /// Tree-based canonicalization entry point.
+    func canonicalize(
+        _ document: XMLTreeDocument,
+        options: XMLCanonicalizationOptions,
         transforms: XMLTransformPipeline
-    ) throws -> XMLCanonicalView
+    ) throws -> Data
+
+    /// Streaming canonicalization entry point from raw XML data.
+    func canonicalize(
+        data: Data,
+        options: XMLCanonicalizationOptions,
+        eventTransforms: XMLEventTransformPipeline,
+        output: (Data) throws -> Void
+    ) throws
+
+    /// Streaming canonicalization entry point from pre-existing XML events.
+    func canonicalize<S: Sequence>(
+        events: S,
+        options: XMLCanonicalizationOptions,
+        eventTransforms: XMLEventTransformPipeline,
+        output: (Data) throws -> Void
+    ) throws where S.Element == XMLStreamEvent
 }

@@ -1,46 +1,66 @@
-Status: Active
-Last Updated: 2026-03-21
-Owner: Maintainers
-Related: [README.md](./README.md), [02-target-roadmap.md](./02-target-roadmap.md), [03-ecosystem-topology.md](./03-ecosystem-topology.md), [05-milestones-and-exit-criteria.md](./05-milestones-and-exit-criteria.md), [../post-release-roadmap.md](../post-release-roadmap.md)
+## Status
+- Draft decision log
 
-# Decision Log
+## Last Updated
+- 2026-03-21
+
+## Owner
+- Matteo Franceschi
+- Shared planning artifact for Codex and Claude
+
+## Related
+- [README.md](README.md)
+- [03-ecosystem-topology.md](03-ecosystem-topology.md)
+- [05-milestones-and-exit-criteria.md](05-milestones-and-exit-criteria.md)
+
+# Enterprise XML Roadmap — Decision Log
 
 ## Scopo
 
-Registrare le decisioni gia' prese o intenzionalmente bloccate, cosi' da evitare che agenti diversi riaprano gli stessi temi a ogni nuova sessione.
+Registrare le decisioni gia' prese in modo che sessioni future e agenti diversi non
+riaprano continuamente le stesse discussioni.
 
 ## Contesto
 
-Questa roadmap copre un arco lungo di evoluzione. Alcune scelte di perimetro e packaging devono quindi essere esplicite fin dall'inizio.
+Questo log non sostituisce la roadmap. Serve a congelare decisioni architetturali o di
+scope che influenzano piu' milestone.
 
 ## Decisioni
 
-| Data | Decisione | Rationale | Impatto | Stato |
-| --- | --- | --- | --- | --- |
-| `2026-03-21` | adottare topologia `core + satellites` | consente di mantenere il core piccolo, stabile e framework-neutral | guida ogni decisione futura su package e confini | `locked` |
-| `2026-03-21` | WSDL e SOAP non fanno parte della stop line XML | sono concern di protocollo e transport, non del runtime XML generale | evita di gonfiare il core e la roadmap enterprise | `locked` |
-| `2026-03-21` | `swift-xml-coder` resta framework-neutral | il core deve poter servire piu' stack senza dipendere da uno specifico framework | Vapor e Hummingbird vanno trattati via adapter satellite | `locked` |
-| `2026-03-21` | l'obiettivo finale e' un `enterprise XML stack` | il posizionamento non e' solo encode/decode, ma un ecosistema XML completo | orienta roadmap, capability matrix e stop condition | `locked` |
-| `2026-03-21` | canonicalization del core e DSig standard-grade non sono la stessa cosa | la normalizzazione interna del modello non basta a sostituire XML Digital Signature interoperabile | DSig e C14N avanzata vanno in un package dedicato | `locked` |
-| `2026-03-21` | la documentazione condivisa vive sotto `.claude/plans/` ma resta agent-neutral | si evita una doppia fonte di verita' pur mantenendo compatibilita' con gli strumenti esistenti | Codex e Claude leggono gli stessi file | `locked` |
-| `2026-03-21` | il baseline pubblico da usare nei piani e' `1.1.0` | alcuni piani locali possono menzionare release future non ancora pubblicate | impedisce di trattare `1.2.0+` come gia' online | `locked` |
-| `2026-03-22` | il backend Swift puro copre solo lo strato streaming (SAX/`XMLStreamEvent`), non DOM né XPath | Foundation.XMLParser su Linux è già backed da libxml2 e non è puro Swift; un parser SAX Swift risolve solo WASM/embedded; rimpiazzare DOM+XPath sarebbe un progetto dell'ordine di grandezza di libxml2 | `swift-xml-pure` è un satellite streaming-only, il core resta su libxml2 per DOM/XPath | `locked` |
+| ID | Decisione | Rationale | Impatto | Data | Stato |
+|---|---|---|---|---|---|
+| `XML-D1` | La topologia target e' `core + satellites` | Riduce il rischio di monolite e mantiene il core stabile | Influenza packaging, scope e ownership delle capability | 2026-03-21 | locked |
+| `XML-D2` | WSDL e SOAP non fanno parte della stop line XML | Sono domini sopra l'XML, non parte del core XML generalista | Evita scope creep nel core e nella roadmap enterprise XML | 2026-03-21 | locked |
+| `XML-D3` | `swift-xml-coder` resta framework-neutral | Il core deve essere riusabile con piu' stack server | Le integrazioni framework vanno in package satellite | 2026-03-21 | locked |
+| `XML-D4` | L'obiettivo finale e' un enterprise XML stack, non solo un miglior encoder/decoder Swift | Serve una stop line piu' alta per poter dire "ora si mantiene" | Introduce validation, codegen, XSLT e DSig nell'ecosistema ufficiale | 2026-03-21 | locked |
+| `XML-D5` | La canonicalization del core e la DSig canonicalization standard-grade sono due cose diverse | Evita posizionamento ambiguo del canonicalizer di default | `XMLDefaultCanonicalizer` resta nel core; C14N/DSig vanno in satellite | 2026-03-21 | locked |
+| `XML-D6` | La documentazione strategica condivisa vive in `.claude/plans/` ma resta agent-neutral | Si evita duplicazione con una `.Codex/` parallela | Un solo pacchetto documentale condiviso per Codex e Claude | 2026-03-21 | locked |
+| `XML-D7` | Il baseline pubblico verificato e' `1.1.0` | E' la release pubblica online verificata alla data del documento | Tutta la roadmap successiva parte da `1.1.0`, non da release locali non pubblicate | 2026-03-21 | locked |
 
-## Questioni Da Riaprire Solo Se Servono
+## Decisioni da non riaprire senza nuovo fatto concreto
 
-- naming finale dei package satellite, se emergono vincoli di branding o disponibilita'
-- livello minimo di supporto che `swift-xml-xslt` e `swift-xml-dsig` devono offrire nella loro prima release
-- eventuale separazione tra repository multipli e monorepo logico di ecosistema
+- Spostare framework interop nel core
+- Spostare XSD/codegen nel core runtime
+- Trattare il canonicalizer default come DSig-grade
+- Usare WSDL/SOAP come criterio per la stop line XML
+- Duplicare la documentazione strategica in una seconda cartella agent-specifica
 
-## Decisioni O Implicazioni
+## Revisit policy
 
-- Prima di creare un nuovo piano o un nuovo epic, conviene verificare qui se il perimetro e' gia' stato deciso.
-- Se una decisione viene cambiata, va aggiornata qui e nei documenti collegati nella stessa sessione.
+Una decisione `locked` puo' essere riaperta solo se emerge almeno uno di questi fattori:
+
+- nuovo vincolo tecnico concreto
+- cambiamento di posizionamento prodotto deciso esplicitamente
+- costo operativo non sostenibile della topologia attuale
+- evidenza ripetuta che la decisione produce attrito significativo
+
+## Decisioni o implicazioni
+
+- Ogni nuovo piano tecnico che contraddice una decisione `locked` dovrebbe citarla
+  esplicitamente e spiegare il motivo del cambio.
+- Se una decisione va riaperta, il log va aggiornato prima o insieme al nuovo piano.
 
 ## Riferimenti
 
-- [README.md](./README.md)
-- [02-target-roadmap.md](./02-target-roadmap.md)
-- [03-ecosystem-topology.md](./03-ecosystem-topology.md)
-- [05-milestones-and-exit-criteria.md](./05-milestones-and-exit-criteria.md)
-- [../post-release-roadmap.md](../post-release-roadmap.md)
+- [03-ecosystem-topology.md](03-ecosystem-topology.md)
+- [05-milestones-and-exit-criteria.md](05-milestones-and-exit-criteria.md)

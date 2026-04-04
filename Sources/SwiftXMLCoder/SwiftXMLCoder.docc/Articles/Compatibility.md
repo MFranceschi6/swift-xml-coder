@@ -25,6 +25,25 @@ iOS, tvOS, and watchOS are supported via Track 1: libxml2 is a system library em
 
 > **Note:** CI runs a build-only gate for iOS Simulator (`arm64-apple-ios15.0-simulator`). Test execution on Simulator is not run in CI due to runner boot time constraints; the macOS test suite provides full coverage of the shared code path.
 
+## libxml2 Baseline
+
+SwiftXMLCoder links against the platform-provided `libxml2`:
+
+- On Apple platforms, this is the `xml2` library bundled in the active Xcode SDK or system runtime.
+- On Linux, this is the distribution package provided via `libxml2-dev`.
+
+This matters for streaming APIs because the upstream libxml2 fix for the push-parser
+`"huge input lookup"` error landed in `2.11.3`. Several environments within SwiftXMLCoder's
+supported matrix still commonly ship older `2.9.x` builds, including Apple SDKs and long-term
+support Linux distributions.
+
+For that reason, SwiftXMLCoder keeps the SAX streaming path compatibility-first by default:
+
+- ``XMLStreamParser`` feeds large inputs to libxml2 incrementally instead of as a single monolithic chunk.
+- ``XMLItemDecoder`` inherits the same behavior because it builds on top of ``XMLStreamParser``.
+
+No configuration is required from the caller. The workaround is an internal implementation detail chosen to preserve correctness across the supported platform matrix.
+
 ## Feature Availability by Lane
 
 ### Core features (Swift 5.6+)
@@ -33,8 +52,7 @@ iOS, tvOS, and watchOS are supported via Track 1: libxml2 is a system library em
 - `XMLDocument` with XPath
 - `XMLTreeParser` / `XMLTreeWriter`
 - `XMLStreamParser` / `XMLStreamWriter` / `XMLStreamEvent` — SAX-style push streaming (async APIs on macOS 12+ / iOS 15+)
-- `XMLEventCursor` — pull/cursor interface over a pre-parsed event sequence
-- `XMLItemDecoder` — item-by-item `Codable` decode from a named repeating element (async on macOS 12+ / iOS 15+)
+- `XMLItemDecoder` — item-by-item streaming `Codable` decode from a named repeating element (async on macOS 12+ / iOS 15+)
 - `XMLNamespaceResolver`, `XMLNamespaceValidator`
 - `XMLFieldNamespaceProvider` — per-field namespace override for encoder/decoder
 - `XMLCanonicalizer`, `XMLDefaultCanonicalizer`, `XMLTransform`

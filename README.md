@@ -16,7 +16,7 @@ Encode and decode any `Codable` type to XML with control over element vs. attrib
 
 - **`XMLEncoder` / `XMLDecoder`** — Codable-compatible, zero-reflection encoding and decoding
 - **Three-tier field mapping** — `@XMLAttribute` / `@XMLChild` property wrappers, `@XMLCodable` macros (Swift 5.9+), or runtime `XMLFieldCodingOverrides`
-- **Streaming** — `XMLStreamParser` (push/SAX), `XMLStreamWriter`, `XMLEventCursor` (pull/cursor), `XMLItemDecoder` (item-by-item Codable decode)
+- **Streaming** — `XMLStreamParser` (push/SAX), `XMLStreamWriter`, `XMLItemDecoder` (item-by-item Codable decode)
 - **XPath 1.0** — query parsed documents with namespace-aware expressions
 - **Namespace support** — declare, resolve, and validate XML namespace prefixes; per-field namespace override via `XMLFieldNamespaceProvider` / `@XMLFieldNamespace`
 - **Canonicalization** — deterministic XML output via `XMLCanonicalizer` (XML-DSig ready)
@@ -105,28 +105,15 @@ let parser = XMLTreeParser(configuration: .init(
 let tree = try parser.parse(data: untrustedInput)
 ```
 
-### Streaming — Pull Cursor
-
-```swift
-// Parse once, consume on demand
-let cursor = try XMLEventCursor(data: xmlData)
-while let event = cursor.next() {
-    if case .startElement(let name, _, _) = event {
-        print(name.localName)
-    }
-}
-```
-
 ### Streaming — Item-by-Item Codable Decode
 
 ```swift
 struct Product: Decodable { let sku: String; let price: Double }
 
-let cursor   = try XMLEventCursor(data: catalogData)
-let products = try XMLItemDecoder().decode(Product.self, itemElement: "Product", from: cursor)
+let products = try XMLItemDecoder().decode(Product.self, itemElement: "Product", from: catalogData)
 
 // Or async, one item at a time (macOS 12+):
-for try await product in XMLItemDecoder().items(Product.self, itemElement: "Product", from: cursor) {
+for try await product in XMLItemDecoder().items(Product.self, itemElement: "Product", from: catalogData) {
     await persist(product)
 }
 ```
@@ -161,13 +148,52 @@ SwiftXMLCoder ships with a comprehensive benchmark suite covering tree parsing, 
 | 1 - 10 MB | Tree or `XMLItemDecoder` | Tree works but uses more memory |
 | > 10 MB | `XMLItemDecoder` / `XMLStreamParser` | Constant memory vs linear; tree does not scale |
 
+### Measured Results
+
+All figures are p50 wall-clock times. Measured on Apple M1 (arm64, 8 GB), macOS 15.3, release build with jemalloc.
+
+| Operation | 10 KB | 100 KB | 1 MB | 10 MB |
+|-----------|-------|--------|------|-------|
+| Tree parse (`XMLTreeParser`) | 237 µs | 2.3 ms | 24 ms | 232 ms |
+| SAX push (`XMLStreamParser`) | 225 µs | 2.2 ms | 20 ms | 208 ms |
+| Codable decode (`XMLDecoder`) | 554 µs | 5.6 ms | 55 ms | 545 ms |
+| Codable encode (`XMLEncoder`) | 872 µs | 8.2 ms | 81 ms | 829 ms |
+| Stream write (`XMLStreamWriter`) | 221 µs | 2.3 ms | 21 ms | 215 ms |
+| Item decode (`XMLItemDecoder`, rich model) | — | — | 53 ms | — |
+
+### GitHub Actions Results
+
+All figures are p50 wall-clock times from the manual GitHub Actions benchmark run on March 22, 2026, using the `macos-15` hosted runner, Swift 6.1, and jemalloc. Run: [actions/runs/23411043764](https://github.com/MFranceschi6/swift-xml-coder/actions/runs/23411043764).
+
+| Operation | 10 KB | 100 KB | 1 MB | 10 MB |
+|-----------|-------|--------|------|-------|
+| Tree parse (`XMLTreeParser`) | 268 µs | 2.7 ms | 29 ms | 241 ms |
+| SAX push (`XMLStreamParser`) | 230 µs | 2.2 ms | 28 ms | 267 ms |
+| Codable decode (`XMLDecoder`) | 591 µs | 5.7 ms | 59 ms | 588 ms |
+| Codable encode (`XMLEncoder`) | 837 µs | 8.1 ms | 108 ms | 962 ms |
+| Stream write (`XMLStreamWriter`) | 243 µs | 2.5 ms | 24 ms | 230 ms |
+| Item decode (`XMLItemDecoder`, rich model) | — | — | 74 ms | — |
+
+### Cross-Machine Observations
+
+The GitHub-hosted runner preserves the same overall ranking as the local M1 run, but most internal benchmarks are modestly slower in CI. Small-payload encode stays effectively flat, while larger streaming workloads drift more: rich `XMLItemDecoder` moves from 53 ms to 74 ms at 1 MB. No benchmark job failed, and there were no correctness warnings or crashes in the run.
+
+One important documentation fix came out of the CI comparison: the previous `Foundation XMLParser` note was inverted. In both local and GitHub Actions measurements, Foundation SAX parsing is faster than SwiftXMLCoder's SAX parser at 1 MB, while SwiftXMLCoder's tree parser remains faster than Foundation `XMLDocument`.
+
+**vs Foundation `XMLParser` (SAX):** SwiftXMLCoder is about 2.0-2.3x slower at 1 MB in both local and GitHub Actions runs (`~21-22 ms` vs `~9-11 ms`). This is consistent across 10 KB and 100 KB as well.
+
+**vs Foundation `XMLDocument` (tree):** SwiftXMLCoder is about 18-25% faster at 1 MB (`23-24 ms` vs `28-32 ms`) across local and GitHub Actions runs.
+
+**vs CoreOffice/XMLCoder decode:** SwiftXMLCoder remains faster on both machines, from about 1.3-1.5x at 100 KB to about 1.5-2.6x at 10 MB depending on the runner.
+
+**vs CoreOffice/XMLCoder encode:** SwiftXMLCoder remains about 1.5-1.7x faster across all scales on both local and GitHub Actions runs.
+
 ### Benchmark Coverage
 
 | Area | Scales | What It Measures |
 |------|--------|-----------------|
 | Tree parse / decode / encode | 10KB - 10MB | Full DOM materialization + Codable round-trip |
 | SAX push (`XMLStreamParser`) | 10KB - 100MB | Event-driven parsing, no tree allocation |
-| Pull cursor (`XMLEventCursor`) | 10KB - 100MB | Lazy pull-based iteration |
 | Item-by-item (`XMLItemDecoder`) | 10KB - 100MB | Streaming Codable decode, constant memory |
 | Stream writer (`XMLStreamWriter`) | 10KB - 10MB | Event sequence to XML serialization |
 | Rich model (nested + attributes) | 10KB - 100MB | Real-world payload with 3-level nesting, namespaces |
@@ -187,6 +213,8 @@ swift package --disable-sandbox benchmark --target ComparisonBenchmarks
 ```
 
 Benchmarks use [ordo-one/package-benchmark](https://github.com/ordo-one/package-benchmark) and require macOS 13+ with jemalloc (`brew install jemalloc`).
+
+The repository also runs benchmark regression checks in GitHub Actions via [`.github/workflows/benchmarks.yml`](./.github/workflows/benchmarks.yml). Every PR to `main` is compared against a `main` baseline on a macOS runner, so we can track regressions with a shared CI reference instead of relying only on local machine measurements.
 
 ---
 

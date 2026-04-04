@@ -1,79 +1,169 @@
-Status: Active
-Last Updated: 2026-03-21
-Owner: Maintainers
-Related: [README.md](./README.md), [01-current-state.md](./01-current-state.md), [02-target-roadmap.md](./02-target-roadmap.md), [03-ecosystem-topology.md](./03-ecosystem-topology.md), [05-milestones-and-exit-criteria.md](./05-milestones-and-exit-criteria.md)
+## Status
+- Draft matrix
 
-# Capability Matrix E Gap Analysis
+## Last Updated
+- 2026-03-21
+
+## Owner
+- Matteo Franceschi
+- Shared planning artifact for Codex and Claude
+
+## Related
+- [README.md](README.md)
+- [01-current-state.md](01-current-state.md)
+- [03-ecosystem-topology.md](03-ecosystem-topology.md)
+- [05-milestones-and-exit-criteria.md](05-milestones-and-exit-criteria.md)
+
+# Enterprise XML Roadmap — Capability Matrix and Gap Analysis
 
 ## Scopo
 
-Confrontare il set di capability attuale con la stop line finale desiderata, mettendo in evidenza dove esistono gap concreti e quale package dovrebbe assorbirli.
+Mappare in modo pragmatico cosa c'e' oggi, cosa deve esistere nella stop line finale e
+dove quella capability deve vivere.
 
 ## Contesto
 
-Uno stack XML maturo non si misura solo sull'encode/decode di oggetti Swift. Contano anche streaming, fidelity strutturale, integrazione con framework, schema validation, transform e tooling.
+Questa matrice non e' una checklist di marketing. Serve a rispondere a una domanda molto
+semplice:
 
-## Matrice
+"manca davvero qualcosa di strutturale prima di poter dire che il progetto entra in sola
+manutenzione?"
 
-| Capability | Current | Target | Home | Priority | Why It Matters |
-| --- | --- | --- | --- | --- | --- |
-| `Codable` encode/decode | forte e gia' centrale nel core | mantenere e consolidare | `core` | alta | resta il punto di ingresso principale per l'adozione |
-| tree model | presente e utile | estendere la fedelta' strutturale | `core` | alta | serve per round-trip, inspectability e tooling |
-| XPath | presente | mantenere | `core` | media | utile per ispezione e query locali |
-| push streaming | presente nel lavoro locale recente | stabilizzare e chiarire il confine API | `core` | alta | necessario per documenti grandi e pipeline |
-| pull/cursor streaming | non ancora first-class nel core | introdurre API pubblica dedicata | `core` | alta | e' una capability standard nei runtime XML maturi |
-| item-by-item streaming decode | non ancora first-class | aggiungere decode incrementale | `core` | alta | evita buffering eccessivo in server-side e batch |
-| namespace ergonomics | buona ma non esaustiva | rendere il mapping per-field e schema-friendly | `core` | alta | i modelli reali XML vivono di namespace e QNames |
-| diagnostics/location | buona ma migliorabile | aggiungere line, column, offset e path dove sensato | `core` | media | migliora debug, validation e DX |
-| PI/doctype fidelity | incompleta nel modello pubblico | completare il round-trip | `core` | media | necessaria per credibilita' come libreria XML completa |
-| schema validation | assente come prodotto ufficiale | aggiungere XSD parse e validation | `satellite` | alta | requisito classico per casi enterprise e schema-first |
-| XSLT | assente | aggiungere modulo ufficiale separato | `satellite` | media | utile per workload XML tradizionali e interoperabilita' |
-| DSig/C14N | assente come modulo completo | aggiungere package dedicato | `satellite` | media | necessario per interoperabilita' e use case firmati |
-| framework adapters | assenti come prodotti ufficiali | fornire adapter first-party | `satellite` | alta | aiuta l'adozione con Vapor e Hummingbird |
-| codegen | assente come prodotto ufficiale | aggiungere pipeline `XSD -> Swift models` | `satellite` | alta | sblocca l'uso schema-first su larga scala |
-| pure Swift streaming backend | assente | aggiungere backend SAX Swift puro per WASM/embedded | `satellite` | media | sblocca l'uso su target dove libxml2 e Foundation non sono disponibili |
+## Matrice capability
 
-## Gap Più Importanti Da Colmare
+| Capability | Current | Target | Home | Priority | Why it matters |
+|---|---|---|---|---|---|
+| Codable encode/decode | Forte, pubblica | Mantenuta e rifinita | core | Alta | E' la capability base del progetto |
+| Tree model | Forte, pubblica | Structural fidelity piu' completa | core | Alta | Serve come foundation per parser, transform e tooling |
+| XPath | Presente e pubblica | Mantenuta, senza rifondazioni | core | Media | Copre query pratiche e document inspection |
+| Push streaming | Presente localmente in modo avanzato | Pubblicata e stabilizzata | core | Alta | Necessaria per documenti grandi e pipeline |
+| Pull/cursor streaming | Mancante | API pubblica completa | core | Alta | Gli stack maturi offrono sia push sia pull |
+| Item-by-item streaming decode | Mancante o solo parziale | Disponibile e robusto | core | Alta | Serve per feed grandi, record stream e server processing |
+| Namespace ergonomics | Buona ma parziale | Mapping piu' ricco per-field e per generated models | core | Alta | I casi reali XSD e SOAP-like stressano qui |
+| Diagnostics / location | Buona, ma centrata su `sourceLine` | `line + column + offset + path` | core | Alta | Fa la differenza su debugging e validation |
+| PI / doctype fidelity | Parziale nel tree model pubblico | Completa | core | Alta | Serve per parlare di XML completo e non solo di subset |
+| Security limits / hardening | Buona | Mantenuta e ampliata dove serve | core | Alta | Obbligatoria per input non trusted |
+| Deterministic canonicalization | Presente | Chiaramente separata da DSig-grade | core | Media | Utile, ma non deve essere sovravenduta |
+| Schema validation | Mancante | Ufficiale | satellite | Alta | E' una capability tipica degli stack enterprise |
+| XSD model / schema set | Mancante | Ufficiale | satellite | Alta | Base per validation e codegen |
+| XSLT | Mancante | Ufficiale | satellite | Media | Parte importante degli stack XML maturi |
+| DSig / C14N | Mancante | Ufficiale | satellite | Media | Necessaria per completare lo story enterprise |
+| Framework adapters | Mancanti ufficialmente | Ufficiali | satellite | Alta | Obiettivo esplicito per Vapor e Hummingbird |
+| Codegen | Mancante nel mondo XML generale | Ufficiale | satellite | Alta | Serve per XSD-first workflows |
 
-- gap di runtime: pull/cursor API, decode incrementale, maggiore chiarezza sullo streaming reale
-- gap di fedelta': PI, doctype e diagnostica piu' ricca
-- gap di ecosistema: framework interop, XSD, codegen, XSLT e DSig
+## Gap analysis sintetica
 
-## Confronto Pragmatico Con Ecosistemi Di Riferimento
+### Gia' forte oggi
+
+- runtime `Codable`
+- tree/document API
+- namespace fundamentals
+- XPath
+- security posture
+- macro DX di base
+
+### Mancanze piu' importanti nel core
+
+- cursor API pubblica
+- item-by-item decode streaming
+- fidelity completa di PI e doctype
+- diagnostics di location complete
+- namespace/name mapping piu' ergonomico
+
+### Mancanze piu' importanti nell'ecosistema
+
+- validation stack
+- code generation stack
+- XSLT stack
+- DSig / C14N stack
+- adapters framework ufficiali
+
+## Confronto sintetico con ecosistemi di riferimento
 
 ### Java StAX
 
-Riferimento forte per il modello pull/cursor. Il gap principale e' l'assenza di una story equivalente e first-class nel core Swift.
+Riferimento importante perche' distingue in modo netto:
 
-### .NET XmlReader E XmlSchemaSet
+- cursor API
+- event API
+- factory / plugability
 
-Riferimento forte per parsing forward-only e validazione schema. Il gap principale e' la mancanza di un modulo ufficiale schema/validation.
+La roadmap target di SwiftXMLCoder dovrebbe convergere almeno sul principio "push + pull",
+non solo su un event stream.
+
+Riferimento: [Java StAX](https://docs.oracle.com/en/java/javase/25/docs/api/java.xml/javax/xml/stream/package-summary.html)
+
+### .NET `XmlReader` / `XmlSchemaSet`
+
+Il mondo .NET mostra bene due capability che qui mancano ancora:
+
+- reader forward-only molto ricco
+- schema set compilabile e riusabile
+
+Questo e' un benchmark molto utile per definire la stop line enterprise.
+
+Riferimenti:
+
+- [.NET XmlReader](https://learn.microsoft.com/en-us/dotnet/fundamentals/runtime-libraries/system-xml-xmlreader)
+- [.NET XmlSchemaSet](https://learn.microsoft.com/en-us/dotnet/standard/data/xml/xmlschemaset-for-schema-compilation)
 
 ### Go `encoding/xml`
 
-Riferimento utile per ergonomia standard-library e token stream. Il gap principale e' la mancanza di un decoding incrementale percepito come semplice e naturale.
+Il package standard Go dimostra quanto sia importante avere:
+
+- token/event API chiara
+- encoder/decoder diretti
+- escape hatch per custom marshal / unmarshal
+
+SwiftXMLCoder oggi e' gia' piu' ricco di Go su alcune dimensioni, ma deve ancora chiudere
+la storia low-level pubblica del reader/cursor.
+
+Riferimento: [Go `encoding/xml`](https://pkg.go.dev/encoding/xml)
 
 ### Rust `quick-xml`
 
-Riferimento utile per performance, streaming e approccio low-level pragmatico. Il gap principale e' offrire primitive altrettanto chiare senza sacrificare la DX Swift.
+`quick-xml` e' utile come riferimento per:
+
+- reader/writer ad alte performance
+- streaming StAX-like
+- layering con serde
+
+La lesson qui e': il livello low-level efficiente e il livello high-level strutturato
+devono convivere bene.
+
+Riferimento: [Rust `quick-xml`](https://docs.rs/quick-xml/latest/quick_xml/)
 
 ### Python `lxml`
 
-Riferimento utile per ampiezza di capability, specialmente su XPath, XSLT e validazione. Il gap principale e' la larghezza dell'ecosistema ufficiale, non il solo core runtime.
+`lxml` e' un riferimento chiave per l'idea di stack XML "quasi completo":
+
+- tree model
+- XPath
+- XSLT
+- validation
+
+Non e' un modello da copiare 1:1, ma spiega bene perche' XSLT e validation fanno parte
+della stop line enterprise.
+
+Riferimento: [Python `lxml`](https://lxml.de/2.1/xpathxslt.html)
 
 ### Swift `XMLCoder`
 
-Riferimento diretto in ecosistema Swift sul fronte `Codable`. Il differenziale desiderato e' posizionarsi non solo come encoder/decoder, ma come stack XML piu' completo e integrabile.
+`XMLCoder` resta il riferimento naturale nel solo ecosistema Swift per la parte
+`Codable`-centric. SwiftXMLCoder ha gia' differenziatori forti, ma per arrivare al livello
+"si mantiene e basta" deve completare il lato ecosystem e low-level XML, non solo il lato
+`Codable`.
 
-## Decisioni O Implicazioni
+Riferimento: [Swift `XMLCoder`](https://swiftpackageindex.com/CoreOffice/XMLCoder)
 
-- Le priorita' piu' alte combinano completamento del core e apertura dell'ecosistema, non un semplice accumulo di feature isolate.
-- Se una capability ha peso soprattutto di integrazione o standard avanzato, la home corretta tende a essere un satellite.
+## Decisioni o implicazioni
+
+- La stop line non va misurata solo sulle feature del core runtime.
+- Lo scarto reale piu' importante non e' sull'encoder/decoder, ma sulle capability
+  low-level e sull'ecosistema ufficiale.
 
 ## Riferimenti
 
-- [README.md](./README.md)
-- [01-current-state.md](./01-current-state.md)
-- [02-target-roadmap.md](./02-target-roadmap.md)
-- [03-ecosystem-topology.md](./03-ecosystem-topology.md)
-- [05-milestones-and-exit-criteria.md](./05-milestones-and-exit-criteria.md)
+- [01-current-state.md](01-current-state.md)
+- [03-ecosystem-topology.md](03-ecosystem-topology.md)
+- [05-milestones-and-exit-criteria.md](05-milestones-and-exit-criteria.md)

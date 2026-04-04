@@ -236,16 +236,12 @@ public struct XMLEncoder: Sendable {
 
     /// Encodes `value` into raw XML `Data`.
     ///
-    /// Internally encodes to an `XMLTreeDocument` and then serialises using the
-    /// `writerConfiguration` from `configuration`.
     /// - Parameter value: The value to encode.
     /// - Returns: UTF-8 encoded XML data.
     /// - Throws: `XMLParsingError` on encoding or serialisation failure.
     public func encode<T: Encodable>(_ value: T) throws(XMLParsingError) -> Data {
         do {
-            let tree = try encodeTreeImpl(value)
-            let writer = XMLTreeWriter(configuration: configuration.writerConfiguration)
-            return try writer.writeData(tree)
+            return try encodeEventsImpl(value)
         } catch let error as XMLParsingError {
             throw error
         } catch {
@@ -268,11 +264,122 @@ public struct XMLEncoder: Sendable {
     /// - Returns: UTF-8 encoded XML data.
     /// - Throws: `XMLParsingError` on encoding or serialisation failure.
     public func encode<T: Encodable>(_ value: T) throws -> Data {
-        let tree = try encodeTreeImpl(value)
-        let writer = XMLTreeWriter(configuration: configuration.writerConfiguration)
-        return try writer.writeData(tree)
+        try encodeEventsImpl(value)
     }
     #endif
+
+    /// Encodes `value` directly to XML `Data` via the event collector pipeline,
+    /// bypassing intermediate tree construction.
+    ///
+    /// Pipeline: Codable → `_XMLEventCollector` → `XMLStreamWriterSink` → `Data`.
+    private func encodeEventsImpl<T: Encodable>(_ value: T) throws -> Data {
+        var logger = configuration.logger
+        logger[metadataKey: "component"] = "XMLEncoder"
+        let rootElementName = try resolveRootElementName(for: T.self, logger: logger)
+        logger.debug("XML encode started", metadata: ["type": "\(T.self)", "rootElement": "\(rootElementName)"])
+
+        let rootNamespaceURI = XMLRootNameResolver.implicitRootElementNamespaceURI(for: T.self)
+        let rootQName = XMLQualifiedName(localName: rootElementName, namespaceURI: rootNamespaceURI)
+        var rootNamespaceDeclarations: [XMLNamespaceDeclaration] = rootNamespaceURI.map {
+            [XMLNamespaceDeclaration(prefix: nil, uri: $0)]
+        } ?? []
+
+        var options = try _XMLEncoderOptions(configuration: configuration)
+        options.perPropertyDateHints = _xmlPropertyDateHints(for: T.self)
+        options.perPropertyStringHints = _xmlPropertyStringHints(for: T.self)
+        options.perPropertyExpandEmptyKeys = _xmlPropertyExpandEmptyKeys(for: T.self)
+
+        let collector = _XMLEventCollector()
+        let rootEncoder = _XMLEventEncoder(
+            options: options,
+            collector: collector,
+            elementName: rootQName,
+            codingPath: [],
+            fieldNodeKinds: _xmlFieldNodeKinds(for: T.self),
+            fieldNamespaces: _xmlFieldNamespaces(for: T.self)
+        )
+        // Pre-populate root namespace declarations (mirrors encodeTreeImpl).
+        for decl in rootNamespaceDeclarations {
+            rootEncoder.addNamespaceDeclarationIfNeeded(prefix: decl.prefix, uri: decl.uri)
+        }
+
+        // Intercept Foundation scalars at root level (URL, UUID, Date, Data, Decimal, …).
+        if let scalar = try rootEncoder.boxedScalar(value, codingPath: [], localName: rootElementName) {
+            rootEncoder.flushStartElement()
+            collector.append(.text(scalar))
+        } else {
+            try value.encode(to: rootEncoder)
+        }
+        // Set up the stream writer sink before encoding so events can be flushed.
+        let writerConfig = XMLStreamWriter.Configuration(
+            encoding: configuration.writerConfiguration.encoding,
+            prettyPrinted: configuration.writerConfiguration.prettyPrinted,
+            expandEmptyElements: configuration.writerConfiguration.expandEmptyElements,
+            limits: streamWriterLimits(from: configuration.writerConfiguration.limits)
+        )
+        var xmlData = Data()
+        var totalBytes = 0
+        let sink = try XMLStreamWriterSink(configuration: writerConfig) { chunk in
+            totalBytes += chunk.count
+            if let maxBytes = writerConfig.limits.maxOutputBytes, totalBytes > maxBytes {
+                throw XMLParsingError.parseFailed(
+                    message: "[XML6_2H_MAX_OUTPUT_BYTES] Output size \(totalBytes) bytes exceeds limit \(maxBytes) bytes."
+                )
+            }
+            xmlData.append(chunk)
+        }
+        collector.sink = sink
+
+        try sink.write(.startDocument(version: "1.0", encoding: "UTF-8", standalone: nil))
+        rootEncoder.finishElement()
+        try collector.flushToSink()
+        try sink.write(.endDocument)
+        try sink.finish()
+
+        logger.debug("XML encode completed", metadata: ["rootElement": "\(rootElementName)", "childCount": "\(collector.childCount)"])
+        return xmlData
+    }
+
+    /// Serialises a tree document to Data via the event-based stream writer pipeline,
+    /// bypassing libxml2 DOM construction.
+    private func encodeTreeToData(_ tree: XMLTreeDocument) throws -> Data {
+        let writerConfig = XMLStreamWriter.Configuration(
+            encoding: configuration.writerConfiguration.encoding,
+            prettyPrinted: configuration.writerConfiguration.prettyPrinted,
+            expandEmptyElements: configuration.writerConfiguration.expandEmptyElements,
+            limits: streamWriterLimits(from: configuration.writerConfiguration.limits)
+        )
+        var xmlData = Data()
+        var totalBytes = 0
+        let sink = try XMLStreamWriterSink(configuration: writerConfig) { chunk in
+            totalBytes += chunk.count
+            if let maxBytes = writerConfig.limits.maxOutputBytes, totalBytes > maxBytes {
+                throw XMLParsingError.parseFailed(
+                    message: "[XML6_2H_MAX_OUTPUT_BYTES] Output size \(totalBytes) bytes exceeds limit \(maxBytes) bytes."
+                )
+            }
+            xmlData.append(chunk)
+        }
+
+        try tree.walkEvents { event in
+            try sink.write(event)
+        }
+        try sink.finish()
+        return xmlData
+    }
+
+    private func streamWriterLimits(
+        from treeLimits: XMLTreeWriter.Limits
+    ) -> XMLStreamWriter.WriterLimits {
+        XMLStreamWriter.WriterLimits(
+            maxDepth: treeLimits.maxDepth,
+            maxNodeCount: treeLimits.maxNodeCount,
+            maxOutputBytes: treeLimits.maxOutputBytes,
+            maxTextNodeBytes: treeLimits.maxTextNodeBytes,
+            maxCDATABlockBytes: treeLimits.maxCDATABlockBytes,
+            maxCommentBytes: treeLimits.maxCommentBytes
+        )
+    }
 
     private func encodeTreeImpl<T: Encodable>(_ value: T) throws -> XMLTreeDocument {
         var logger = configuration.logger

@@ -18,7 +18,7 @@ func comparisonBenchmarks() {
         ("10KB", compXmlData10KB), ("100KB", compXmlData100KB),
         ("1MB", compXmlData1MB), ("10MB", compXmlData10MB)
     ] {
-        Benchmark("Compare/Decode/SwiftXMLCoder/\(label)") { benchmark in
+        Benchmark("Compare/Decode/SwiftXMLCoder/SAX/\(label)") { benchmark in
             let decoder = SwiftXMLCoder.XMLDecoder()
             for _ in benchmark.scaledIterations {
                 blackHole(try? decoder.decode(CompBenchmarkCollection.self, from: data))

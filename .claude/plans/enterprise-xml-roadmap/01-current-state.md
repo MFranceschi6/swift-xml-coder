@@ -1,69 +1,185 @@
-Status: Active
-Last Updated: 2026-03-22
-Owner: Maintainers
-Related: [README.md](./README.md), [02-target-roadmap.md](./02-target-roadmap.md), [04-capability-matrix.md](./04-capability-matrix.md), [06-decision-log.md](./06-decision-log.md), [../post-release-roadmap.md](../post-release-roadmap.md)
+## Status
+- Draft snapshot
 
-# Stato Attuale
+## Last Updated
+- 2026-03-21
+
+## Owner
+- Matteo Franceschi
+- Shared planning artifact for Codex and Claude
+
+## Related
+- [README.md](README.md)
+- [02-target-roadmap.md](02-target-roadmap.md)
+- [../post-release-roadmap.md](../post-release-roadmap.md)
+- [../streaming-layer-roadmap.md](../streaming-layer-roadmap.md)
+
+# Enterprise XML Roadmap — Current State
 
 ## Scopo
 
-Separare i fatti verificati oggi dalla roadmap futura, in modo che la pianificazione non parta da assunzioni errate sullo stato della repository o delle release pubbliche.
+Fornire una fotografia esplicita del progetto alla data di questo snapshot, separando:
+
+- stato pubblicato realmente
+- stato locale della worktree
+- capability attualmente presenti
+- quality gates osservati
+- debiti strutturali gia' noti
 
 ## Contesto
 
-La repo contiene gia' un core XML solido, ma i materiali locali di roadmap e alcune iniziative future possono facilmente essere confusi con release gia' pubblicate. Questo file fissa il baseline di partenza.
+Il repository contiene gia' piani avanzati per streaming, performance e quality, ma alcune
+di quelle note descrivono uno stato locale piu' avanzato del baseline pubblico.
 
-## Release Pubbliche Verificate
+Questo documento serve a evitare che i piani futuri partano da un presupposto errato.
 
-| Versione | Data | Stato |
-| --- | --- | --- |
-| `1.1.0` | `2026-03-21` | ultima release pubblica verificata |
-| `1.0.0` | precedente alla `1.1.0` | disponibile nella storia pubblica |
+## Stato pubblicato verificato
 
-Nota operativa: il lavoro XML-R2 e XML-R3 esiste come commit locali su `main` (non ancora taggato). La prossima release pubblica sara' `1.3.0` o superiore quando verranno creati tag e release notes reali.
+### Release pubbliche
 
-## Milestone Locali Completate (Non Ancora Rilasciate)
+Release pubbliche verificate alla data del documento:
 
-| Milestone | Commit | Contenuto |
-| --- | --- | --- |
-| XML-R2 — PI/Doctype/Comment fidelity | `e9bdb6d` | `XMLProcessingInstruction`, `XMLDoctype`, `XMLComment` in tree model |
-| XML-R2 — Namespace ergonomics per field | `3f26da8` | `XMLFieldNamespaceProvider` + `@XMLFieldNamespace` macro |
-| XML-R2 — Diagnostics | `9c3505c` | `XMLParsingError.decodeFailed` + `XMLSourceLocation` |
-| XML-R2 — Streaming DocC | `8cc331e` | Streaming.md aggiornato con push/pull boundary, selective extraction |
-| XML-R3 — Pull cursor + item decode | `980eab0` | `XMLEventCursor`, `XMLItemDecoder`, 14 nuovi test |
+| Versione | Stato | Data |
+|---|---|---|
+| `1.1.0` | latest pubblica | `2026-03-21` |
+| `1.0.0` | pubblica | `2026-03-15` |
+| `0.1.0` | tag iniziale | `2026-03-15` |
 
-## Stato Core: Maintenance-Only
+### Implicazione
 
-Il core soddisfa tutti i criteri della stop condition enterprise:
+Il baseline pubblico da cui partire e' `1.1.0`.
 
-- ✅ runtime XML generale credibile (tree model, namespace, XPath, Codable, macro)
-- ✅ story streaming di base (push callback + AsyncSequence)
-- ✅ pull/cursor API (`XMLEventCursor`) e item streaming (`XMLItemDecoder`)
-- ✅ fidelity strutturale (PI, doctype, comment)
-- ✅ diagnostica (source location, coding path)
-- ✅ integrazione con framework esterni non richiede cambiare il core
+Qualsiasi riferimento locale a `1.2.0+` deve essere trattato come:
 
-## Stato Dei Quality Gates Locali (2026-03-22)
+- lavoro in corso
+- milestone pianificata
+- stato locale non ancora pubblicato
 
-- `swift build -c debug`: verde
-- `swift test --enable-code-coverage`: verde, 535 test, 0 fallimenti
-- `swiftlint lint`: verde, 0 errori
+Non va trattato come fatto storico gia' rilasciato.
 
-## Debiti Minori Residui
+## Stato locale della repository
 
-- `column` e `byteOffset` di `XMLSourceLocation` sono sempre `nil` (richiede SAX-level instrumentation futura)
-- warning SwiftLint pre-esistenti nella repo (non critici, 0 errori)
+### Branch locale osservata
 
-## Decisioni O Implicazioni
+Snapshot della worktree al momento dell'analisi:
 
-- Ogni nuova roadmap deve partire da `1.1.0` come baseline pubblico.
-- Le iniziative `1.2.0+` devono essere descritte come locali o pianificate finche' non vengono pubblicate.
-- Le capability future vanno valutate rispetto a una topologia `core + satellites`, non assumendo un singolo repository monolitico.
+- branch: `claude/epic-ii1-ii3-streaming`
+- sono presenti modifiche locali e file non tracciati legati al layer streaming
+- esistono piani locali per `II.6`, `II.7` e per una roadmap enterprise piu' ampia
+
+### Mismatch gia' emerso
+
+Il file [../post-release-roadmap.md](../post-release-roadmap.md), prima dell'allineamento
+minimo, trattava `1.2.0` come se fosse gia' rilasciata. Questo non corrispondeva ai tag e
+alle release pubbliche realmente disponibili.
+
+## Capability presenti oggi nel core
+
+### Capability solide e gia' pubblicate
+
+- `XMLEncoder` / `XMLDecoder` per mapping `Codable`
+- tree model immutabile
+- namespace support con `XMLQualifiedName` e `XMLNamespaceResolver`
+- XPath su `XMLDocument`
+- canonicalization deterministica tramite `XMLCanonicalizer` e `XMLDefaultCanonicalizer`
+- macro DX principali su Swift 5.9+
+- parser security profile con limiti configurabili
+- supporto multi-lane Swift e multi-platform
+- test support dedicato
+
+### Capability gia' presenti in workspace locale
+
+Nella worktree locale risultano gia' presenti o in avanzato stato di lavoro:
+
+- `XMLStreamParser`
+- `XMLStreamWriter`
+- `XMLStreamEncoder`
+- `XMLStreamDecoder`
+- `XMLStreamParser+IO`
+- `XMLStreamWriter+IO`
+- `XMLStreamEventDecoder`
+
+Questa parte rende il progetto localmente piu' avanzato del solo baseline pubblico
+`1.1.0`, ma non cambia il fatto che la release pubblica verificata resti `1.1.0`.
+
+### Capability mancanti o solo parziali rispetto alla stop line enterprise
+
+- pull/cursor API pubblica stile `XMLStreamReader`
+- decode item-by-item realmente streaming
+- structural fidelity completa per PI e doctype nel tree model pubblico
+- location diagnostica completa con colonna e offset
+- namespace/name mapping per-field piu' ricco
+- schema validation ufficiale
+- code generation ufficiale per XSD
+- XSLT ufficiale
+- C14N / Exclusive C14N standard-grade e DSig stack ufficiale
+- adapter ufficiali per NIO, Vapor e Hummingbird
+
+## Quality gates osservati localmente
+
+### Build
+
+- `swift build -c debug` osservato verde
+
+### Test
+
+- `swift test --enable-code-coverage` osservato verde
+- suite eseguita: `514` test
+- risultato osservato: `0` failure
+
+### Lint
+
+- `swiftlint lint` osservato senza errori bloccanti
+- risultato osservato: `257` warning, `0` serious
+
+### Coverage
+
+Misura locale osservata con `llvm-cov report`:
+
+- total line coverage: `84.85%`
+- total region coverage: `78.06%`
+
+### Implicazione sul quality gate
+
+Esiste un workflow quality che dichiara un gate `>= 90%`, ma lo snapshot locale osservato
+qui e' inferiore a quel valore. Prima di promuovere il prossimo baseline pubblico, questa
+divergenza va chiarita in modo esplicito.
+
+## Debiti principali gia' emersi
+
+### Debito di baseline documentale
+
+- stato locale e stato pubblico non erano allineati nei piani
+- mancava una fonte unica di verita' per la roadmap enterprise
+
+### Debito di posizionamento
+
+- il canonicalizer di default del core e' un deterministic normalizer
+- non va descritto come equivalente a un engine DSig/C14N standard-grade
+
+### Debito di capability
+
+- manca ancora una storia completa per cursor/pull parsing
+- manca una storia completa per schema, transform e signature
+- manca la family di package ufficiali per framework interop
+
+### Debito di maintainability
+
+- il core ha warning SwiftLint diffusi, soprattutto nei file grandi e nei container Codable
+- esistono aree con coverage piu' bassa del target implicito di quality
+- alcuni percorsi async/streaming richiedono ancora chiarezza tra API convenience e API
+  realmente streaming
+
+## Decisioni o implicazioni
+
+- Tutta la roadmap futura deve partire dal baseline pubblico `1.1.0`.
+- Lo stato locale avanzato e' utile per pianificare la prossima wave, ma non sostituisce
+  la cronologia pubblica.
+- Prima di dichiarare il progetto "maintenance-only" servono ancora capability aggiuntive
+  oltre a quelle gia' presenti oggi.
 
 ## Riferimenti
 
-- [README.md](./README.md)
-- [02-target-roadmap.md](./02-target-roadmap.md)
-- [04-capability-matrix.md](./04-capability-matrix.md)
-- [06-decision-log.md](./06-decision-log.md)
-- [../post-release-roadmap.md](../post-release-roadmap.md)
+- [README.md](README.md)
+- [02-target-roadmap.md](02-target-roadmap.md)
+- [04-capability-matrix.md](04-capability-matrix.md)

@@ -33,6 +33,18 @@ func decodeBenchmarks() {
         }
     }
 
+    // Decode at various sizes (streaming SAX path)
+    for (label, data) in [
+        ("10KB", xmlData10KB), ("100KB", xmlData100KB),
+        ("1MB", xmlData1MB), ("10MB", xmlData10MB)
+    ] {
+        Benchmark("Decode/SAX/\(label)") { benchmark in
+            for _ in benchmark.scaledIterations {
+                blackHole(try? decoder.decode(BenchmarkCollection.self, from: data))
+            }
+        }
+    }
+
     // Parse-only vs full decode comparison
     let parser = XMLTreeParser()
 

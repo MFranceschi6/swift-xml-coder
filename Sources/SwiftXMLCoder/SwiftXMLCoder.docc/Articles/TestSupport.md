@@ -69,12 +69,13 @@ XCTAssertEqual(result.id, 42)
 let orderResult = try XMLCanonicalizerContractProbe.probeTransformOrder(
     canonicalize: XMLCanonicalizerContractProbe.makeDefaultCanonicalizeClosure()
 )
-XCTAssertEqual(orderResult.observedOrder, orderResult.expectedOrder)
+XCTAssertEqual(orderResult.recordedTokens, ["A", "B"])
+XCTAssertEqual(orderResult.traceValue, "AB")
 
 let failureResult = try XMLCanonicalizerContractProbe.probeTransformFailure(
     canonicalize: XMLCanonicalizerContractProbe.makeDefaultCanonicalizeClosure()
 )
-XCTAssertTrue(failureResult.errorWasPropagated)
+XCTAssertTrue(failureResult.message?.contains("XML6_9_CANONICAL_TRANSFORM_FAILED") == true)
 ```
 
 Pass your own `canonicalize` closure to test a custom `XMLCanonicalizer` implementation against the same contract.
