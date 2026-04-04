@@ -237,6 +237,7 @@ final class XMLCoverageBoost2Tests: XCTestCase {
         struct Entry: Codable, Equatable {
             let a: Int
             let b: String
+            enum CodingKeys: String, CodingKey { case a, b }
         }
 
         func encode(to encoder: Encoder) throws {
@@ -393,8 +394,7 @@ final class XMLCoverageBoost2Tests: XCTestCase {
     // MARK: - XMLStreamWriterSink: text node byte limit
 
     func test_writerSink_textNodeByteLimitExceeded_throws() throws {
-        var limits = XMLStreamWriter.WriterLimits()
-        limits.maxTextNodeBytes = 5
+        let limits = XMLStreamWriter.WriterLimits(maxTextNodeBytes: 5)
         let config = XMLStreamWriter.Configuration(limits: limits)
         let sink = try XMLStreamWriterSink(configuration: config) { _ in }
         try sink.write(.startDocument(version: "1.0", encoding: "UTF-8", standalone: nil))
@@ -402,7 +402,7 @@ final class XMLCoverageBoost2Tests: XCTestCase {
 
         XCTAssertThrowsError(try sink.write(.text("this is way too long"))) { error in
             if case XMLParsingError.parseFailed(let msg) = error {
-                XCTAssert(msg.contains("MAX_TEXT_NODE_BYTES"), "Expected text limit error, got: \(msg)")
+                XCTAssert(msg?.contains("MAX_TEXT_NODE_BYTES") == true, "Expected text limit error, got: \(msg ?? "nil")")
             }
         }
     }
@@ -410,8 +410,7 @@ final class XMLCoverageBoost2Tests: XCTestCase {
     // MARK: - XMLStreamWriterSink: CDATA byte limit
 
     func test_writerSink_cdataByteLimitExceeded_throws() throws {
-        var limits = XMLStreamWriter.WriterLimits()
-        limits.maxCDATABlockBytes = 3
+        let limits = XMLStreamWriter.WriterLimits(maxCDATABlockBytes: 3)
         let config = XMLStreamWriter.Configuration(limits: limits)
         let sink = try XMLStreamWriterSink(configuration: config) { _ in }
         try sink.write(.startDocument(version: "1.0", encoding: "UTF-8", standalone: nil))
@@ -419,7 +418,7 @@ final class XMLCoverageBoost2Tests: XCTestCase {
 
         XCTAssertThrowsError(try sink.write(.cdata("long cdata content"))) { error in
             if case XMLParsingError.parseFailed(let msg) = error {
-                XCTAssert(msg.contains("MAX_CDATA_BYTES"), "Expected CDATA limit error, got: \(msg)")
+                XCTAssert(msg?.contains("MAX_CDATA_BYTES") == true, "Expected CDATA limit error, got: \(msg ?? "nil")")
             }
         }
     }
@@ -427,8 +426,7 @@ final class XMLCoverageBoost2Tests: XCTestCase {
     // MARK: - XMLStreamWriterSink: comment byte limit
 
     func test_writerSink_commentByteLimitExceeded_throws() throws {
-        var limits = XMLStreamWriter.WriterLimits()
-        limits.maxCommentBytes = 3
+        let limits = XMLStreamWriter.WriterLimits(maxCommentBytes: 3)
         let config = XMLStreamWriter.Configuration(limits: limits)
         let sink = try XMLStreamWriterSink(configuration: config) { _ in }
         try sink.write(.startDocument(version: "1.0", encoding: "UTF-8", standalone: nil))
@@ -436,7 +434,7 @@ final class XMLCoverageBoost2Tests: XCTestCase {
 
         XCTAssertThrowsError(try sink.write(.comment("this comment is too long"))) { error in
             if case XMLParsingError.parseFailed(let msg) = error {
-                XCTAssert(msg.contains("MAX_COMMENT_BYTES"), "Expected comment limit error, got: \(msg)")
+                XCTAssert(msg?.contains("MAX_COMMENT_BYTES") == true, "Expected comment limit error, got: \(msg ?? "nil")")
             }
         }
     }
@@ -444,8 +442,7 @@ final class XMLCoverageBoost2Tests: XCTestCase {
     // MARK: - XMLStreamWriterSink: max depth limit
 
     func test_writerSink_maxDepthExceeded_throws() throws {
-        var limits = XMLStreamWriter.WriterLimits()
-        limits.maxDepth = 2
+        let limits = XMLStreamWriter.WriterLimits(maxDepth: 2)
         let config = XMLStreamWriter.Configuration(limits: limits)
         let sink = try XMLStreamWriterSink(configuration: config) { _ in }
         try sink.write(.startDocument(version: "1.0", encoding: "UTF-8", standalone: nil))
@@ -454,7 +451,7 @@ final class XMLCoverageBoost2Tests: XCTestCase {
         // Depth is now 2, trying to go to 3 should fail
         XCTAssertThrowsError(try sink.write(.startElement(name: XMLQualifiedName(localName: "c"), attributes: [], namespaceDeclarations: []))) { error in
             if case XMLParsingError.parseFailed(let msg) = error {
-                XCTAssert(msg.contains("MAX_DEPTH"), "Expected depth limit error, got: \(msg)")
+                XCTAssert(msg?.contains("MAX_DEPTH") == true, "Expected depth limit error, got: \(msg ?? "nil")")
             }
         }
     }
@@ -462,8 +459,7 @@ final class XMLCoverageBoost2Tests: XCTestCase {
     // MARK: - XMLStreamWriterSink: max node count limit
 
     func test_writerSink_maxNodeCountExceeded_throws() throws {
-        var limits = XMLStreamWriter.WriterLimits()
-        limits.maxNodeCount = 3
+        let limits = XMLStreamWriter.WriterLimits(maxNodeCount: 3)
         let config = XMLStreamWriter.Configuration(limits: limits)
         let sink = try XMLStreamWriterSink(configuration: config) { _ in }
         try sink.write(.startDocument(version: "1.0", encoding: "UTF-8", standalone: nil))
@@ -476,7 +472,7 @@ final class XMLCoverageBoost2Tests: XCTestCase {
         // Node 4: should exceed limit
         XCTAssertThrowsError(try sink.write(.text("c"))) { error in
             if case XMLParsingError.parseFailed(let msg) = error {
-                XCTAssert(msg.contains("MAX_NODE_COUNT"), "Expected node count error, got: \(msg)")
+                XCTAssert(msg?.contains("MAX_NODE_COUNT") == true, "Expected node count error, got: \(msg ?? "nil")")
             }
         }
     }
@@ -799,7 +795,8 @@ final class XMLCoverageBoost2Tests: XCTestCase {
 
     func test_encoder_prettyPrinted_containsNewlines() throws {
         struct Simple: Codable { let a: String; let b: String }
-        let config = XMLEncoder.Configuration(rootElementName: "root", prettyPrinted: true)
+        let writerConfig = XMLTreeWriter.Configuration(prettyPrinted: true)
+        let config = XMLEncoder.Configuration(rootElementName: "root", writerConfiguration: writerConfig)
         let data = try XMLEncoder(configuration: config).encode(Simple(a: "1", b: "2"))
         let xml = String(decoding: data, as: UTF8.self)
         XCTAssert(xml.contains("\n"), "Expected newlines in pretty-printed output: \(xml)")
