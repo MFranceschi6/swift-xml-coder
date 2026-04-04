@@ -69,6 +69,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   - **Performance**: ~5% instruction count reduction and ~7-9% throughput improvement over the
     initial streaming decoder, narrowing the SAX→Tree decode gap to ~7-10%.
 
+### Removed
+
+- **`XMLEventCursor` (BREAKING)** — removed entirely. The pull-cursor interface pre-parsed
+  the full document into an event array on creation, providing no true streaming benefit.
+  Use `XMLStreamParser` for event-level access or `XMLItemDecoder` for Codable item-by-item
+  decode.
+- **`XMLItemDecoder` cursor-based overloads (BREAKING)** — `decode(_:itemElement:from cursor:)`
+  and `items(_:itemElement:from cursor:)` removed. Use the `Data`-based overloads
+  `decode(_:itemElement:from data:)` and `items(_:itemElement:from data:)` instead, which
+  use a truly streaming SAX parser session with O(largest-item) peak memory.
+- **`StreamParse/Cursor/*` benchmarks** — removed along with `XMLEventCursor`.
+
 ### Changed
 
 - **`XMLStreamWriterSink`** — new internal incremental writer that accepts events one at a
@@ -76,22 +88,25 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   Building block for all streaming pipeline improvements below.
 - **`XMLTreeDocument.walkEvents(_:)`** — tree-to-events bridge that walks a tree document
   and emits `XMLStreamEvent` values in document order, enabling the event-based encode path.
-
-### Changed
-
 - **Encoder now routes through `_XMLEventEncoder`** — `XMLEncoder.encode()` no longer
   constructs an `XMLTreeDocument` as an intermediate step. Instead it accumulates events in
   `_XMLEventCollector` and serialises via `XMLStreamWriterSink`, eliminating all intermediate
   tree allocations on the hot path.
-- **Streaming canonicalizer now writes incrementally** — the stream-based canonicalize path
-  (`canonicalize(events:..., output:)`) feeds normalised events directly to
-  `XMLStreamWriterSink` instead of accumulating all events before serialisation. The output
-  callback now receives data chunks as they are produced.
+- **Encoder flushes events incrementally** — `_XMLEventCollector` now flushes accumulated
+  events to `XMLStreamWriterSink` via `flushToSink()` instead of iterating all events twice
+  (once for child counting, once for serialisation). Measured 5-20% improvement on encode
+  benchmarks.
+- **Streaming canonicalizer uses pull-based session** — `canonicalize(data:...)` now uses
+  `_XMLStreamingParserSession` to pull events one at a time instead of pre-parsing all events
+  into an array. Measured 5-7% improvement on canonicalization benchmarks.
+- **`XMLStreamWriter.write(AsyncSequence)` streams events directly** — the async overload
+  now writes events through `XMLStreamWriterSink` instead of collecting all events into an
+  array before writing.
 - **`XMLStreamWriter` delegates to `XMLStreamWriterSink`** — `writeImpl` now creates a
   sink internally, removing duplicated libxml2 event-dispatch code.
-- **`XMLItemDecoder` uses span-based decode** — item decoding now uses `nextItemSpan()` on
-  the cursor to record index ranges and creates `ContiguousArray` slices from the cursor's
-  backing buffer, reducing per-item copy overhead.
+- **`StreamDecode/ItemDecoder/*` benchmarks now measure the true streaming path** — benchmarks
+  use the `Data`-based API, eliminating cursor pre-parse and per-item `_XMLEventBuffer`
+  overhead from measurements.
 
 ## [1.4.0] — 2026-03-27
 

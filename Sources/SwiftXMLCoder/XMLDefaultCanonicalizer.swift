@@ -40,17 +40,50 @@ public struct XMLDefaultCanonicalizer: XMLCanonicalizer {
         eventTransforms: XMLEventTransformPipeline,
         output: (Data) throws -> Void
     ) throws {
-        var parsedEvents: [XMLStreamEvent] = []
-        try XMLStreamParser().parse(data: data) { event in
-            parsedEvents.append(event)
-        }
-
-        try canonicalize(
-            events: parsedEvents,
-            options: options,
-            eventTransforms: eventTransforms,
-            output: output
+        let session = try _XMLStreamingParserSession(
+            data: data,
+            configuration: XMLTreeParser.Configuration()
         )
+
+        try withoutActuallyEscaping(output) { escapableOutput in
+            let sink = try XMLStreamWriterSink(
+                configuration: streamWriterConfiguration(for: options),
+                output: escapableOutput
+            )
+            var transforms = eventTransforms
+
+            while let event = try session.nextEvent() {
+                let produced = try runPipeline(
+                    initialEvents: [event],
+                    through: &transforms,
+                    startIndex: 0
+                )
+                try writeNormalized(produced, options: options, sink: sink)
+            }
+
+            for index in transforms.indices {
+                let finalizedEvents: [XMLStreamEvent]
+                do {
+                    finalizedEvents = try transforms[index].finalize()
+                } catch let parsingError as XMLParsingError {
+                    throw parsingError
+                } catch {
+                    throw XMLParsingError.other(
+                        underlyingError: error,
+                        message: "[XML6_9_CANONICAL_EVENT_TRANSFORM_FAILED] Event transform finalize #\(index) failed."
+                    )
+                }
+
+                let downstream = try runPipeline(
+                    initialEvents: finalizedEvents,
+                    through: &transforms,
+                    startIndex: index + 1
+                )
+                try writeNormalized(downstream, options: options, sink: sink)
+            }
+
+            try sink.finish()
+        }
     }
 
     public func canonicalize<S: Sequence>(

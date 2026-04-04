@@ -19,22 +19,6 @@ func streamingBenchmarks() {
         }
     }
 
-    // MARK: - Pull Cursor (XMLEventCursor)
-
-    for (label, data) in [
-        ("10KB", xmlData10KB), ("100KB", xmlData100KB), ("1MB", xmlData1MB),
-        ("10MB", xmlData10MB), ("100MB", xmlData100MB)
-    ] {
-        Benchmark("StreamParse/Cursor/\(label)") { benchmark in
-            for _ in benchmark.scaledIterations {
-                let cursor = try XMLEventCursor(data: data)
-                var count = 0
-                while cursor.next() != nil { count += 1 }
-                blackHole(count)
-            }
-        }
-    }
-
     // MARK: - Item-by-Item Decode (XMLItemDecoder)
 
     for (label, data) in [
@@ -44,12 +28,11 @@ func streamingBenchmarks() {
         Benchmark("StreamDecode/ItemDecoder/\(label)") { benchmark in
             let decoder = XMLItemDecoder()
             for _ in benchmark.scaledIterations {
-                let cursor = try XMLEventCursor(data: data)
                 blackHole(
                     try? decoder.decode(
                         BenchmarkItem.self,
                         itemElement: "items",
-                        from: cursor
+                        from: data
                     )
                 )
             }

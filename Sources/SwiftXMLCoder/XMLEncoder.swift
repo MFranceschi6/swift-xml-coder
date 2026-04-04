@@ -306,24 +306,11 @@ public struct XMLEncoder: Sendable {
         // Intercept Foundation scalars at root level (URL, UUID, Date, Data, Decimal, …).
         if let scalar = try rootEncoder.boxedScalar(value, codingPath: [], localName: rootElementName) {
             rootEncoder.flushStartElement()
-            collector.events.append(.text(scalar))
+            collector.append(.text(scalar))
         } else {
             try value.encode(to: rootEncoder)
         }
-        rootEncoder.finishElement()
-
-        var childCount = 0
-        var depth = 0
-        for event in collector.events {
-            switch event {
-            case .startElement: depth += 1; if depth == 2 { childCount += 1 }
-            case .endElement:   depth -= 1
-            default: break
-            }
-        }
-        logger.debug("XML encode completed", metadata: ["rootElement": "\(rootElementName)", "childCount": "\(childCount)"])
-
-        // Flush collected events to the stream writer sink.
+        // Set up the stream writer sink before encoding so events can be flushed.
         let writerConfig = XMLStreamWriter.Configuration(
             encoding: configuration.writerConfiguration.encoding,
             prettyPrinted: configuration.writerConfiguration.prettyPrinted,
@@ -341,12 +328,15 @@ public struct XMLEncoder: Sendable {
             }
             xmlData.append(chunk)
         }
+        collector.sink = sink
+
         try sink.write(.startDocument(version: "1.0", encoding: "UTF-8", standalone: nil))
-        for event in collector.events {
-            try sink.write(event)
-        }
+        rootEncoder.finishElement()
+        try collector.flushToSink()
         try sink.write(.endDocument)
         try sink.finish()
+
+        logger.debug("XML encode completed", metadata: ["rootElement": "\(rootElementName)", "childCount": "\(collector.childCount)"])
         return xmlData
     }
 

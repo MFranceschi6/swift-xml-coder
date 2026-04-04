@@ -84,12 +84,11 @@ func richBenchmarks() {
         Benchmark("StreamDecode/ItemDecoder/Rich/\(label)") { benchmark in
             let itemDecoder = XMLItemDecoder()
             for _ in benchmark.scaledIterations {
-                let cursor = try XMLEventCursor(data: data)
                 blackHole(
                     try? itemDecoder.decode(
                         RichItem.self,
                         itemElement: "items",
-                        from: cursor
+                        from: data
                     )
                 )
             }

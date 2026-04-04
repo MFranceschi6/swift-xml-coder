@@ -43,12 +43,35 @@ import Logging
 // MARK: - _XMLEventCollector
 
 /// Shared mutable buffer accumulating events during a single top-level encode call.
+/// Events are drained to `sink` (when set) via `flushToSink()`, reclaiming memory.
 final class _XMLEventCollector {
     var events: ContiguousArray<XMLStreamEvent>
+    /// When set, `flushToSink()` writes accumulated events here and clears the buffer.
+    var sink: XMLStreamWriterSink?
+    /// Tracks direct children of the root element for diagnostic logging.
+    private(set) var childCount: Int = 0
+    private var depth: Int = 0
 
     init(estimatedEventCount: Int = 128) {
         events = ContiguousArray()
         events.reserveCapacity(estimatedEventCount)
+    }
+
+    func append(_ event: XMLStreamEvent) {
+        events.append(event)
+        switch event {
+        case .startElement: depth += 1; if depth == 1 { childCount += 1 }
+        case .endElement:   depth -= 1
+        default: break
+        }
+    }
+
+    func flushToSink() throws {
+        guard let sink = sink else { return }
+        for event in events {
+            try sink.write(event)
+        }
+        events.removeAll(keepingCapacity: true)
     }
 }
 
@@ -116,7 +139,7 @@ final class _XMLEventEncoder: Encoder, _XMLScalarBoxer {
     func flushStartElement() {
         guard !startElementEmitted else { return }
         startElementEmitted = true
-        collector.events.append(.startElement(
+        collector.append(.startElement(
             name: elementName,
             attributes: pendingAttributes,
             namespaceDeclarations: pendingNamespaces
@@ -128,7 +151,7 @@ final class _XMLEventEncoder: Encoder, _XMLScalarBoxer {
         guard !pendingSubTrees.isEmpty else { return }
         for box in pendingSubTrees {
             box.makeElement().walkEvents { event in
-                collector.events.append(event)
+                collector.append(event)
             }
         }
         pendingSubTrees.removeAll()
@@ -147,9 +170,9 @@ final class _XMLEventEncoder: Encoder, _XMLScalarBoxer {
             // Element was completely empty (no text, CDATA, or children before finishElement).
             // Inject an empty text node so the writer emits <element></element> rather than
             // the self-closing <element/>.
-            collector.events.append(.text(""))
+            collector.append(.text(""))
         }
-        collector.events.append(.endElement(name: elementName))
+        collector.append(.endElement(name: elementName))
     }
 
     // MARK: Nil element helper
@@ -159,9 +182,9 @@ final class _XMLEventEncoder: Encoder, _XMLScalarBoxer {
         drainPendingSubTrees()
         flushStartElement()
         let name = qualifiedName ?? XMLQualifiedName(localName: localName)
-        collector.events.append(.startElement(name: name, attributes: [], namespaceDeclarations: []))
-        if expandEmpty { collector.events.append(.text("")) }
-        collector.events.append(.endElement(name: name))
+        collector.append(.startElement(name: name, attributes: [], namespaceDeclarations: []))
+        if expandEmpty { collector.append(.text("")) }
+        collector.append(.endElement(name: name))
     }
 
     // MARK: Namespace declaration helper
@@ -408,12 +431,12 @@ struct _XMLEventKeyedEncodingContainer<Key: CodingKey>: KeyedEncodingContainerPr
             encoder.drainPendingSubTrees()
             encoder.flushStartElement()
             let childName = childQualifiedName(for: key)
-            encoder.collector.events.append(.startElement(name: childName, attributes: [], namespaceDeclarations: []))
+            encoder.collector.append(.startElement(name: childName, attributes: [], namespaceDeclarations: []))
             switch resolvedStringStrategy(for: key) {
-            case .text:  encoder.collector.events.append(.text(scalar))
-            case .cdata: encoder.collector.events.append(.cdata(scalar))
+            case .text:  encoder.collector.append(.text(scalar))
+            case .cdata: encoder.collector.append(.cdata(scalar))
             }
-            encoder.collector.events.append(.endElement(name: childName))
+            encoder.collector.append(.endElement(name: childName))
             return
         }
 
@@ -490,8 +513,8 @@ struct _XMLEventKeyedEncodingContainer<Key: CodingKey>: KeyedEncodingContainerPr
         encoder.drainPendingSubTrees()
         encoder.flushStartElement()
         switch resolvedStringStrategy(for: key) {
-        case .text:  encoder.collector.events.append(.text(scalar))
-        case .cdata: encoder.collector.events.append(.cdata(scalar))
+        case .text:  encoder.collector.append(.text(scalar))
+        case .cdata: encoder.collector.append(.cdata(scalar))
         }
     }
 
@@ -552,7 +575,7 @@ struct _XMLEventUnkeyedEncodingContainer: UnkeyedEncodingContainer {
     mutating func encodeNil() throws {
         guard encoder.options.nilEncodingStrategy == .emptyElement else { return }
         let itemName = makeItemStartElement()
-        encoder.collector.events.append(.endElement(name: itemName))
+        encoder.collector.append(.endElement(name: itemName))
     }
 
     mutating func encode(_ value: Bool)   throws { try encodeScalar(value) }
@@ -579,9 +602,9 @@ struct _XMLEventUnkeyedEncodingContainer: UnkeyedEncodingContainer {
             encoder.drainPendingSubTrees()
             encoder.flushStartElement()
             count += 1
-            encoder.collector.events.append(.startElement(name: itemName, attributes: [], namespaceDeclarations: []))
-            encoder.collector.events.append(.text(scalar))
-            encoder.collector.events.append(.endElement(name: itemName))
+            encoder.collector.append(.startElement(name: itemName, attributes: [], namespaceDeclarations: []))
+            encoder.collector.append(.text(scalar))
+            encoder.collector.append(.endElement(name: itemName))
             return
         }
         encoder.drainPendingSubTrees()
@@ -625,8 +648,8 @@ struct _XMLEventUnkeyedEncodingContainer: UnkeyedEncodingContainer {
             throw XMLParsingError.parseFailed(message: "[XML6_4_UNKEYED_SCALAR] Unable to box unkeyed scalar.")
         }
         let itemName = makeItemStartElement()
-        encoder.collector.events.append(.text(scalar))
-        encoder.collector.events.append(.endElement(name: itemName))
+        encoder.collector.append(.text(scalar))
+        encoder.collector.append(.endElement(name: itemName))
     }
 
     /// Emits `.startElement` for a new item, increments `count`, and returns the item name.
@@ -636,7 +659,7 @@ struct _XMLEventUnkeyedEncodingContainer: UnkeyedEncodingContainer {
         encoder.flushStartElement()
         count += 1
         let itemName = XMLQualifiedName(localName: encoder.options.itemElementName)
-        encoder.collector.events.append(.startElement(name: itemName, attributes: [], namespaceDeclarations: []))
+        encoder.collector.append(.startElement(name: itemName, attributes: [], namespaceDeclarations: []))
         return itemName
     }
 
@@ -689,7 +712,7 @@ struct _XMLEventSingleValueEncodingContainer: SingleValueEncodingContainer {
             value, codingPath: codingPath, localName: encoder.elementName.localName
         ) {
             encoder.flushStartElement()
-            encoder.collector.events.append(.text(scalar))
+            encoder.collector.append(.text(scalar))
             return
         }
         // Complex value: create a sibling encoder sharing the same collector and element name.
@@ -725,6 +748,6 @@ struct _XMLEventSingleValueEncodingContainer: SingleValueEncodingContainer {
             throw XMLParsingError.parseFailed(message: "[XML6_4_SINGLE_SCALAR] Unable to box single value scalar.")
         }
         encoder.flushStartElement()
-        encoder.collector.events.append(.text(scalar))
+        encoder.collector.append(.text(scalar))
     }
 }

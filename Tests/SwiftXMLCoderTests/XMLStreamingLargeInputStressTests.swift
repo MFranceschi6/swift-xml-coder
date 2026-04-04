@@ -48,24 +48,13 @@ final class XMLStreamingLargeInputStressTests: XCTestCase {
         XCTAssertGreaterThan(eventCount, 0)
     }
 
-    func test_eventCursor_largeFlatFixture_10MB_stress() throws {
-        try XCTSkipUnless(shouldRunStressTests, "Set RUN_LARGE_XML_STRESS=1 to run large streaming stress tests.")
-
-        let data = makeBenchmarkStyleXML(itemCount: 60_000)
-        XCTAssertGreaterThan(data.count, 8_000_000)
-
-        let cursor = try XMLEventCursor(data: data)
-        XCTAssertGreaterThan(cursor.count, 0)
-    }
-
     func test_itemDecoder_largeFlatFixture_10MB_stress() throws {
         try XCTSkipUnless(shouldRunStressTests, "Set RUN_LARGE_XML_STRESS=1 to run large streaming stress tests.")
 
         let data = makeBenchmarkStyleXML(itemCount: 60_000)
         XCTAssertGreaterThan(data.count, 8_000_000)
 
-        let cursor = try XMLEventCursor(data: data)
-        let products = try XMLItemDecoder().decode(Product.self, itemElement: "items", from: cursor)
+        let products = try XMLItemDecoder().decode(Product.self, itemElement: "items", from: data)
         XCTAssertEqual(products.count, 60_000)
     }
 }

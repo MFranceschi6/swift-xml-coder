@@ -40,7 +40,7 @@ support Linux distributions.
 For that reason, SwiftXMLCoder keeps the SAX streaming path compatibility-first by default:
 
 - ``XMLStreamParser`` feeds large inputs to libxml2 incrementally instead of as a single monolithic chunk.
-- ``XMLEventCursor`` and ``XMLItemDecoder`` inherit the same behavior because they build on top of ``XMLStreamParser``.
+- ``XMLItemDecoder`` inherits the same behavior because it builds on top of ``XMLStreamParser``.
 
 No configuration is required from the caller. The workaround is an internal implementation detail chosen to preserve correctness across the supported platform matrix.
 
@@ -52,8 +52,7 @@ No configuration is required from the caller. The workaround is an internal impl
 - `XMLDocument` with XPath
 - `XMLTreeParser` / `XMLTreeWriter`
 - `XMLStreamParser` / `XMLStreamWriter` / `XMLStreamEvent` — SAX-style push streaming (async APIs on macOS 12+ / iOS 15+)
-- `XMLEventCursor` — pull/cursor interface over a pre-parsed event sequence
-- `XMLItemDecoder` — item-by-item `Codable` decode from a named repeating element (async on macOS 12+ / iOS 15+)
+- `XMLItemDecoder` — item-by-item streaming `Codable` decode from a named repeating element (async on macOS 12+ / iOS 15+)
 - `XMLNamespaceResolver`, `XMLNamespaceValidator`
 - `XMLFieldNamespaceProvider` — per-field namespace override for encoder/decoder
 - `XMLCanonicalizer`, `XMLDefaultCanonicalizer`, `XMLTransform`

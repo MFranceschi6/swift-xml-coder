@@ -184,10 +184,29 @@ public struct XMLStreamWriter: Sendable {
     public func write<S: AsyncSequence>(
         _ events: S
     ) async throws -> Data where S.Element == XMLStreamEvent {
-        var collected: [XMLStreamEvent] = []
-        for try await event in events {
-            collected.append(event)
+        var chunks: [Data] = []
+        let sink = try XMLStreamWriterSink(
+            configuration: configuration,
+            flushThreshold: Int.max
+        ) { chunk in
+            chunks.append(chunk)
         }
-        return try writeImpl(collected)
+
+        for try await event in events {
+            try sink.write(event)
+        }
+        try sink.finish()
+
+        let totalBytes = chunks.reduce(0) { $0 + $1.count }
+        if let maxBytes = configuration.limits.maxOutputBytes, totalBytes > maxBytes {
+            throw XMLParsingError.parseFailed(
+                message: "[XML6_2H_MAX_OUTPUT_BYTES] Output size \(totalBytes) bytes exceeds limit \(maxBytes) bytes."
+            )
+        }
+
+        if chunks.count == 1 {
+            return chunks[0]
+        }
+        return chunks.reduce(into: Data()) { $0.append($1) }
     }
 }
