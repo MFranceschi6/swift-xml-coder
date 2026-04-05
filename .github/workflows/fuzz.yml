@@ -33,7 +33,7 @@ jobs:
           swift-version: "6.1"
 
       - name: Cache SPM build artifacts
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: .build
           key: ubuntu-22.04-spm-swift6.1-fuzz-${{ hashFiles('Package*.swift') }}
@@ -77,7 +77,7 @@ jobs:
           swift-version: "6.1"
 
       - name: Cache SPM build artifacts
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             .build
