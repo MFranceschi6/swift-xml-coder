@@ -8,6 +8,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
+- **`XMLNode.lineNumber`** — new computed property exposing the 1-based source line number
+  of an element as reported by libxml2 (`xmlGetLineNo`). Returns `nil` when line information
+  is unavailable (e.g. programmatically created nodes). Resolves #28.
+
 - **Coverage boost tests for internal streaming/encoder paths** — expanded
   `XMLCoverageBoostTests` with direct tests for `_XMLTreeEncoder` internals
   (date strategy variants, custom-date error wrapping, keyed attribute/text-content
