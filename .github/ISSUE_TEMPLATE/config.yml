@@ -1,0 +1,9 @@
+blank_issues_enabled: false
+
+contact_links:
+  - name: Question or discussion
+    url: https://github.com/MFranceschi6/swift-xml-coder/discussions
+    about: Ask questions and discuss the library here — not in issues.
+  - name: Security vulnerability
+    url: https://github.com/MFranceschi6/swift-xml-coder/security/advisories/new
+    about: Report security vulnerabilities privately via GitHub Security Advisories.
