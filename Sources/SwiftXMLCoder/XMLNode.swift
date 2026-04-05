@@ -120,6 +120,16 @@ public struct XMLNode {
         }
     }
 
+    /// The 1-based line number of this element in the source document, or `nil` if unavailable.
+    ///
+    /// libxml2 reports `0` when line information was not recorded during parsing; this property
+    /// returns `nil` in that case. Line numbers greater than 65535 are supported on platforms
+    /// where libxml2 stores extended line information.
+    public var lineNumber: Int? {
+        let line = xmlGetLineNo(nodePointer)
+        return line > 0 ? Int(line) : nil
+    }
+
     /// Returns all direct element children of this node.
     public func children() -> [XMLNode] {
         var nodes: [XMLNode] = []
