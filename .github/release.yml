@@ -1,0 +1,26 @@
+changelog:
+  exclude:
+    labels:
+      - dependencies
+      - duplicate
+      - invalid
+      - wontfix
+  categories:
+    - title: "Breaking Changes"
+      labels: [breaking-change]
+    - title: "New Features"
+      labels: [enhancement]
+    - title: "Bug Fixes"
+      labels: [bug]
+    - title: "Performance"
+      labels: [performance]
+    - title: "Macros"
+      labels: [macros]
+    - title: "Streaming"
+      labels: [streaming]
+    - title: "Swift 6 / Concurrency"
+      labels: [swift-6]
+    - title: "Documentation"
+      labels: [documentation]
+    - title: "Other Changes"
+      labels: ["*"]

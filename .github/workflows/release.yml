@@ -1,0 +1,114 @@
+name: Release
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: 'Version bump type (minor or major)'
+        required: true
+        type: choice
+        options: [minor, major]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    if: |
+      (github.event_name == 'workflow_dispatch') ||
+      (github.event.pull_request.merged == true &&
+       contains(github.event.pull_request.labels.*.name, 'autorelease: patch'))
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Compute next version
+        id: version
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: refs } = await github.rest.git.listMatchingRefs({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: 'tags/v',
+            });
+
+            const versions = refs
+              .map(r => r.ref.replace('refs/tags/v', ''))
+              .filter(v => /^\d+\.\d+\.\d+$/.test(v))
+              .sort((a, b) => {
+                const pa = a.split('.').map(Number);
+                const pb = b.split('.').map(Number);
+                for (let i = 0; i < 3; i++) {
+                  if (pa[i] !== pb[i]) return pb[i] - pa[i];
+                }
+                return 0;
+              });
+
+            const latest = versions[0] ?? '0.0.0';
+            const [major, minor, patch] = latest.split('.').map(Number);
+
+            const bump = context.eventName === 'workflow_dispatch'
+              ? context.payload.inputs.bump
+              : 'patch';
+
+            let next;
+            if (bump === 'major')      next = `${major + 1}.0.0`;
+            else if (bump === 'minor') next = `${major}.${minor + 1}.0`;
+            else                       next = `${major}.${minor}.${patch + 1}`;
+
+            core.setOutput('current', `v${latest}`);
+            core.setOutput('next', `v${next}`);
+            core.setOutput('bump', bump);
+
+            core.summary.addHeading(`Release: v${latest} → v${next} (${bump})`);
+            await core.summary.write();
+
+      - name: Create tag
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.git.createRef({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: `refs/tags/${{ steps.version.outputs.next }}`,
+              sha: context.sha,
+            });
+
+      - name: Create GitHub Release
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const tag      = '${{ steps.version.outputs.next }}';
+            const previous = '${{ steps.version.outputs.current }}';
+            const bump     = '${{ steps.version.outputs.bump }}';
+
+            // For minor/major: prepend an explicit notice to the generated notes.
+            let body = undefined;
+            if (bump !== 'patch') {
+              const { data: generated } = await github.rest.repos.generateReleaseNotes({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                tag_name: tag,
+                previous_tag_name: previous,
+              });
+              const notice = bump === 'major'
+                ? '> [!CAUTION]\n> This is a **major** release and may contain breaking changes. Review the full diff before upgrading.\n\n'
+                : '> [!NOTE]\n> This is a **minor** release. New public API has been added; existing API is unchanged.\n\n';
+              body = notice + generated.body;
+            }
+
+            await github.rest.repos.createRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: tag,
+              name: tag,
+              generate_release_notes: bump === 'patch',
+              body,
+              make_latest: 'true',
+            });
