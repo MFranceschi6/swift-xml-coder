@@ -94,7 +94,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Setup Swift
-        uses: swift-actions/setup-swift@v2
+        uses: swift-actions/setup-swift@v3
         with:
           swift-version: "5.9"
 
@@ -155,7 +155,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Setup Swift
-        uses: swift-actions/setup-swift@v2
+        uses: swift-actions/setup-swift@v3
         with:
           swift-version: "5.10"
 
@@ -259,7 +259,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Setup Swift
-        uses: swift-actions/setup-swift@v2
+        uses: swift-actions/setup-swift@v3
         with:
           swift-version: "6.1"
 
@@ -390,7 +390,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Setup Swift
-        uses: swift-actions/setup-swift@v2
+        uses: swift-actions/setup-swift@v3
         with:
           swift-version: "6.1"
 
@@ -424,7 +424,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Setup Swift
-        uses: swift-actions/setup-swift@v2
+        uses: swift-actions/setup-swift@v3
         with:
           swift-version: "6.1"
 
