@@ -1,0 +1,174 @@
+# SwiftXMLCoder
+
+> High-performance, Codable-compatible XML encoder/decoder for Swift.
+> **Not the same as [CoreOffice/XMLCoder](https://github.com/CoreOffice/XMLCoder)** — different library, different API.
+> SPM-only. macOS, iOS, tvOS, watchOS, Linux. Backed by libxml2. No Foundation XML APIs.
+
+## Installation
+
+```swift
+// Package.swift
+dependencies: [
+    .package(url: "https://github.com/MFranceschi6/swift-xml-coder.git", from: "2.0.0")
+],
+targets: [
+    .target(
+        name: "MyTarget",
+        dependencies: [
+            .product(name: "SwiftXMLCoder", package: "swift-xml-coder"),
+            // For macro support (Swift 5.9+):
+            .product(name: "SwiftXMLCoderMacros", package: "swift-xml-coder"),
+        ]
+    )
+]
+```
+
+---
+
+## Pattern 1 — Encode / Decode a struct
+
+```swift
+import SwiftXMLCoder
+
+struct Book: Codable {
+    var title: String
+    var author: String
+    var year: Int
+}
+
+// Encode
+let book = Book(title: "Swift in Practice", author: "Apple", year: 2024)
+let xmlData = try XMLEncoder().encode(book)
+// <Book><title>Swift in Practice</title><author>Apple</author><year>2024</year></Book>
+
+// Decode
+let decoded = try XMLDecoder().decode(Book.self, from: xmlData)
+```
+
+The root element name is the type name by default. Override with `XMLRootNode`.
+
+---
+
+## Pattern 2 — Macro API: @XMLCodable (Swift 5.9+)
+
+`@XMLCodable` synthesises field-mapping. Annotate individual properties to override defaults.
+
+```swift
+import SwiftXMLCoder
+import SwiftXMLCoderMacros
+
+@XMLCodable
+struct Product: Codable {
+    @XMLAttribute var id: String    // → <Product id="SKU-1">
+    var name: String                // → <name>Widget</name>  (default: element)
+    @XMLText var price: Double      // → text content of <price>9.99</price>
+    @XMLIgnore var cache: [String]? // excluded from XML entirely (must be Optional)
+    @XMLCDATA var description: String // → <description><![CDATA[...]]></description>
+}
+// Output: <Product id="SKU-1"><name>Widget</name><price>9.99</price><description><![CDATA[...]]></description></Product>
+```
+
+**Without macros** use property wrappers directly:
+```swift
+struct Product: Codable {
+    @XMLAttribute var id: String
+    var name: String
+}
+```
+
+---
+
+## Pattern 3 — Streaming decode with XMLItemDecoder (large feeds)
+
+Use `XMLItemDecoder` instead of `XMLDecoder` for documents where items repeat at the top
+level and memory is a concern. It decodes one item at a time in O(1) memory.
+
+```swift
+struct Product: Decodable { let sku: String; let price: Double }
+
+// Synchronous — returns [Product]
+let products = try XMLItemDecoder().decode(
+    Product.self, itemElement: "Product", from: catalogData
+)
+
+// Async — one item at a time (macOS 12+ / Swift 5.5+)
+for try await product in XMLItemDecoder().items(
+    Product.self, itemElement: "Product", from: catalogData
+) {
+    await persist(product)
+}
+```
+
+---
+
+## Pattern 4 — Namespaces
+
+```swift
+import SwiftXMLCoderMacros
+
+// Root namespace via macro:
+@XMLRootNamespace("http://schemas.example.com/orders/v2")
+@XMLCodable
+struct Order: Codable {
+    var id: String
+    // Per-field namespace override:
+    @XMLFieldNamespace("http://schemas.example.com/shipping", prefix: "ship")
+    var shippingAddress: String
+}
+```
+
+Without macros, conform to `XMLRootNode` and `XMLFieldNamespaceProvider` manually.
+
+---
+
+## Pattern 5 — Untrusted / external input (security)
+
+Always use the security preset when parsing data from untrusted sources.
+It caps document depth, total node count, and text-node size.
+
+```swift
+let configuration = XMLTreeParser.Configuration(
+    limits: .untrustedInputDefault()
+)
+let tree = try XMLTreeParser(configuration: configuration).parse(data: untrustedInput)
+let decoded = try XMLDecoder().decode(MyType.self, from: untrustedInput)
+// XMLDecoder also accepts a custom XMLTreeParser.Configuration via its configuration property.
+```
+
+---
+
+## Choosing the right API
+
+| Need | API |
+|------|-----|
+| Encode/decode a Codable type | `XMLEncoder` / `XMLDecoder` |
+| Decode a large feed item-by-item | `XMLItemDecoder` |
+| Parse raw events (SAX-style) | `XMLStreamParser` |
+| Write raw events | `XMLStreamWriter` |
+| Parse into a tree for XPath / transforms | `XMLTreeParser` → `XMLTreeDocument` |
+| Deterministic / canonical XML | `XMLDefaultCanonicalizer` |
+| XPath queries | `XMLDocument.xpathFirstNode(_:)` |
+
+---
+
+## Common mistakes
+
+- **Do not import `Foundation.XMLElement`** — it is unrelated. SwiftXMLCoder types are `XMLTreeElement`, `XMLStreamEvent`, etc.
+- **`@XMLCodable` is required** for `@XMLAttribute`, `@XMLText`, `@XMLIgnore`, `@XMLCDATA`, `@XMLFieldNamespace` to synthesise field mappings. Without it the property wrappers still work but macros do nothing.
+- **`@XMLIgnore` fields must be `Optional`** or have a default value — the decoder will not find a value for them in XML.
+- **`XMLItemDecoder`, not `XMLDecoder`, for streaming** — `XMLDecoder` loads the full tree; only `XMLItemDecoder` is memory-bounded.
+- **Key transform strategies** — if the XML uses `snake_case` or `kebab-case` element names, set `XMLDecoder.Configuration.keyTransformStrategy` (e.g. `.convertFromSnakeCase`).
+- **Errors** — all errors are typed as `XMLParsingError`. `decodeFailed` includes the coding path and source location.
+
+---
+
+## Further reading
+
+- [Full API reference (DocC)](https://mfranceschi6.github.io/swift-xml-coder/documentation/swiftxmlcoder/)
+- [Getting Started](Sources/SwiftXMLCoder/SwiftXMLCoder.docc/Articles/GettingStarted.md)
+- [Field Mapping](Sources/SwiftXMLCoder/SwiftXMLCoder.docc/Articles/FieldMapping.md)
+- [Streaming](Sources/SwiftXMLCoder/SwiftXMLCoder.docc/Articles/Streaming.md)
+- [Namespaces](Sources/SwiftXMLCoder/SwiftXMLCoder.docc/Articles/Namespaces.md)
+- [Canonicalization](Sources/SwiftXMLCoder/SwiftXMLCoder.docc/Articles/Canonicalization.md)
+- [XPath](Sources/SwiftXMLCoder/SwiftXMLCoder.docc/Articles/XPath.md)
+- [Security](Sources/SwiftXMLCoder/SwiftXMLCoder.docc/Articles/Security.md)

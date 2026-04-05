@@ -1,8 +1,42 @@
 import Foundation
 
-/// The default ``XMLCanonicalizer`` implementation.
+/// The built-in ``XMLCanonicalizer`` implementation.
+///
+/// `XMLDefaultCanonicalizer` normalizes and serializes an XML document to a deterministic byte
+/// sequence. It supports two paths:
+///
+/// - **Tree path** — parse, apply ``XMLTransform`` pipeline, normalize the tree (sort attributes and
+///   namespace declarations, strip or normalize whitespace, optionally remove comments and PIs),
+///   then serialize with ``XMLTreeWriter``.
+/// - **Streaming path** — parse events from raw `Data` or a pre-built ``XMLStreamEvent`` sequence,
+///   pipe through an ``XMLEventTransform`` pipeline, normalize each event, and write directly to a
+///   callback sink with ``XMLStreamWriterSink``.
+///
+/// ## Basic usage
+///
+/// ```swift
+/// let parser = XMLTreeParser()
+/// let tree = try parser.parse(data: xmlData)
+///
+/// let canonicalData = try XMLDefaultCanonicalizer().canonicalize(tree)
+/// ```
+///
+/// Pass ``XMLCanonicalizationOptions`` to control attribute ordering, whitespace handling,
+/// comment inclusion, and output encoding:
+///
+/// ```swift
+/// let options = XMLCanonicalizationOptions(includeComments: true, prettyPrintedOutput: false)
+/// let canonicalData = try XMLDefaultCanonicalizer().canonicalize(
+///     tree,
+///     options: options,
+///     transforms: []
+/// )
+/// ```
+///
+/// - SeeAlso: ``XMLCanonicalizer``, ``XMLCanonicalizationOptions``, ``XMLTransform``,
+///   ``XMLEventTransform``
 public struct XMLDefaultCanonicalizer: XMLCanonicalizer {
-    /// Creates a default canonicalizer.
+    /// Creates a default canonicalizer with no configuration state.
     public init() {}
 
     // MARK: - Tree-based API
@@ -23,7 +57,13 @@ public struct XMLDefaultCanonicalizer: XMLCanonicalizer {
         return try writer.writeData(normalizedDocument)
     }
 
-    /// Convenience tree-based canonicalization with full defaults.
+    /// Canonicalizes a document tree using all default options and no transforms.
+    ///
+    /// Equivalent to calling ``canonicalize(_:options:transforms:)`` with
+    /// `XMLCanonicalizationOptions()` and an empty pipeline.
+    ///
+    /// - Parameter document: The document to canonicalize.
+    /// - Returns: The canonical XML bytes.
     public func canonicalize(_ document: XMLTreeDocument) throws -> Data {
         try canonicalize(
             document,
@@ -134,7 +174,16 @@ public struct XMLDefaultCanonicalizer: XMLCanonicalizer {
         }
     }
 
-    /// Convenience stream-based canonicalization from raw XML data that returns `Data`.
+    /// Canonicalizes raw XML data and returns the result as `Data`.
+    ///
+    /// Convenience wrapper over ``canonicalize(data:options:eventTransforms:output:)`` that
+    /// collects all output chunks and returns them concatenated.
+    ///
+    /// - Parameters:
+    ///   - data: The raw XML input.
+    ///   - options: Normalization and serialization options. Defaults to ``XMLCanonicalizationOptions/init()``.
+    ///   - eventTransforms: Event-level transforms to apply. Defaults to an empty pipeline.
+    /// - Returns: The canonical XML bytes.
     public func canonicalize(
         data: Data,
         options: XMLCanonicalizationOptions = XMLCanonicalizationOptions(),
@@ -147,7 +196,16 @@ public struct XMLDefaultCanonicalizer: XMLCanonicalizer {
         return chunks.reduce(into: Data(), { $0.append($1) })
     }
 
-    /// Convenience stream-based canonicalization from pre-parsed events that returns `Data`.
+    /// Canonicalizes a pre-parsed event sequence and returns the result as `Data`.
+    ///
+    /// Convenience wrapper over ``canonicalize(events:options:eventTransforms:output:)`` that
+    /// collects all output chunks and returns them concatenated.
+    ///
+    /// - Parameters:
+    ///   - events: A sequence of ``XMLStreamEvent`` values representing the document.
+    ///   - options: Normalization and serialization options. Defaults to ``XMLCanonicalizationOptions/init()``.
+    ///   - eventTransforms: Event-level transforms to apply. Defaults to an empty pipeline.
+    /// - Returns: The canonical XML bytes.
     public func canonicalize<S: Sequence>(
         events: S,
         options: XMLCanonicalizationOptions = XMLCanonicalizationOptions(),
