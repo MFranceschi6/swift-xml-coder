@@ -8,6 +8,12 @@ import SwiftXMLCoderOwnership6
 enum LibXML2 {
     static let initializeOnce: Void = {
         xmlInitParser()
+        // Pre-warm the encoding handler table for UTF-8. libxml2's
+        // xmlGetCharEncodingHandler lazily initialises a global handler
+        // table that is not thread-safe. Resolving it here (under the
+        // dispatch_once guarantee of `static let`) prevents a SEGV when
+        // multiple threads call xmlTextWriterStartDocument concurrently.
+        swiftxmlcoder_warm_encoding_handler("UTF-8")
     }()
 
     static func ensureInitialized() {
