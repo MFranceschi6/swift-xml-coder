@@ -7,13 +7,12 @@ import SwiftXMLCoderOwnership6
 
 enum LibXML2 {
     static let initializeOnce: Void = {
+        // libxml2 is fully initialised (including the encoding-handler table)
+        // by swiftxmlcoder_auto_init_libxml2, a C __attribute__((constructor))
+        // that runs at library-load time before any thread is created.
+        // This call is a no-op safeguard for exotic configurations (e.g. pure
+        // static linking on platforms that do not run constructors).
         xmlInitParser()
-        // Pre-warm the encoding handler table for UTF-8. libxml2's
-        // xmlGetCharEncodingHandler lazily initialises a global handler
-        // table that is not thread-safe. Resolving it here (under the
-        // dispatch_once guarantee of `static let`) prevents a SEGV when
-        // multiple threads call xmlTextWriterStartDocument concurrently.
-        swiftxmlcoder_warm_encoding_handler("UTF-8")
     }()
 
     static func ensureInitialized() {
