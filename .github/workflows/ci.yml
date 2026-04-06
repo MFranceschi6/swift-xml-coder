@@ -19,7 +19,7 @@ jobs:
     name: runtime-5.4 (linux)
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: List versioned manifests
         run: ls -1 Package*.swift
@@ -52,7 +52,7 @@ jobs:
     name: tooling-5.6 (linux)
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: List versioned manifests
         run: ls -1 Package*.swift
@@ -91,7 +91,7 @@ jobs:
         # with the macOS 15.x SDK shipped on macos-15 runners (c_standard_library mismatch).
         os: [ubuntu-22.04]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Setup Swift
         uses: swift-actions/setup-swift@v2
@@ -152,7 +152,7 @@ jobs:
         # with the macOS 15.x SDK shipped on macos-15 runners (c_standard_library mismatch).
         os: [ubuntu-22.04]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Setup Swift
         uses: swift-actions/setup-swift@v2
@@ -256,7 +256,7 @@ jobs:
       matrix:
         os: [ubuntu-22.04, macos-15]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Setup Swift
         uses: swift-actions/setup-swift@v2
@@ -387,7 +387,7 @@ jobs:
     name: Concurrency (TSan, ubuntu-22.04)
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Setup Swift
         uses: swift-actions/setup-swift@v2
@@ -421,7 +421,7 @@ jobs:
     name: ios-simulator (macos-15)
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Setup Swift
         uses: swift-actions/setup-swift@v2
