@@ -121,7 +121,7 @@ for T in "${TARGETS[@]}"; do
         -I "$CLIBXML2_MODULE_DIR"
         -L "$BIN_PATH"
         -module-name "$T"
-        "${LIBXML2_SWIFTC_FLAGS[@]}"
+        ${LIBXML2_SWIFTC_FLAGS[@]+"${LIBXML2_SWIFTC_FLAGS[@]}"}
         "$SCRIPT_DIR/Sources/$T/$T.swift"
         -lxml2
         -o "$OUTDIR/$T"

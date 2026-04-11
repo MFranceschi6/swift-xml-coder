@@ -32,13 +32,13 @@ jobs:
         with:
           swift-version: "6.1"
 
-      - name: Cache SPM build artifacts
+      - name: Cache SPM package resolution
         uses: actions/cache@v5
         with:
-          path: .build
-          key: ubuntu-22.04-spm-swift6.1-fuzz-${{ hashFiles('Package*.swift') }}
+          path: .build/checkouts
+          key: ubuntu-22.04-spm-swift6.1-packages-${{ hashFiles('Package.resolved') }}
           restore-keys: |
-            ubuntu-22.04-spm-swift6.1-fuzz-
+            ubuntu-22.04-spm-swift6.1-packages-
 
       - name: Install libxml2
         run: |
