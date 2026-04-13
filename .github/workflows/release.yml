@@ -29,7 +29,7 @@ jobs:
 
       - name: Compute next version
         id: version
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             const { data: refs } = await github.rest.git.listMatchingRefs({
@@ -70,7 +70,7 @@ jobs:
             await core.summary.write();
 
       - name: Create tag
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             await github.rest.git.createRef({
@@ -81,7 +81,7 @@ jobs:
             });
 
       - name: Create GitHub Release
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             const tag      = '${{ steps.version.outputs.next }}';
